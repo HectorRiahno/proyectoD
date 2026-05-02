@@ -14,34 +14,41 @@ const employeeSidebarItems = [
     id: 1,
     title: "Gestión de Citas",
     icon: "Calendar",
-    path: "/citas",
+    path: "/dashboard/citas",
     badge: "CRUD"
   },
   {
     id: 2,
     title: "Pacientes",
     icon: "Users",
-    path: "/pacientes",
+    path: "/dashboard/pacientes",
     badge: "CRUD"
   },
   {
     id: 3,
+    title: "Usuarios",
+    icon: "UserPlus",
+    path: "/dashboard/usuarios",
+    badge: "ADMIN"
+  },
+  {
+    id: 4,
     title: "Inventario",
     icon: "Package",
-    path: "/inventario",
+    path: "/dashboard/inventario",
     badge: "CRUD"
   },
   {
     id: 4,
     title: "Reportes",
     icon: "BarChart3",
-    path: "/reportes"
+    path: "/dashboard/reportes"
   },
   {
     id: 5,
     title: "Configuración",
     icon: "Settings",
-    path: "/configuracion"
+    path: "/dashboard/configuracion"
   }
 ];
 

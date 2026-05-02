@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Lock, Mail, Phone, MapPin, Calendar, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../../lib/supabase';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ export default function Register() {
     fechaNacimiento: '',
     direccion: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleChange = (e) => {
     setFormData({
@@ -23,14 +26,59 @@ export default function Register() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
+
     if (formData.contrasena !== formData.confirmarContrasena) {
-      alert('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden');
+      setLoading(false);
       return;
     }
-    alert('Registro exitoso. Ahora puedes iniciar sesión.');
-    navigate('/');
+
+    try {
+      // Registrar usuario en Supabase Auth
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.contrasena,
+        options: {
+          data: {
+            nombre: formData.nombre,
+            documento: formData.documento,
+            telefono: formData.telefono,
+          }
+        }
+      });
+
+      if (authError) throw authError;
+
+      // Guardar información adicional en la tabla usuarios
+      if (data?.user) {
+        const { error: insertError } = await supabase
+          .from('usuarios')
+          .insert({
+            id: data.user.id,
+            documento: formData.documento,
+            usuario: formData.usuario,
+            nombre: formData.nombre,
+            email: formData.email,
+            telefono: formData.telefono,
+            fecha_nacimiento: formData.fechaNacimiento,
+            direccion: formData.direccion,
+          });
+
+        if (insertError) console.warn('Warning: No se pudo guardar datos adicionales', insertError);
+      }
+
+      alert('Registro exitoso. Por favor verifica tu correo electrónico para confirmar tu cuenta.');
+      navigate('/login');
+    } catch (err) {
+      setError(err.message || 'Error al registrar usuario');
+      console.error('Error de registro:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

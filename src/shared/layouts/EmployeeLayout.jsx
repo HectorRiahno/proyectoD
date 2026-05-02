@@ -1,13 +1,7 @@
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
-import Home from "../../features/employees/pages/Home";
-import Citas from "../../features/employees/pages/Citas";
-import Inventario from "../../features/employees/pages/Inventario";
-import Reportes from "../../features/employees/pages/Reportes";
-import Configuracion from "../../features/employees/pages/Configuracion";
-import PacientesNuevo from "../../features/employees/pages/PacientesNuevo";
 
 export default function EmployeeLayout() {
   return (
@@ -23,15 +17,7 @@ export default function EmployeeLayout() {
 
         <div className="ml-64 min-h-[calc(100vh-4rem)]">
           <main className="px-8 py-6">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/dashboard" element={<Home />} />
-              <Route path="/citas" element={<Citas />} />
-              <Route path="/inventario" element={<Inventario />} />
-              <Route path="/pacientes" element={<PacientesNuevo />} />
-              <Route path="/reportes" element={<Reportes />} />
-              <Route path="/configuracion" element={<Configuracion />} />
-            </Routes>
+            <Outlet />
           </main>
         </div>
       </div>

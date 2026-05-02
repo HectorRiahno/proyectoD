@@ -8,14 +8,14 @@ const clientSidebarItems = [
     id: 1, 
     title: "Mi Panel", 
     icon: "LayoutDashboard", 
-    path: "/dashboard",
+    path: "/cliente",
     description: "Vista general"
   },
   { 
     id: 2, 
     title: "Mis Citas", 
     icon: "Calendar", 
-    path: "/citas",
+    path: "/cliente/citas",
     badge: "Ver",
     description: "Consultar citas"
   },
@@ -23,7 +23,7 @@ const clientSidebarItems = [
     id: 3, 
     title: "Mi Historial", 
     icon: "FileText", 
-    path: "/historial",
+    path: "/cliente/historial",
     badge: "Ver",
     description: "Historia clínica"
   },
@@ -31,7 +31,7 @@ const clientSidebarItems = [
     id: 4, 
     title: "Mis Medicamentos", 
     icon: "Pill", 
-    path: "/medicamentos",
+    path: "/cliente/medicamentos",
     badge: "Ver",
     description: "Tratamiento actual"
   },
@@ -39,7 +39,7 @@ const clientSidebarItems = [
     id: 5, 
     title: "Resultados", 
     icon: "ClipboardList", 
-    path: "/resultados",
+    path: "/cliente/resultados",
     badge: "Imprimir",
     description: "Exámenes y análisis"
   },
@@ -47,7 +47,7 @@ const clientSidebarItems = [
     id: 6, 
     title: "Documentos", 
     icon: "FileDown", 
-    path: "/documentos",
+    path: "/cliente/documentos",
     badge: "Descargar",
     description: "Mis archivos médicos"
   },
@@ -55,7 +55,7 @@ const clientSidebarItems = [
     id: 7, 
     title: "Mi Perfil", 
     icon: "User", 
-    path: "/perfil",
+    path: "/cliente/perfil",
     description: "Información personal"
   }
 ];

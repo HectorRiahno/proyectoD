@@ -1,14 +1,7 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import ClientNavbar from '../components/ClientNavbar';
 import ClientSidebar from '../components/ClientSidebar';
-import ClientDashboard from '../../features/clients/pages/ClientDashboard';
-import MisCitas from '../../features/clients/pages/MisCitas';
-import MiHistorial from '../../features/clients/pages/MiHistorial';
-import MisMedicamentos from '../../features/clients/pages/MisMedicamentos';
-import Resultados from '../../features/clients/pages/Resultados';
-import Documentos from '../../features/clients/pages/Documentos';
-import MiPerfil from '../../features/clients/pages/MiPerfil';
 
 export default function ClientLayout({ user }) {
   return (
@@ -27,16 +20,7 @@ export default function ClientLayout({ user }) {
 
         <div className="ml-64 min-h-[calc(100vh-4rem)]">
           <main className="px-8 py-6">
-            <Routes>
-              <Route path="/" element={<ClientDashboard user={user} />} />
-              <Route path="/dashboard" element={<ClientDashboard user={user} />} />
-              <Route path="/citas" element={<MisCitas />} />
-              <Route path="/historial" element={<MiHistorial />} />
-              <Route path="/medicamentos" element={<MisMedicamentos />} />
-              <Route path="/resultados" element={<Resultados />} />
-              <Route path="/documentos" element={<Documentos />} />
-              <Route path="/perfil" element={<MiPerfil />} />
-            </Routes>
+            <Outlet />
           </main>
         </div>
       </div>

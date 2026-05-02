@@ -1,17 +1,43 @@
 import React, { useState } from 'react';
 import { Lock, User, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../../lib/supabase';
 
-export default function Login({ onSubmit }) {
+export default function Login() {
   const navigate = useNavigate();
   const [documento, setDocumento] = useState('');
   const [usuario, setUsuario] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [tipoUsuario, setTipoUsuario] = useState('empleado');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onSubmit) onSubmit({ documento, usuario, contrasena, tipoUsuario });
+    setLoading(true);
+    setError('');
+
+    try {
+      // Intentar iniciar sesión con Supabase Auth
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: usuario,
+        password: contrasena,
+      });
+
+      if (authError) throw authError;
+
+      // Si tiene éxito, redirigir según el tipo de usuario
+      if (tipoUsuario === 'empleado') {
+        navigate('/dashboard');
+      } else {
+        navigate('/cliente');
+      }
+    } catch (err) {
+      setError('Credenciales inválidas. Por favor verifica tu usuario y contraseña.');
+      console.error('Error de login:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -28,7 +54,7 @@ export default function Login({ onSubmit }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
+          {/* <div>
             <label className="text-sm font-medium text-gray-700 block mb-2">Tipo de Usuario</label>
             <select
               value={tipoUsuario}
@@ -38,9 +64,9 @@ export default function Login({ onSubmit }) {
               <option value="empleado">Empleado del Hospital</option>
               <option value="cliente">Paciente/Cliente</option>
             </select>
-          </div>
+          </div> */}
 
-          <div>
+          {/* <div>
             <label className="text-sm font-medium text-gray-700 block mb-2">Documento de Identidad</label>
             <input
               value={documento}
@@ -48,7 +74,7 @@ export default function Login({ onSubmit }) {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               placeholder="Ingrese su documento"
             />
-          </div>
+          </div> */}
 
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-2">Usuario</label>
@@ -77,14 +103,27 @@ export default function Login({ onSubmit }) {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <LogIn className="w-5 h-5" /> Iniciar Sesión
+            {loading ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <>
+                <LogIn className="w-5 h-5" /> Iniciar Sesión
+              </>
+            )}
           </button>
 
-          <div className="text-center space-y-3 pt-2">
+          {/* <div className="text-center space-y-3 pt-2">
             <a href="#" className="text-sm text-blue-600 hover:text-blue-700 block font-medium">
               ¿Olvidaste tu contraseña?
             </a>
@@ -97,7 +136,7 @@ export default function Login({ onSubmit }) {
                 ¿Usuario nuevo? <span className="font-semibold text-blue-600">Regístrate aquí</span>
               </button>
             </div>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>

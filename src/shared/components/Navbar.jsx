@@ -5,6 +5,7 @@ import { Bell, User, Activity, Search, Trash, LogOut, Eye, CheckCircle } from "l
 import { NavLink, useNavigate } from "react-router-dom";
 import { notifications as mockNotifications } from "../../data/notifications";
 import { pacientesList } from "../../data/pacientesList";
+import { supabase } from "../../lib/supabase";
 import React from "react";
 
 function Navbar() {
@@ -71,10 +72,15 @@ function Navbar() {
     setNotifications((prev) => prev.map(n => ({ ...n, read: true })));
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("authUser");
-    navigate('/');
-    window.location.reload();
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      // Forzar redirección aunque haya error
+      navigate('/login');
+    }
   };
 
   return (
