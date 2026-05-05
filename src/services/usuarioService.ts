@@ -1,10 +1,16 @@
 import { supabase, supabaseHelpers } from '../lib/supabase';
 
 // Nombre de la tabla en Supabase
-const TABLE_NAME = 'usuarios';
+const TABLE_NAME = 'usuario';
 
 // Tipo para usuario
 export interface Usuario {
+  id: string;
+  nombre: string;
+  correo: string;
+  id_rol: string | number;
+  rol_nombre?: string;
+  especialidad?: string;
   [key: string]: unknown;
 }
 
@@ -27,52 +33,59 @@ export const usuarioService = {
   },
 
   /**
-   * Buscar usuario por documento
+   * Obtener usuario por ID junto con su rol
    */
-  async getByDocumento(documento: string): Promise<Usuario | null> {
+  async getByIdWithRol(id: number | string): Promise<Usuario> {
+    const { data: usuario, error: usuarioError } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (usuarioError) {
+      throw usuarioError;
+    }
+
+    const { data: rolData, error: rolError } = await supabase
+      .from('rol')
+      .select('nombre')
+      .eq('id', usuario.id_rol)
+      .single();
+
+    if (rolError) {
+      throw rolError;
+    }
+
+    return {
+      ...usuario,
+      rol_nombre: rolData?.nombre || null,
+    } as Usuario;
+  },
+
+  /**
+   * Buscar usuario por email
+   */
+  async getByEmail(correo: string): Promise<Usuario | null> {
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .select('*')
-      .eq('documento', documento)
+      .eq('correo', correo)
       .single();
-    
-    if (error) throw error;
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw error;
+    }
+
     return data;
   },
 
   /**
-   * Buscar usuario por nombre de usuario
+   * Crear nuevo usuario (solo metadatos)
    */
-  async getByUsuario(usuario: string): Promise<Usuario | null> {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('*')
-      .eq('usuario', usuario)
-      .single();
-    
-    if (error) throw error;
-    return data;
-  },
-
-  /**
-   * Iniciar sesión (validar credenciales)
-   */
-  async login(usuario: string, contrasena: string): Promise<Usuario | null> {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('*')
-      .eq('usuario', usuario)
-      .eq('contrasena', contrasena)
-      .single();
-    
-    if (error) throw error;
-    return data;
-  },
-
-  /**
-   * Crear nuevo usuario
-   */
-  async create(usuario: Usuario): Promise<Usuario[]> {
+  async create(usuario: Omit<Usuario, 'id'>): Promise<Usuario[]> {
     return supabaseHelpers.insert(TABLE_NAME, usuario) as Promise<Usuario[]>;
   },
 
