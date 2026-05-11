@@ -1,42 +1,66 @@
-import { supabase, supabaseHelpers } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
-const TABLE_NAME = 'alergias';
+// NOTA: En la BD real no existe una tabla `alergias` separada.
+// Las alergias se guardan en la columna `paciente.alergias` (TEXT libre).
+// Este servicio expone una API similar a la anterior pero opera sobre ese campo.
 
-// Tipo para alergia
+const TABLE = 'paciente';
+
 export interface Alergia {
+  id_paciente?: number;
+  alergias?: string;          // texto libre con todas las alergias
   [key: string]: unknown;
 }
 
 export const alergiaService = {
-  async getAll(): Promise<Alergia[]> {
-    return supabaseHelpers.getAll(TABLE_NAME) as Promise<Alergia[]>;
-  },
-
-  async getById(id: number | string): Promise<Alergia> {
-    return supabaseHelpers.getById(TABLE_NAME, id) as Promise<Alergia>;
-  },
-
-  async getByPaciente(pacienteId: number): Promise<Alergia[]> {
+  /**
+   * Devuelve las alergias de un paciente (campo TEXT).
+   */
+  async getByPaciente(pacienteId: number): Promise<Alergia | null> {
     const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('*')
-      .eq('paciente_id', pacienteId);
-    
+      .from(TABLE)
+      .select('id_paciente, alergias')
+      .eq('id_paciente', pacienteId)
+      .maybeSingle();
     if (error) throw error;
-    return data || [];
+    return (data ?? null) as Alergia | null;
   },
 
-  async create(alergia: Alergia): Promise<Alergia[]> {
-    return supabaseHelpers.insert(TABLE_NAME, alergia) as Promise<Alergia[]>;
+  /**
+   * Alergias del PACIENTE autenticado (vía vista).
+   */
+  async getMisAlergias(): Promise<Alergia | null> {
+    const { data, error } = await supabase
+      .from('vw_paciente_mi_perfil')
+      .select('id_paciente, alergias')
+      .maybeSingle();
+    if (error) throw error;
+    return (data ?? null) as Alergia | null;
   },
 
-  async update(id: number | string, updates: Partial<Alergia>): Promise<Alergia[]> {
-    return supabaseHelpers.update(TABLE_NAME, id, updates) as Promise<Alergia[]>;
+  /**
+   * Actualiza el campo `alergias` del paciente.
+   */
+  async updateForPaciente(pacienteId: number, alergias: string): Promise<Alergia[]> {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update({ alergias })
+      .eq('id_paciente', pacienteId)
+      .select('id_paciente, alergias');
+    if (error) throw error;
+    return (data ?? []) as Alergia[];
   },
 
-  async remove(id: number | string): Promise<boolean> {
-    return supabaseHelpers.remove(TABLE_NAME, id);
-  }
+  /**
+   * Listado global de pacientes con sus alergias (vista admin).
+   */
+  async getAll(): Promise<Alergia[]> {
+    const { data, error } = await supabase
+      .from('vw_admin_pacientes')
+      .select('id_paciente, nombre_completo, alergias');
+    if (error) throw error;
+    return (data ?? []) as Alergia[];
+  },
 };
 
 export default alergiaService;

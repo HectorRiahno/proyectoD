@@ -27,15 +27,21 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   const fetchUsuario = async (session) => {
-    const userId = session?.user?.id;
-    if (!userId) {
-      throw new Error('No se encontró el identificador de usuario');
+    const authUid = session?.user?.id;
+    if (!authUid) {
+      throw new Error('No se encontró el UUID de la sesión');
     }
 
     try {
-      return await usuarioService.getByIdWithRol(userId);
+      // Vínculo principal: auth.users.id → public.usuario.auth_user_id
+      const usuario = await usuarioService.getByAuthUserId(authUid);
+      if (!usuario) {
+        console.warn('No existe fila en public.usuario para auth UUID:', authUid);
+        return buildUserFromSession(session);
+      }
+      return usuario;
     } catch (err) {
-      console.warn('No se encontró el usuario en la tabla usuario, usando metadata de sesión', err);
+      console.warn('Error consultando usuario, usando metadata de sesión', err);
       return buildUserFromSession(session);
     }
   };
@@ -92,7 +98,10 @@ export function AuthProvider({ children }) {
       setLoading(true);
       setError(null);
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
       if (authError) throw authError;
       return data;
     } catch (err) {
@@ -106,12 +115,29 @@ export function AuthProvider({ children }) {
   const getRoleIdByName = async (rolNombre) => {
     const { data, error } = await supabase
       .from('rol')
-      .select('id')
+      .select('id_rol')
       .eq('nombre', rolNombre)
       .single();
 
     if (error) throw error;
-    return data?.id;
+    return data?.id_rol;
+  };
+
+  /**
+   * Validador de contraseña fuerte.
+   * Reglas: mínimo 8 caracteres, al menos una letra y un número.
+   */
+  const validarPassword = (password) => {
+    if (!password || password.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    }
+    if (!/[A-Za-z]/.test(password)) {
+      return 'La contraseña debe contener al menos una letra';
+    }
+    if (!/\d/.test(password)) {
+      return 'La contraseña debe contener al menos un número';
+    }
+    return null;
   };
 
   const registro = async (email, password, nombre, rolNombre = ROLE_CLIENTE) => {
@@ -119,16 +145,22 @@ export function AuthProvider({ children }) {
       setLoading(true);
       setError(null);
 
-      const rol_id = await getRoleIdByName(normalizeRoleName(rolNombre));
+      const pwdError = validarPassword(password);
+      if (pwdError) throw new Error(pwdError);
 
+      const rolNormalizado = normalizeRoleName(rolNombre);
+      const rol_id = await getRoleIdByName(rolNormalizado);
+
+      // signUp inicia sesión en algunos modos. El trigger SQL crea la fila
+      // en public.usuario con el mismo UUID automáticamente.
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: email.toLowerCase().trim(),
         password,
         options: {
           data: {
             nombre,
+            rol: rolNormalizado,
             id_rol: rol_id,
-            rol_nombre: normalizeRoleName(rolNombre),
           },
         },
       });

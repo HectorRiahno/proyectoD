@@ -1,37 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Search, Plus, AlertCircle, Loader2, User, Stethoscope } from 'lucide-react';
+import { Calendar, Clock, Search, User, AlertCircle, Loader2 } from 'lucide-react';
 import citaService from '../../../services/citaService';
-import NuevaCitaModal from '../components/NuevaCitaModal';
 
-const ESTADOS = ['todos', 'programada', 'confirmada', 'en_curso', 'completada', 'cancelada', 'no_asistio'];
+const ESTADOS = ['todas', 'programada', 'confirmada', 'en_curso', 'completada', 'cancelada', 'no_asistio'];
 
-export default function Citas() {
+export default function MisCitas() {
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEstado, setFilterEstado] = useState('todos');
-  const [showModal, setShowModal] = useState(false);
-
-  const reload = () => {
-    setLoading(true);
-    citaService.getAll()
-      .then(setCitas)
-      .catch((err) => setError(err.message ?? 'Error cargando citas'))
-      .finally(() => setLoading(false));
-  };
+  const [search, setSearch] = useState('');
+  const [filterEstado, setFilterEstado] = useState('todas');
 
   useEffect(() => {
-    reload();
+    let mounted = true;
+    citaService.getMisCitasMedico()
+      .then((data) => { if (mounted) setCitas(data); })
+      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando citas'); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, []);
 
   const filtered = citas.filter((c) => {
-    const term = searchTerm.toLowerCase();
+    const term = search.toLowerCase();
     const matchSearch =
       (c.paciente_nombre ?? '').toLowerCase().includes(term) ||
-      (c.medico_nombre ?? '').toLowerCase().includes(term) ||
-      (c.paciente_documento ?? '').includes(searchTerm);
-    const matchEstado = filterEstado === 'todos' || c.estado === filterEstado;
+      (c.paciente_documento ?? '').includes(search) ||
+      (c.motivo ?? '').toLowerCase().includes(term);
+    const matchEstado = filterEstado === 'todas' || c.estado === filterEstado;
     return matchSearch && matchEstado;
   });
 
@@ -45,20 +40,20 @@ export default function Citas() {
   };
 
   const counts = ESTADOS.reduce((acc, e) => {
-    acc[e] = e === 'todos' ? citas.length : citas.filter((c) => c.estado === e).length;
+    acc[e] = e === 'todas' ? citas.length : citas.filter((c) => c.estado === e).length;
     return acc;
   }, {});
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg p-8 text-white">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Gestión de Citas</h1>
-            <p className="text-blue-100">Agenda completa del centro médico</p>
+            <h1 className="text-3xl font-bold mb-2">Mis citas</h1>
+            <p className="text-emerald-100">Todas las citas asignadas a ti</p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-blue-100 mb-1">Total Citas</p>
+            <p className="text-sm text-emerald-100 mb-1">Total</p>
             <p className="text-4xl font-bold">{loading ? '···' : citas.length}</p>
           </div>
         </div>
@@ -66,34 +61,22 @@ export default function Citas() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} />
-          {error}
+          <AlertCircle size={20} /> {error}
         </div>
       )}
 
-      {/* Filtros */}
       <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Buscar por paciente, médico o documento..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            />
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg"
-          >
-            <Plus size={20} />
-            Nueva Cita
-          </button>
+        <div className="relative">
+          <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Buscar por paciente, documento o motivo..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+          />
         </div>
 
-        {/* Tabs de estado */}
         <div className="flex flex-wrap gap-2">
           {ESTADOS.map((e) => (
             <button
@@ -101,7 +84,7 @@ export default function Citas() {
               onClick={() => setFilterEstado(e)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition capitalize ${
                 filterEstado === e
-                  ? 'bg-blue-600 text-white shadow-md'
+                  ? 'bg-emerald-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -112,15 +95,13 @@ export default function Citas() {
         </div>
       </div>
 
-      {/* Tabla de citas */}
       <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+            <thead className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Fecha / Hora</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Paciente</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Médico</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Tipo</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Motivo</th>
                 <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Estado</th>
@@ -129,24 +110,24 @@ export default function Citas() {
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400">
-                    <Loader2 size={32} className="mx-auto mb-2 animate-spin" />
-                    Cargando citas...
+                  <td colSpan={5} className="text-center py-12 text-gray-400">
+                    <Loader2 size={32} className="mx-auto mb-2 animate-spin text-emerald-600" />
+                    Cargando...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-500">
+                  <td colSpan={5} className="text-center py-12 text-gray-500">
                     <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
-                    No se encontraron citas
+                    No hay citas que coincidan
                   </td>
                 </tr>
               ) : (
                 filtered.map((c, idx) => (
-                  <tr key={c.id_cita} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                  <tr key={c.id_cita} className={`hover:bg-emerald-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                        <Calendar size={14} className="text-blue-600" />
+                        <Calendar size={14} className="text-emerald-600" />
                         {c.fecha}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
@@ -156,8 +137,8 @@ export default function Citas() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <User size={14} className="text-blue-600" />
+                        <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                          <User size={14} className="text-emerald-600" />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900 text-sm">{c.paciente_nombre ?? '—'}</p>
@@ -165,23 +146,12 @@ export default function Citas() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Stethoscope size={14} className="text-purple-600" />
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{c.medico_nombre ?? '—'}</p>
-                          <p className="text-xs text-gray-500">{c.medico_especialidad ?? ''}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">
-                      {c.tipo_consulta_nombre ?? '—'}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{c.tipo_consulta ?? '—'}</td>
                     <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title={c.motivo}>
                       {c.motivo ?? '—'}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`text-xs px-3 py-1 rounded-full font-medium border ${estadoStyles[c.estado] ?? 'bg-gray-100 text-gray-700'}`}>
+                      <span className={`text-xs px-3 py-1 rounded-full font-medium border ${estadoStyles[c.estado] ?? 'bg-gray-100'}`}>
                         {c.estado}
                       </span>
                     </td>
@@ -192,12 +162,6 @@ export default function Citas() {
           </table>
         </div>
       </div>
-
-      <NuevaCitaModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        onSave={() => { setShowModal(false); reload(); }}
-      />
     </div>
   );
 }

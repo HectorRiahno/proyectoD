@@ -1,166 +1,146 @@
-import React from 'react';
-import { FileText, Download, File, FolderOpen, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FileText, FileDown, AlertCircle, Loader2, Calendar, Pill, ClipboardList, Activity } from 'lucide-react';
+import { supabase } from '../../../lib/supabase';
 
 export default function Documentos() {
-  const documentos = [
+  const navigate = useNavigate();
+  const [counts, setCounts] = useState({ consultas: 0, recetas: 0, diagnosticos: 0, signos: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      supabase.from('vw_paciente_mi_historial').select('*', { count: 'exact', head: true }),
+      supabase.from('vw_paciente_mis_medicamentos').select('*', { count: 'exact', head: true }),
+      supabase.from('vw_paciente_mis_diagnosticos').select('*', { count: 'exact', head: true }),
+      supabase.from('vw_paciente_mis_signos').select('*', { count: 'exact', head: true }),
+    ])
+      .then(([a, b, c, d]) => {
+        if (mounted) {
+          setCounts({
+            consultas: a.count ?? 0,
+            recetas: b.count ?? 0,
+            diagnosticos: c.count ?? 0,
+            signos: d.count ?? 0,
+          });
+        }
+      })
+      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando documentos'); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  const docs = [
     {
-      id: 1,
-      nombre: 'Historia Clínica Completa',
-      tipo: 'PDF',
-      tamaño: '2.4 MB',
-      fecha: '2024-10-23',
-      categoria: 'Historia Clínica'
+      title: 'Historia clínica',
+      description: 'Registro completo de todas tus consultas médicas',
+      icon: FileText,
+      color: 'sky',
+      count: counts.consultas,
+      path: '/cliente/historial',
     },
     {
-      id: 2,
-      nombre: 'Consentimiento Informado',
-      tipo: 'PDF',
-      tamaño: '856 KB',
-      fecha: '2024-10-20',
-      categoria: 'Legal'
+      title: 'Recetas médicas',
+      description: 'Medicamentos y tratamientos prescritos',
+      icon: Pill,
+      color: 'cyan',
+      count: counts.recetas,
+      path: '/cliente/medicamentos',
     },
     {
-      id: 3,
-      nombre: 'Resumen de Alta',
-      tipo: 'PDF',
-      tamaño: '1.2 MB',
-      fecha: '2024-10-15',
-      categoria: 'Resúmenes'
+      title: 'Diagnósticos',
+      description: 'Diagnósticos con códigos CIE-10',
+      icon: ClipboardList,
+      color: 'teal',
+      count: counts.diagnosticos,
+      path: '/cliente/resultados',
     },
     {
-      id: 4,
-      nombre: 'Carnet de Vacunación',
-      tipo: 'PDF',
-      tamaño: '678 KB',
-      fecha: '2024-09-30',
-      categoria: 'Vacunas'
+      title: 'Signos vitales',
+      description: 'Registros de presión, temperatura, peso, etc.',
+      icon: Activity,
+      color: 'indigo',
+      count: counts.signos,
+      path: '/cliente/resultados',
     },
-    {
-      id: 5,
-      nombre: 'Certificado Médico',
-      tipo: 'PDF',
-      tamaño: '423 KB',
-      fecha: '2024-09-25',
-      categoria: 'Certificados'
-    },
-    {
-      id: 6,
-      nombre: 'Orden de Exámenes',
-      tipo: 'PDF',
-      tamaño: '345 KB',
-      fecha: '2024-09-20',
-      categoria: 'Órdenes'
-    }
   ];
 
-  const handleDownload = (doc) => {
-    alert(`Descargando: ${doc.nombre}`);
+  const colors = {
+    sky:    'from-sky-500 to-cyan-600',
+    cyan:   'from-cyan-500 to-teal-600',
+    teal:   'from-teal-500 to-emerald-600',
+    indigo: 'from-indigo-500 to-purple-600',
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl shadow-lg p-8 text-white">
+      <div className="bg-gradient-to-r from-sky-600 to-cyan-700 rounded-xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Mis Documentos</h1>
-            <p className="text-emerald-100">Archivos y documentación médica</p>
+            <h1 className="text-3xl font-bold mb-2">Mis documentos</h1>
+            <p className="text-sky-100">Accede a toda tu información médica</p>
           </div>
-          <FolderOpen size={64} className="opacity-20" />
+          <FileDown size={48} className="opacity-50" />
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Documentos</p>
-              <p className="text-3xl font-bold text-gray-900">{documentos.length}</p>
-            </div>
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-              <FileText className="text-emerald-600" size={24} />
-            </div>
-          </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
+          <AlertCircle size={20} /> {error}
         </div>
+      )}
 
-        <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Este Mes</p>
-              <p className="text-3xl font-bold text-gray-900">3</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Calendar className="text-blue-600" size={24} />
-            </div>
-          </div>
+      {loading ? (
+        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
+          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-sky-600" />
+          <p className="text-gray-500">Cargando documentos...</p>
         </div>
-
-        <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Tamaño Total</p>
-              <p className="text-3xl font-bold text-gray-900">5.9</p>
-              <p className="text-xs text-gray-500">MB</p>
-            </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <File className="text-purple-600" size={24} />
-            </div>
-          </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {docs.map((d, i) => {
+            const Icon = d.icon;
+            return (
+              <button
+                key={i}
+                onClick={() => navigate(d.path)}
+                className="text-left bg-white rounded-xl shadow-md hover:shadow-xl transition p-6 border border-gray-100 group"
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colors[d.color]} flex items-center justify-center shadow-lg flex-shrink-0`}>
+                    <Icon className="text-white" size={28} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-bold text-gray-900">{d.title}</h3>
+                      <span className="text-xs font-bold bg-sky-100 text-sky-700 px-2 py-1 rounded-full">
+                        {d.count}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">{d.description}</p>
+                    <p className="text-xs text-sky-600 font-medium mt-3 group-hover:translate-x-1 transition">
+                      Ver documentos →
+                    </p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
+      )}
 
-        <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Categorías</p>
-              <p className="text-3xl font-bold text-gray-900">6</p>
-            </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-              <FolderOpen className="text-orange-600" size={24} />
-            </div>
-          </div>
+      <div className="bg-sky-50 border border-sky-200 rounded-xl p-6 flex items-start gap-3">
+        <div className="bg-sky-100 rounded-lg p-2 flex-shrink-0">
+          <AlertCircle size={20} className="text-sky-600" />
         </div>
-      </div>
-
-      {/* Grid de Documentos */}
-      <div className="grid grid-cols-3 gap-4">
-        {documentos.map(doc => (
-          <div key={doc.id} className="bg-white rounded-xl shadow-md border border-gray-100 p-6 hover:shadow-lg transition">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-md">
-                <FileText className="text-white" size={24} />
-              </div>
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
-                {doc.tipo}
-              </span>
-            </div>
-
-            <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{doc.nombre}</h3>
-            
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Categoría:</span>
-                <span className="font-medium text-gray-900">{doc.categoria}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Tamaño:</span>
-                <span className="font-medium text-gray-900">{doc.tamaño}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Fecha:</span>
-                <span className="font-medium text-gray-900">{doc.fecha}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleDownload(doc)}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-md"
-            >
-              <Download size={18} />
-              Descargar
-            </button>
-          </div>
-        ))}
+        <div className="text-sm text-sky-900">
+          <p className="font-semibold mb-1">Sobre tus documentos médicos</p>
+          <p>
+            Toda tu información médica está protegida y solo es accesible para ti y el personal médico autorizado.
+            Si necesitas una copia física de algún documento, contacta a la administración del centro.
+          </p>
+        </div>
       </div>
     </div>
   );

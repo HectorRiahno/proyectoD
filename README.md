@@ -51,22 +51,7 @@ npm run dev
 | ana.rodriguez | ana2024 | 400500600 |
 | luis.martinez | luis456 | 500600700 |
 
-## 📁 Estructura del Proyecto
 
-El proyecto sigue una arquitectura modular basada en features:
-
-```
-src/
-├── features/           # Módulos por característica
-│   ├── auth/          # Autenticación
-│   ├── employees/     # Dashboard empleados
-│   ├── clients/       # Dashboard clientes
-│   └── inventory/     # Sistema inventario
-├── shared/            # Componentes compartidos
-│   ├── components/    # Navbars, Sidebars
-│   └── layouts/       # Layouts por rol
-├── data/              # Datos JSON
-└── pages/             # Páginas legacy
 ```
 
 Ver [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) para más detalles.

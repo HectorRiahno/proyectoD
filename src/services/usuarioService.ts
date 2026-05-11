@@ -1,107 +1,120 @@
-import { supabase, supabaseHelpers } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
-// Nombre de la tabla en Supabase
-const TABLE_NAME = 'usuario';
+// Tabla: usuario (id_usuario, username, id_persona, activo, ...)
+// Vista para LECTURA: vw_admin_usuarios (incluye persona + rol via asignacion_rol)
+const TABLE = 'usuario';
+const VIEW  = 'vw_admin_usuarios';
 
-// Tipo para usuario
 export interface Usuario {
-  id: string;
-  nombre: string;
-  correo: string;
-  id_rol: string | number;
+  id_usuario?: number;
+  auth_user_id?: string;     // UUID de auth.users
+  username?: string;
+  id_persona?: number;
+  activo?: boolean;
+  ultimo_acceso?: string;
+  created_at?: string;
+  // Campos provenientes de la vista (persona + rol)
+  documento?: string;
+  nombres?: string;
+  apellidos?: string;
+  nombre_completo?: string;
+  email?: string;
+  telefono?: string;
+  id_rol?: number;
   rol_nombre?: string;
-  especialidad?: string;
   [key: string]: unknown;
 }
 
-/**
- * Servicio para gestionar usuarios en Supabase
- */
 export const usuarioService = {
-  /**
-   * Obtener todos los usuarios
-   */
   async getAll(): Promise<Usuario[]> {
-    return supabaseHelpers.getAll(TABLE_NAME) as Promise<Usuario[]>;
+    const { data, error } = await supabase.from(VIEW).select('*');
+    if (error) throw error;
+    return (data ?? []) as Usuario[];
   },
 
-  /**
-   * Obtener usuario por ID
-   */
   async getById(id: number | string): Promise<Usuario> {
-    return supabaseHelpers.getById(TABLE_NAME, id) as Promise<Usuario>;
-  },
-
-  /**
-   * Obtener usuario por ID junto con su rol
-   */
-  async getByIdWithRol(id: number | string): Promise<Usuario> {
-    const { data: usuario, error: usuarioError } = await supabase
-      .from(TABLE_NAME)
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (usuarioError) {
-      throw usuarioError;
-    }
-
-    const { data: rolData, error: rolError } = await supabase
-      .from('rol')
-      .select('nombre')
-      .eq('id', usuario.id_rol)
-      .single();
-
-    if (rolError) {
-      throw rolError;
-    }
-
-    return {
-      ...usuario,
-      rol_nombre: rolData?.nombre || null,
-    } as Usuario;
-  },
-
-  /**
-   * Buscar usuario por email
-   */
-  async getByEmail(correo: string): Promise<Usuario | null> {
     const { data, error } = await supabase
-      .from(TABLE_NAME)
+      .from(VIEW)
       .select('*')
-      .eq('correo', correo)
+      .eq('id_usuario', id)
       .single();
+    if (error) throw error;
+    return data as Usuario;
+  },
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null;
-      }
-      throw error;
+  /**
+   * Busca un usuario por su UUID de auth.users (vínculo con Supabase Auth).
+   * Es el método principal después del login.
+   */
+  async getByAuthUserId(authUserId: string): Promise<Usuario | null> {
+    const { data, error } = await supabase
+      .from(VIEW)
+      .select('*')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data ?? null) as Usuario | null;
+  },
+
+  /**
+   * Devuelve el usuario con su rol — la vista ya hace el JOIN.
+   * Acepta tanto BIGINT (id_usuario) como UUID (auth_user_id).
+   */
+  async getByIdWithRol(id: number | string): Promise<Usuario | null> {
+    // Si parece UUID, buscar por auth_user_id
+    if (typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) {
+      return this.getByAuthUserId(id);
     }
-
-    return data;
+    return this.getById(id);
   },
 
   /**
-   * Crear nuevo usuario (solo metadatos)
+   * Busca por email (de la tabla persona, expuesto en la vista).
    */
-  async create(usuario: Omit<Usuario, 'id'>): Promise<Usuario[]> {
-    return supabaseHelpers.insert(TABLE_NAME, usuario) as Promise<Usuario[]>;
+  async getByEmail(email: string): Promise<Usuario | null> {
+    const { data, error } = await supabase
+      .from(VIEW)
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) throw error;
+    return (data ?? null) as Usuario | null;
   },
 
   /**
-   * Actualizar usuario
+   * Busca por username (auth) — útil para login flow.
    */
+  async getByUsername(username: string): Promise<Usuario | null> {
+    const { data, error } = await supabase
+      .from(VIEW)
+      .select('*')
+      .eq('username', username)
+      .maybeSingle();
+    if (error) throw error;
+    return (data ?? null) as Usuario | null;
+  },
+
+  async create(usuario: Partial<Usuario>): Promise<Usuario[]> {
+    const { data, error } = await supabase.from(TABLE).insert(usuario).select();
+    if (error) throw error;
+    return (data ?? []) as Usuario[];
+  },
+
   async update(id: number | string, updates: Partial<Usuario>): Promise<Usuario[]> {
-    return supabaseHelpers.update(TABLE_NAME, id, updates) as Promise<Usuario[]>;
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update(updates)
+      .eq('id_usuario', id)
+      .select();
+    if (error) throw error;
+    return (data ?? []) as Usuario[];
   },
 
-  /**
-   * Eliminar usuario
-   */
   async remove(id: number | string): Promise<boolean> {
-    return supabaseHelpers.remove(TABLE_NAME, id);
-  }
+    const { error } = await supabase.from(TABLE).delete().eq('id_usuario', id);
+    if (error) throw error;
+    return true;
+  },
 };
 
 export default usuarioService;

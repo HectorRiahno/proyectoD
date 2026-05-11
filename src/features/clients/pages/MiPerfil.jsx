@@ -1,274 +1,130 @@
-import React, { useState } from 'react';
-import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  User, Mail, Phone, MapPin, Calendar, Heart, AlertCircle,
+  Loader2, FileText, Briefcase, Users, IdCard
+} from 'lucide-react';
+import pacienteService from '../../../services/pacienteService';
 
 export default function MiPerfil() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [perfil, setPerfil] = useState({
-    nombre: 'Carlos López Martínez',
-    documento: '300400500',
-    fechaNacimiento: '15/03/1985',
-    edad: 39,
-    telefono: '+57 300 123 4567',
-    email: 'carlos.lopez@email.com',
-    direccion: 'Calle 45 #12-34, Bogotá',
-    tipoSangre: 'O+',
-    alergias: 'Penicilina',
-    contactoEmergencia: 'Ana López - +57 310 987 6543',
-    eps: 'Compensar',
-    ocupacion: 'Ingeniero de Sistemas'
-  });
+  const [perfil, setPerfil] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [formData, setFormData] = useState(perfil);
+  useEffect(() => {
+    let mounted = true;
+    pacienteService.getMiPerfil()
+      .then((data) => { if (mounted) setPerfil(data); })
+      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando perfil'); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const initials = (n) => (n ?? '?').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
 
-  const handleSave = () => {
-    setPerfil(formData);
-    setIsEditing(false);
-    alert('Perfil actualizado correctamente');
-  };
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
+        <Loader2 size={32} className="mx-auto mb-2 animate-spin text-sky-600" />
+        <p className="text-gray-500">Cargando perfil...</p>
+      </div>
+    );
+  }
 
-  const handleCancel = () => {
-    setFormData(perfil);
-    setIsEditing(false);
-  };
+  if (error || !perfil) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-xl flex items-center gap-3">
+        <AlertCircle size={20} />
+        {error || 'No se pudo cargar tu perfil'}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-3xl font-bold shadow-lg">
-              CL
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold mb-2">{perfil.nombre}</h1>
-              <p className="text-emerald-100">Documento: {perfil.documento}</p>
-              <p className="text-emerald-100">EPS: {perfil.eps}</p>
-            </div>
+      <div className="bg-gradient-to-r from-sky-600 to-cyan-700 rounded-xl shadow-lg p-8 text-white">
+        <div className="flex items-center gap-6">
+          <div className="w-24 h-24 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-xl">
+            {initials(perfil.nombre_completo)}
           </div>
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-xl transition font-semibold"
-            >
-              <Edit size={20} />
-              Editar Perfil
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="flex items-center gap-2 px-6 py-3 bg-white text-emerald-600 hover:bg-white/90 rounded-xl transition font-semibold"
-              >
-                <Save size={20} />
-                Guardar
-              </button>
-              <button
-                onClick={handleCancel}
-                className="flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl transition font-semibold"
-              >
-                <X size={20} />
-                Cancelar
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Información Personal */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <User className="text-emerald-600" size={24} />
-          Información Personal
-        </h2>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nombre Completo
-            </label>
-            {isEditing ? (
-              <input
-                name="nombre"
-                value={formData.nombre}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.nombre}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Documento
-            </label>
-            <p className="px-4 py-3 bg-gray-100 rounded-xl text-gray-600 font-mono">{perfil.documento}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Fecha de Nacimiento
-            </label>
-            <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.fechaNacimiento}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Edad
-            </label>
-            <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.edad} años</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Tipo de Sangre
-            </label>
-            <p className="px-4 py-3 bg-red-50 rounded-xl text-red-700 font-bold">{perfil.tipoSangre}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Ocupación
-            </label>
-            {isEditing ? (
-              <input
-                name="ocupacion"
-                value={formData.ocupacion}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.ocupacion}</p>
-            )}
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold mb-1">{perfil.nombre_completo}</h1>
+            <p className="text-sky-100">
+              {perfil.tipo_documento} {perfil.documento}
+              {perfil.edad != null && ` · ${perfil.edad} años`}
+              {perfil.genero && ` · ${perfil.genero}`}
+            </p>
+            <p className="text-sm text-sky-100 mt-2 flex items-center gap-2">
+              <FileText size={14} />
+              Historia clínica: <span className="font-mono font-semibold">{perfil.numero_historia}</span>
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Información de Contacto */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <Phone className="text-emerald-600" size={24} />
-          Información de Contacto
-        </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title="Información personal" icon={<User size={20} />}>
+          <Field icon={<IdCard size={16} />} label="Documento" value={`${perfil.tipo_documento ?? ''} ${perfil.documento}`} />
+          <Field icon={<Calendar size={16} />} label="Fecha de nacimiento" value={perfil.fecha_nacimiento} />
+          <Field icon={<User size={16} />} label="Género" value={perfil.genero} />
+          <Field icon={<Users size={16} />} label="Estado civil" value={perfil.estado_civil} />
+          <Field icon={<Briefcase size={16} />} label="Ocupación" value={perfil.ocupacion} />
+        </Card>
 
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-              <Phone size={16} />
-              Teléfono
-            </label>
-            {isEditing ? (
-              <input
-                name="telefono"
-                value={formData.telefono}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.telefono}</p>
-            )}
-          </div>
+        <Card title="Contacto" icon={<Phone size={20} />}>
+          <Field icon={<Mail size={16} />} label="Correo electrónico" value={perfil.email} />
+          <Field icon={<Phone size={16} />} label="Teléfono" value={perfil.telefono} />
+          <Field icon={<MapPin size={16} />} label="Dirección" value={perfil.direccion} />
+          <Field icon={<Phone size={16} />} label="Contacto de emergencia" value={perfil.contacto_emergencia} />
+        </Card>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-              <Mail size={16} />
-              Email
-            </label>
-            {isEditing ? (
-              <input
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.email}</p>
-            )}
+        <Card title="Información médica" icon={<Heart size={20} />} className="lg:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-xs font-bold text-red-700 uppercase mb-1 flex items-center gap-1">
+                <Heart size={14} /> Tipo de sangre
+              </p>
+              <p className="text-2xl font-bold text-red-900">{perfil.tipo_sangre ?? '—'}</p>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <p className="text-xs font-bold text-orange-700 uppercase mb-1 flex items-center gap-1">
+                <AlertCircle size={14} /> Alergias conocidas
+              </p>
+              <p className="text-sm text-orange-900 whitespace-pre-wrap">{perfil.alergias || 'Ninguna registrada'}</p>
+            </div>
           </div>
-
-          <div className="col-span-2">
-            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-              <MapPin size={16} />
-              Dirección
-            </label>
-            {isEditing ? (
-              <input
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.direccion}</p>
-            )}
-          </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Información Médica */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <Calendar className="text-emerald-600" size={24} />
-          Información Médica
-        </h2>
+      <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-sm text-sky-800 flex items-start gap-3">
+        <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+        <p>
+          Si alguno de estos datos está desactualizado, comunícate con la administración del centro para que sea corregido.
+          Por seguridad, los datos personales solo pueden ser modificados por el personal autorizado.
+        </p>
+      </div>
+    </div>
+  );
+}
 
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Alergias
-            </label>
-            {isEditing ? (
-              <input
-                name="alergias"
-                value={formData.alergias}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-orange-50 rounded-xl text-orange-700 font-medium">{perfil.alergias}</p>
-            )}
-          </div>
+function Card({ title, icon, children, className = '' }) {
+  return (
+    <div className={`bg-white rounded-xl shadow-md p-6 border border-gray-100 ${className}`}>
+      <h2 className="text-lg font-bold text-gray-800 mb-5 flex items-center gap-2">
+        <span className="text-sky-600">{icon}</span>
+        {title}
+      </h2>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Contacto de Emergencia
-            </label>
-            {isEditing ? (
-              <input
-                name="contactoEmergencia"
-                value={formData.contactoEmergencia}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-red-50 rounded-xl text-red-700 font-medium">{perfil.contactoEmergencia}</p>
-            )}
-          </div>
-
-          <div className="col-span-2">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              EPS / Aseguradora
-            </label>
-            {isEditing ? (
-              <input
-                name="eps"
-                value={formData.eps}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
-            ) : (
-              <p className="px-4 py-3 bg-gray-50 rounded-xl text-gray-900 font-medium">{perfil.eps}</p>
-            )}
-          </div>
-        </div>
+function Field({ icon, label, value }) {
+  return (
+    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+      <div className="text-sky-600 mt-0.5 flex-shrink-0">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-sm font-semibold text-gray-900 break-words">{value || '—'}</p>
       </div>
     </div>
   );

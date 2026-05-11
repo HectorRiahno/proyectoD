@@ -43,8 +43,12 @@ export default function CreateDoctor() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    if (formData.password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (!/[A-Za-z]/.test(formData.password) || !/\d/.test(formData.password)) {
+      setError('La contraseña debe contener letras y números.');
       return;
     }
 
@@ -52,10 +56,9 @@ export default function CreateDoctor() {
       setLoading(true);
       await createDoctorAccount({
         nombre: formData.nombre,
-        correo: formData.correo,
+        email: formData.correo,
         especialidad: formData.especialidad,
         password: formData.password,
-        id_rol: 2,
       });
       setSuccess('Cuenta de médico creada correctamente.');
       setFormData({ nombre: '', correo: '', especialidad: '', password: '' });
