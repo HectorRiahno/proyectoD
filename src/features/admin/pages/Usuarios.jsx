@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, ShieldCheck, Mail, Lock, User, Users, Search, Loader2, AlertCircle, CheckCircle, X } from 'lucide-react';
-import usuarioService from '../../../services/usuarioService';
+import {
+  UserPlus, ShieldCheck, Mail, Lock, User, Users, Search,
+  Loader2, AlertCircle, CheckCircle, X, Edit, Trash2,
+  ToggleLeft, ToggleRight, Eye, EyeOff, Info
+} from 'lucide-react';
+import { supabase } from '../../../lib/supabase';
 import { createUserAccount } from '../../../services/adminService';
 
+// ─── Roles disponibles ─────────────────────────────────────────────────────────
 const ROLES = [
   { value: 'admin',     label: 'Administrador' },
   { value: 'medico',    label: 'Médico' },
@@ -10,127 +15,152 @@ const ROLES = [
   { value: 'cliente',   label: 'Cliente / Paciente' },
 ];
 
-const rolColor = (rol) => {
-  const map = {
-    admin:     'bg-red-100 text-red-700',
-    medico:    'bg-blue-100 text-blue-700',
-    asistente: 'bg-purple-100 text-purple-700',
-    cliente:   'bg-green-100 text-green-700',
-  };
-  return map[rol] ?? 'bg-gray-100 text-gray-700';
-};
+const rolColor = (rol) => ({
+  admin:     'bg-red-100 text-red-700',
+  medico:    'bg-blue-100 text-blue-700',
+  asistente: 'bg-purple-100 text-purple-700',
+  cliente:   'bg-green-100 text-green-700',
+}[rol] ?? 'bg-gray-100 text-gray-700');
 
+// ─── Página principal ──────────────────────────────────────────────────────────
 export default function Usuarios() {
-  const [usuarios, setUsuarios] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [usuarios, setUsuarios]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [search, setSearch]       = useState('');
   const [filterRol, setFilterRol] = useState('todos');
-  const [showCreate, setShowCreate] = useState(false);
+  const [creando, setCreando]     = useState(false);
+  const [editando, setEditando]   = useState(null);
 
-  const reload = () => {
+  const cargar = async () => {
     setLoading(true);
     setError('');
-    usuarioService.getAll()
-      .then(setUsuarios)
-      .catch((err) => setError(err.message ?? 'Error cargando usuarios'))
-      .finally(() => setLoading(false));
+    const { data, error } = await supabase
+      .from('vw_admin_usuarios')
+      .select('*')
+      .order('nombre_completo', { ascending: true });
+    if (error) setError(error.message);
+    else setUsuarios(data ?? []);
+    setLoading(false);
   };
 
-  useEffect(() => {
-    reload();
-  }, []);
+  useEffect(() => { cargar(); }, []);
 
-  const filtered = usuarios.filter((u) => {
-    const term = searchTerm.toLowerCase();
+  const filtered = usuarios.filter(u => {
+    const term = search.toLowerCase();
     const matchSearch =
       (u.nombre_completo ?? '').toLowerCase().includes(term) ||
-      (u.email ?? '').toLowerCase().includes(term) ||
-      (u.username ?? '').toLowerCase().includes(term) ||
-      (u.documento ?? '').includes(searchTerm);
+      (u.email           ?? '').toLowerCase().includes(term) ||
+      (u.username        ?? '').toLowerCase().includes(term) ||
+      (u.documento       ?? '').includes(search);
     const matchRol = filterRol === 'todos' || u.rol_nombre === filterRol;
     return matchSearch && matchRol;
   });
 
   const totalPorRol = ROLES.reduce((acc, r) => {
-    acc[r.value] = usuarios.filter((u) => u.rol_nombre === r.value).length;
+    acc[r.value] = usuarios.filter(u => u.rol_nombre === r.value).length;
     return acc;
   }, { todos: usuarios.length });
 
+  const toggleActivo = async (u) => {
+    setError('');
+    const { error } = await supabase
+      .from('usuario')
+      .update({ activo: !u.activo })
+      .eq('id_usuario', u.id_usuario);
+    if (error) {
+      setError(error.code === '42501'
+        ? 'Sin permisos. Ejecuta supabase/rls-admin.sql primero.'
+        : error.message);
+      return;
+    }
+    cargar();
+  };
+
+  const eliminar = async (u) => {
+    if (!window.confirm(
+      `¿Eliminar el perfil de "${u.nombre_completo}"?\n\n` +
+      `Se eliminará su registro del sistema.\n` +
+      `Para eliminar el acceso de login, ve a Supabase Dashboard → Auth → Users.`
+    )) return;
+
+    setError('');
+    try {
+      // 1. Eliminar asignaciones de rol
+      await supabase.from('asignacion_rol').delete().eq('id_usuario', u.id_usuario);
+      // 2. Eliminar usuario (persona queda como registro histórico)
+      const { error: e2 } = await supabase.from('usuario').delete().eq('id_usuario', u.id_usuario);
+      if (e2) {
+        if (e2.code === '42501') throw new Error('Sin permisos. Ejecuta supabase/rls-admin.sql primero.');
+        throw new Error(e2.message);
+      }
+      cargar();
+    } catch (err) {
+      setError(err.message ?? 'Error al eliminar usuario');
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Gestión de Usuarios</h1>
-            <p className="text-blue-100">Administrar cuentas del sistema (admin, médico, asistente, cliente)</p>
+            <p className="text-blue-100">Cuentas de acceso al sistema</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-blue-100 mb-1">Total Usuarios</p>
-            <p className="text-4xl font-bold">{loading ? '···' : usuarios.length}</p>
+          <div className="flex gap-6 text-center">
+            <KPI label="Total"      value={loading ? '···' : usuarios.length} />
+            <KPI label="Activos"    value={loading ? '···' : usuarios.filter(u => u.activo).length} />
+            <KPI label="Inactivos"  value={loading ? '···' : usuarios.filter(u => !u.activo).length} />
           </div>
         </div>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} />
-          {error}
+          <AlertCircle size={20} /> {error}
+          <button onClick={() => setError('')} className="ml-auto"><X size={16} /></button>
         </div>
       )}
 
       {/* Resumen por rol */}
-      <div className="grid grid-cols-4 gap-4">
-        {ROLES.map((r) => (
-          <div key={r.value} className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">{r.label}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{totalPorRol[r.value] ?? 0}</p>
-          </div>
+      <div className="grid grid-cols-5 gap-3">
+        {[{ value: 'todos', label: 'Todos' }, ...ROLES].map(r => (
+          <button
+            key={r.value}
+            onClick={() => setFilterRol(r.value)}
+            className={`p-4 rounded-xl border transition text-left ${
+              filterRol === r.value
+                ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
+                : 'bg-white border-gray-100 text-gray-700 hover:border-blue-300'
+            }`}
+          >
+            <p className="text-xs opacity-80 mb-1">{r.label}</p>
+            <p className="text-2xl font-bold">{totalPorRol[r.value] ?? 0}</p>
+          </button>
         ))}
       </div>
 
       {/* Filtros + acción */}
-      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 space-y-4">
+      <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
         <div className="flex items-center gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 text-gray-400" size={20} />
             <input
               type="text"
               placeholder="Buscar por nombre, email, usuario o documento..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => setCreando(true)}
             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg"
           >
-            <UserPlus size={20} />
-            Crear usuario
+            <UserPlus size={20} /> Crear usuario
           </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilterRol('todos')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              filterRol === 'todos' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Todos ({totalPorRol.todos})
-          </button>
-          {ROLES.map((r) => (
-            <button
-              key={r.value}
-              onClick={() => setFilterRol(r.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                filterRol === r.value ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {r.label} ({totalPorRol[r.value] ?? 0})
-            </button>
-          ))}
         </div>
       </div>
 
@@ -146,102 +176,109 @@ export default function Usuarios() {
                 <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Rol</th>
                 <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Estado</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Último acceso</th>
+                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400">
-                    <Loader2 size={32} className="mx-auto mb-2 animate-spin" />
-                    Cargando usuarios...
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="text-center py-12">
+                  <Loader2 size={32} className="mx-auto mb-2 animate-spin text-blue-600" />
+                  <p className="text-gray-500">Cargando usuarios...</p>
+                </td></tr>
               ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-500">
-                    <Users size={48} className="mx-auto mb-4 text-gray-300" />
-                    No se encontraron usuarios
+                <tr><td colSpan={7} className="text-center py-12">
+                  <Users size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">No se encontraron usuarios</p>
+                </td></tr>
+              ) : filtered.map((u, idx) => (
+                <tr key={u.id_usuario} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                  {/* Usuario */}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${u.activo ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gray-400'}`}>
+                        {(u.nombre_completo ?? '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{u.nombre_completo || '—'}</p>
+                        <p className="text-xs text-gray-500">@{u.username}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{u.email || '—'}</td>
+                  <td className="px-6 py-4 text-sm font-mono text-gray-700">{u.documento || '—'}</td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`text-xs px-3 py-1 rounded-full font-medium ${rolColor(u.rol_nombre)}`}>
+                      {u.rol_nombre || 'sin rol'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <button onClick={() => toggleActivo(u)} title={u.activo ? 'Desactivar' : 'Activar'}>
+                      {u.activo
+                        ? <ToggleRight size={28} className="text-green-500 mx-auto" />
+                        : <ToggleLeft  size={28} className="text-gray-400 mx-auto" />}
+                    </button>
+                    <p className="text-xs text-gray-500 mt-0.5">{u.activo ? 'Activo' : 'Inactivo'}</p>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-gray-600">
+                    {u.ultimo_acceso
+                      ? new Date(u.ultimo_acceso).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
+                      : 'Nunca'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => setEditando(u)}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        title="Editar"
+                      >
+                        <Edit size={17} />
+                      </button>
+                      <button
+                        onClick={() => eliminar(u)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                filtered.map((u, idx) => (
-                  <tr key={u.id_usuario} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-md">
-                          {(u.nombre_completo ?? '?').split(' ').map((s) => s[0]).join('').slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">{u.nombre_completo ?? '—'}</p>
-                          <p className="text-xs text-gray-500">@{u.username ?? ''}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{u.email ?? '—'}</td>
-                    <td className="px-6 py-4 text-sm font-mono text-gray-700">{u.documento ?? '—'}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`text-xs px-3 py-1 rounded-full font-medium ${rolColor(u.rol_nombre)}`}>
-                        {u.rol_nombre ?? 'sin rol'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {u.activo ? (
-                        <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium bg-green-100 text-green-700">
-                          <CheckCircle size={12} /> Activo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium bg-gray-100 text-gray-700">
-                          Inactivo
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-gray-600">
-                      {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-ES') : 'Nunca'}
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       </div>
 
-      {showCreate && (
-        <CrearUsuarioModal
-          onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); reload(); }}
-        />
-      )}
+      {creando  && <ModalCrear    onClose={() => { setCreando(false);  cargar(); }} />}
+      {editando && <ModalEditar   usuario={editando} onClose={() => { setEditando(null); cargar(); }} />}
     </div>
   );
 }
 
-function CrearUsuarioModal({ onClose, onCreated }) {
+// ─── Modal: Crear usuario ──────────────────────────────────────────────────────
+function ModalCrear({ onClose }) {
   const [form, setForm] = useState({
-    email: '',
-    password: '',
-    nombre: '',
-    rol: 'cliente',
-    especialidad: '',
+    email: '', password: '', nombre: '', rol: 'cliente', especialidad: '',
   });
+  const [showPass, setShowPass] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]           = useState('');
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     setError('');
     setSubmitting(true);
     try {
       await createUserAccount({
-        email: form.email,
-        password: form.password,
-        nombre: form.nombre,
-        rol: form.rol,
+        email:       form.email,
+        password:    form.password,
+        nombre:      form.nombre,
+        rol:         form.rol,
         especialidad: form.rol === 'medico' ? form.especialidad : undefined,
       });
-      onCreated();
+      onClose();
     } catch (err) {
       setError(err.message ?? 'No se pudo crear la cuenta');
     } finally {
@@ -249,79 +286,245 @@ function CrearUsuarioModal({ onClose, onCreated }) {
     }
   };
 
+  const strength = (() => {
+    const p = form.password;
+    if (!p) return 0;
+    let s = 0;
+    if (p.length >= 8) s++;
+    if (/[A-Z]/.test(p)) s++;
+    if (/[a-z]/.test(p)) s++;
+    if (/\d/.test(p)) s++;
+    if (/[^A-Za-z0-9]/.test(p)) s++;
+    return s;
+  })();
+
+  return (
+    <Modal titulo="Crear nuevo usuario" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Aviso */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-800">
+          <Info size={16} className="flex-shrink-0 mt-0.5" />
+          <p>Se crea la cuenta en Supabase Auth y automáticamente se registran los datos en la BD.</p>
+        </div>
+
+        <FieldInput label="Nombre completo *" name="nombre" value={form.nombre} onChange={handleChange} required placeholder="Ej: María Gómez Pérez" icon={<User size={16} />} />
+        <FieldInput label="Correo electrónico *" name="email" type="email" value={form.email} onChange={handleChange} required placeholder="usuario@correo.com" icon={<Mail size={16} />} />
+
+        {/* Contraseña con medidor */}
+        <div>
+          <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+            <Lock size={16} /> Contraseña *
+          </label>
+          <div className="relative">
+            <input
+              name="password" type={showPass ? 'text' : 'password'} value={form.password}
+              onChange={handleChange} required placeholder="Mínimo 8 caracteres"
+              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button type="button" onClick={() => setShowPass(p => !p)}
+              className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600">
+              {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+          {form.password && (
+            <>
+              <div className="flex gap-1 h-1.5 mt-2">
+                {[1,2,3,4,5].map(n => (
+                  <div key={n} className={`flex-1 rounded-full transition-all ${
+                    n <= strength
+                      ? strength <= 2 ? 'bg-red-400' : strength <= 3 ? 'bg-yellow-400' : 'bg-green-500'
+                      : 'bg-gray-200'
+                  }`} />
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Fortaleza: <span className="font-medium">{['','Muy débil','Débil','Regular','Fuerte','Muy fuerte'][strength]}</span>
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Rol */}
+        <div>
+          <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+            <ShieldCheck size={16} /> Rol *
+          </label>
+          <select name="rol" value={form.rol} onChange={handleChange}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+
+        {form.rol === 'medico' && (
+          <FieldInput label="Especialidad *" name="especialidad" value={form.especialidad} onChange={handleChange} required placeholder="Ej: Cardiología" />
+        )}
+
+        {error && <ErrorBox msg={error} />}
+        <BotonesForm onCancel={onClose} saving={submitting} labelSave="Crear usuario" />
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Modal: Editar usuario ─────────────────────────────────────────────────────
+function ModalEditar({ usuario: u, onClose }) {
+  const [form, setForm] = useState({
+    nombres:   u.nombres   ?? '',
+    apellidos: u.apellidos ?? '',
+    telefono:  u.telefono  ?? '',
+    documento: u.documento ?? '',
+    activo:    u.activo    ?? true,
+    rol:       u.rol_nombre ?? 'cliente',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  const handleChange = e => {
+    const { name, value, type, checked } = e.target;
+    setForm(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      // 1. Actualizar datos de persona
+      if (u.id_persona) {
+        const { error: e1 } = await supabase.from('persona').update({
+          nombres:   form.nombres.trim(),
+          apellidos: form.apellidos.trim(),
+          telefono:  form.telefono || null,
+          documento: form.documento.trim() || null,
+        }).eq('id_persona', u.id_persona);
+        if (e1) {
+          if (e1.code === '42501') throw new Error('Sin permisos sobre persona. Ejecuta supabase/rls-admin.sql.');
+          if (e1.code === '23505') throw new Error('Ya existe una persona con ese documento.');
+          throw new Error(e1.message);
+        }
+      }
+
+      // 2. Actualizar campo activo en usuario
+      const { error: e2 } = await supabase.from('usuario').update({ activo: form.activo }).eq('id_usuario', u.id_usuario);
+      if (e2) {
+        if (e2.code === '42501') throw new Error('Sin permisos sobre usuario. Ejecuta supabase/rls-admin.sql.');
+        throw new Error(e2.message);
+      }
+
+      // 3. Actualizar rol si cambió
+      if (form.rol !== u.rol_nombre) {
+        // Obtener id del nuevo rol
+        const { data: rolData } = await supabase.from('rol').select('id_rol').eq('nombre', form.rol).maybeSingle();
+        if (!rolData?.id_rol) throw new Error(`Rol "${form.rol}" no encontrado en la BD.`);
+
+        // Eliminar asignación anterior
+        await supabase.from('asignacion_rol').delete().eq('id_usuario', u.id_usuario);
+
+        // Insertar nueva asignación
+        const { error: e3 } = await supabase.from('asignacion_rol').insert({
+          id_usuario: u.id_usuario,
+          id_rol:     rolData.id_rol,
+        });
+        if (e3) {
+          if (e3.code === '42501') throw new Error('Sin permisos sobre asignacion_rol. Ejecuta supabase/rls-admin.sql.');
+          throw new Error(e3.message);
+        }
+      }
+
+      onClose();
+    } catch (err) {
+      console.error('[ModalEditar Usuario]', err);
+      setError(err.message ?? 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal titulo="Editar usuario" subtitulo={u.nombre_completo ?? u.username} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Info sólo lectura */}
+        <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
+          <div>
+            <p className="text-xs text-gray-500">Username</p>
+            <p className="font-semibold text-gray-900">@{u.username}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Email</p>
+            <p className="font-semibold text-gray-900 truncate">{u.email}</p>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400">* El email y el username no se pueden modificar desde aquí.</p>
+
+        {/* Datos personales */}
+        <div className="grid grid-cols-2 gap-4">
+          <FieldInput label="Nombres *"   name="nombres"   value={form.nombres}   onChange={handleChange} required />
+          <FieldInput label="Apellidos *" name="apellidos" value={form.apellidos} onChange={handleChange} required />
+          <FieldInput label="Documento"   name="documento" value={form.documento} onChange={handleChange} placeholder="Cédula o ID" />
+          <FieldInput label="Teléfono"    name="telefono"  value={form.telefono}  onChange={handleChange} />
+        </div>
+
+        {/* Rol */}
+        <div>
+          <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+            <ShieldCheck size={16} /> Rol
+          </label>
+          <select name="rol" value={form.rol} onChange={handleChange}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+          {form.rol !== u.rol_nombre && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+              <Info size={12} /> Cambio de rol: <strong>{u.rol_nombre}</strong> → <strong>{form.rol}</strong>
+            </p>
+          )}
+        </div>
+
+        {/* Activo */}
+        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+          <input type="checkbox" name="activo" id="chk-activo-edit" checked={form.activo} onChange={handleChange} className="w-5 h-5 rounded text-blue-600" />
+          <label htmlFor="chk-activo-edit" className="text-sm font-medium text-gray-700">
+            Cuenta activa (el usuario puede iniciar sesión)
+          </label>
+        </div>
+
+        {error && <ErrorBox msg={error} />}
+        <BotonesForm onCancel={onClose} saving={saving} labelSave="Guardar cambios" />
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Sub-componentes UI ────────────────────────────────────────────────────────
+function Modal({ titulo, subtitulo, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl">
           <div>
-            <h2 className="text-2xl font-bold">Crear nuevo usuario</h2>
-            <p className="text-blue-100 text-sm">Esta cuenta podrá iniciar sesión con email y contraseña</p>
+            <h2 className="text-2xl font-bold">{titulo}</h2>
+            {subtitulo && <p className="text-blue-100 text-sm">{subtitulo}</p>}
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition"><X size={24} /></button>
+          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">
+            <X size={24} />
+          </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <Input label="Nombre completo" name="nombre" value={form.nombre} onChange={handleChange} icon={<User size={16} />} required placeholder="Ej: María Gómez Pérez" />
-          <Input label="Correo electrónico" name="email" type="email" value={form.email} onChange={handleChange} icon={<Mail size={16} />} required placeholder="usuario@correo.com" />
-          <Input label="Contraseña" name="password" type="password" value={form.password} onChange={handleChange} icon={<Lock size={16} />} required placeholder="Mínimo 8 caracteres, letras + números" />
-
-          <div>
-            <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-              <ShieldCheck size={16} /> Rol
-            </label>
-            <select
-              name="rol"
-              value={form.rol}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            >
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {form.rol === 'medico' && (
-            <Input
-              label="Especialidad"
-              name="especialidad"
-              value={form.especialidad}
-              onChange={handleChange}
-              required
-              placeholder="Cardiología, Pediatría, etc."
-            />
-          )}
-
-          {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
-              <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60"
-            >
-              {submitting ? 'Creando...' : 'Crear usuario'}
-            </button>
-          </div>
-        </form>
+        <div className="p-6">{children}</div>
       </div>
     </div>
   );
 }
 
-function Input({ label, icon, ...props }) {
+function KPI({ label, value }) {
+  return (
+    <div>
+      <p className="text-sm text-blue-100">{label}</p>
+      <p className="text-3xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function FieldInput({ label, icon, ...props }) {
   return (
     <div>
       <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
@@ -329,8 +532,31 @@ function Input({ label, icon, ...props }) {
       </label>
       <input
         {...props}
-        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
+    </div>
+  );
+}
+
+function ErrorBox({ msg }) {
+  return (
+    <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-start gap-2">
+      <AlertCircle size={16} className="flex-shrink-0 mt-0.5" /> {msg}
+    </div>
+  );
+}
+
+function BotonesForm({ onCancel, saving, labelSave }) {
+  return (
+    <div className="flex gap-3 pt-4 border-t border-gray-200">
+      <button type="button" onClick={onCancel}
+        className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold">
+        Cancelar
+      </button>
+      <button type="submit" disabled={saving}
+        className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60">
+        {saving ? 'Guardando...' : labelSave}
+      </button>
     </div>
   );
 }

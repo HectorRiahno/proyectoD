@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Search, User, AlertCircle, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Clock, Search, User, AlertCircle, Loader2, Stethoscope, CheckCircle2 } from 'lucide-react';
 import citaService from '../../../services/citaService';
 
 const ESTADOS = ['todas', 'programada', 'confirmada', 'en_curso', 'completada', 'cancelada', 'no_asistio'];
 
 export default function MisCitas() {
+  const navigate = useNavigate();
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,6 +21,13 @@ export default function MisCitas() {
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, []);
+
+  // Navega a la página de consultas con el id de la cita para iniciar la atención.
+  // La cita se marcará como 'completada' cuando se guarde la consulta (lógica
+  // existente en Consultas.jsx → ModalCrear → handleSubmit).
+  const tomarCita = (cita) => {
+    navigate(`/medico/consultas?citaId=${cita.id_cita}`);
+  };
 
   const filtered = citas.filter((c) => {
     const term = search.toLowerCase();
@@ -105,19 +114,20 @@ export default function MisCitas() {
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Tipo</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Motivo</th>
                 <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Estado</th>
+                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-gray-400">
+                  <td colSpan={6} className="text-center py-12 text-gray-400">
                     <Loader2 size={32} className="mx-auto mb-2 animate-spin text-emerald-600" />
                     Cargando...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-gray-500">
+                  <td colSpan={6} className="text-center py-12 text-gray-500">
                     <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
                     No hay citas que coincidan
                   </td>
@@ -154,6 +164,23 @@ export default function MisCitas() {
                       <span className={`text-xs px-3 py-1 rounded-full font-medium border ${estadoStyles[c.estado] ?? 'bg-gray-100'}`}>
                         {c.estado}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {['programada', 'confirmada', 'en_curso'].includes(c.estado) ? (
+                        <button
+                          onClick={() => tomarCita(c)}
+                          title="Iniciar consulta médica para esta cita"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition text-xs font-semibold shadow-sm"
+                        >
+                          <Stethoscope size={14} /> Tomar cita
+                        </button>
+                      ) : c.estado === 'completada' ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                          <CheckCircle2 size={14} /> Atendida
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))

@@ -18,6 +18,7 @@ import AdminReportes from './features/admin/pages/Reportes';
 import AdminConfiguracion from './features/admin/pages/Configuracion';
 import AdminUsuarios from './features/admin/pages/Usuarios';
 import AdminMedicos  from './features/admin/pages/Medicos';
+import AdminHorarios from './features/admin/pages/Horarios';
 import CreateDoctor from './features/admin/components/CreateDoctor';
 
 import MedicoDashboard from './features/medico/pages/MedicoDashboard';
@@ -122,6 +123,7 @@ export default function AppRoutes() {
         <Route path="pacientes"    element={<AdminPacientes />} />
         <Route path="usuarios"     element={<AdminUsuarios />} />
         <Route path="medicos"      element={<AdminMedicos />} />
+        <Route path="horarios"     element={<AdminHorarios />} />
         <Route path="crear-medico" element={<CreateDoctor />} />
         <Route path="reportes"     element={<AdminReportes />} />
         <Route path="configuracion" element={<AdminConfiguracion />} />

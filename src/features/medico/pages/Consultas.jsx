@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ClipboardList, Search, Plus, Edit, Eye, Trash2,
   AlertCircle, Loader2, User, Calendar, X,
@@ -40,6 +41,22 @@ export default function Consultas() {
   const [detalle, setDetalle]     = useState(null);
   const [editando, setEditando]   = useState(null);
   const [creando, setCreando]     = useState(false);
+  const [citaInicial, setCitaInicial] = useState(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Si la URL trae ?citaId=N (viene del botón "Tomar cita" en /medico/citas),
+  // abrimos el modal de nueva consulta con esa cita pre-vinculada.
+  useEffect(() => {
+    const citaId = searchParams.get('citaId');
+    if (citaId) {
+      setCitaInicial(citaId);
+      setCreando(true);
+      // Limpiar el param para que un refresh no reabra el modal indefinidamente.
+      searchParams.delete('citaId');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -179,7 +196,7 @@ export default function Consultas() {
 
       {detalle  && <ModalDetalle  consulta={detalle}  onClose={() => setDetalle(null)} />}
       {editando && <ModalEditar   consulta={editando} onClose={() => { setEditando(null); cargar(); }} />}
-      {creando  && <ModalCrear    onClose={() => { setCreando(false); cargar(); }} />}
+      {creando  && <ModalCrear    citaInicial={citaInicial} onClose={() => { setCreando(false); setCitaInicial(null); cargar(); }} />}
     </div>
   );
 }
@@ -253,7 +270,7 @@ function ModalDetalle({ consulta: c, onClose }) {
 }
 
 // ─── Modal: Crear consulta (formulario tabbed completo) ────────────────────────
-function ModalCrear({ onClose }) {
+function ModalCrear({ citaInicial = null, onClose }) {
   const { usuarioLogueado } = useAuth();
   const [tab, setTab]           = useState(0);
   const [form, setForm]         = useState({
@@ -285,23 +302,49 @@ function ModalCrear({ onClose }) {
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState('');
   const [searchPac, setSearchPac]         = useState('');
-  const [citaVinculada, setCitaVinculada] = useState('');
+  const [citaVinculada, setCitaVinculada] = useState(citaInicial ? String(citaInicial) : '');
 
   // Cargar pacientes, citas y tipos de diagnóstico
   useEffect(() => {
     const cargar = async () => {
+      // Si llega una citaInicial, incluimos también 'en_curso' por si la cita
+      // ya fue marcada como en proceso, y traemos esa cita aunque no esté en
+      // los estados habituales (para que aparezca en el dropdown).
+      const estadosCita = ['programada', 'confirmada', 'en_curso'];
       const [rPac, rCitas, rTipos] = await Promise.all([
         supabase.from('vw_admin_pacientes').select('id_paciente, nombre_completo, documento').order('nombre_completo'),
-        supabase.from('vw_medico_mis_citas').select('id_cita, fecha, hora, paciente_nombre, estado, id_paciente').in('estado', ['programada', 'confirmada']).order('fecha', { ascending: true }),
+        supabase.from('vw_medico_mis_citas').select('id_cita, fecha, hora, paciente_nombre, estado, id_paciente').in('estado', estadosCita).order('fecha', { ascending: true }),
         supabase.from('tipo_diagnostico').select('id_tipo_diagnostico, nombre').order('nombre'),
       ]);
+      let citasList = rCitas.data ?? [];
+
+      // Si la cita inicial no está en el listado (por ejemplo, ya completada),
+      // la buscamos explícitamente para poder mostrar el contexto al médico.
+      if (citaInicial && !citasList.some(c => String(c.id_cita) === String(citaInicial))) {
+        const { data: citaExtra } = await supabase
+          .from('vw_medico_mis_citas')
+          .select('id_cita, fecha, hora, paciente_nombre, estado, id_paciente')
+          .eq('id_cita', citaInicial)
+          .maybeSingle();
+        if (citaExtra) citasList = [citaExtra, ...citasList];
+      }
+
       setPacientes(rPac.data ?? []);
-      setCitas(rCitas.data ?? []);
+      setCitas(citasList);
       setTiposDx(rTipos.data ?? []);
+
+      // Pre-rellenar el paciente si hay cita inicial
+      if (citaInicial) {
+        const cita = citasList.find(c => String(c.id_cita) === String(citaInicial));
+        if (cita?.id_paciente) {
+          setForm(p => ({ ...p, id_paciente: String(cita.id_paciente) }));
+        }
+      }
+
       setLoadingData(false);
     };
     cargar();
-  }, []);
+  }, [citaInicial]);
 
   // Cargar antecedentes cuando cambia el paciente
   useEffect(() => {
@@ -450,12 +493,39 @@ function ModalCrear({ onClose }) {
     );
   }
 
+  // Información de la cita actualmente vinculada (para mostrar contexto)
+  const citaActual = citaVinculada ? citas.find(c => String(c.id_cita) === String(citaVinculada)) : null;
+
   return (
-    <Modal titulo="Consulta médica" subtitulo="Completa todos los campos de la consulta" onClose={onClose} wide>
+    <Modal
+      titulo={citaInicial ? 'Atender cita médica' : 'Consulta médica'}
+      subtitulo={citaInicial ? 'Registra la atención de la cita seleccionada' : 'Completa todos los campos de la consulta'}
+      onClose={onClose}
+      wide
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
 
-        {/* Cita vinculada */}
-        {citas.length > 0 && (
+        {/* Banner de cita vinculada (cuando viene de "Tomar cita") */}
+        {citaInicial && citaActual && (
+          <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-300 flex items-center gap-3">
+            <div className="bg-emerald-600 rounded-lg p-2">
+              <Calendar size={18} className="text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-emerald-700 uppercase">Atendiendo cita</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {citaActual.paciente_nombre} · {citaActual.fecha} {citaActual.hora?.slice(0,5)}
+              </p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                Cita #{citaActual.id_cita} · Al guardar, se marcará como completada
+              </p>
+            </div>
+            <CheckCircle size={20} className="text-emerald-600 flex-shrink-0" />
+          </div>
+        )}
+
+        {/* Selector de cita (sólo si NO vino preseleccionada) */}
+        {!citaInicial && citas.length > 0 && (
           <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-3">
             <Calendar size={16} className="text-emerald-600 flex-shrink-0" />
             <select value={citaVinculada} onChange={handleCitaSelect}

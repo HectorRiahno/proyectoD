@@ -39,6 +39,13 @@ const employeeSidebarItems = [
     badge: "CRUD"
   },
   {
+    id: 36,
+    title: "Horarios",
+    icon: "Clock",
+    path: "/dashboard/horarios",
+    badge: "ADMIN"
+  },
+  {
     id: 4,
     title: "Inventario",
     icon: "Package",

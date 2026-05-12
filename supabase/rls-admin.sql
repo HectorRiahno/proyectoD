@@ -184,6 +184,31 @@ CREATE POLICY "auth_read_asignacion_rol" ON asignacion_rol
     FOR SELECT TO authenticated USING (TRUE);
 
 -- =====================================================================
+-- usuario — admin puede actualizar y eliminar (el INSERT lo hace el trigger)
+-- =====================================================================
+DROP POLICY IF EXISTS "admin_update_usuario" ON usuario;
+DROP POLICY IF EXISTS "admin_delete_usuario" ON usuario;
+
+CREATE POLICY "admin_update_usuario"
+    ON usuario FOR UPDATE TO authenticated
+    USING    (es_admin())
+    WITH CHECK (es_admin());
+
+CREATE POLICY "admin_delete_usuario"
+    ON usuario FOR DELETE TO authenticated
+    USING (es_admin());
+
+-- =====================================================================
+-- asignacion_rol — admin puede gestionar roles de cualquier usuario
+-- =====================================================================
+DROP POLICY IF EXISTS "admin_write_asignacion_rol" ON asignacion_rol;
+
+CREATE POLICY "admin_write_asignacion_rol"
+    ON asignacion_rol FOR ALL TO authenticated
+    USING    (es_admin())
+    WITH CHECK (es_admin());
+
+-- =====================================================================
 -- Grants para que las funciones helper sean visibles
 -- =====================================================================
 GRANT EXECUTE ON FUNCTION es_admin()             TO authenticated;
