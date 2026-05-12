@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import * as Icons from "lucide-react";
-import { Settings } from "lucide-react";
+import { useAuth } from "../../../hooks/useAuth";
 
 // Sidebar para EMPLEADOS - con acceso CRUD completo
 const employeeSidebarItems = [
@@ -32,6 +32,13 @@ const employeeSidebarItems = [
     badge: "ADMIN"
   },
   {
+    id: 35,
+    title: "Médicos",
+    icon: "Stethoscope",
+    path: "/dashboard/medicos",
+    badge: "CRUD"
+  },
+  {
     id: 4,
     title: "Inventario",
     icon: "Package",
@@ -39,13 +46,13 @@ const employeeSidebarItems = [
     badge: "CRUD"
   },
   {
-    id: 4,
+    id: 5,
     title: "Reportes",
     icon: "BarChart3",
     path: "/dashboard/reportes"
   },
   {
-    id: 5,
+    id: 6,
     title: "Configuración",
     icon: "Settings",
     path: "/dashboard/configuracion"
@@ -54,17 +61,22 @@ const employeeSidebarItems = [
 
 function EmployeeSidebar() {
   const location = useLocation();
+  const { usuarioLogueado } = useAuth();
+
+  const nombre = usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Administrador';
+  const iniciales = nombre.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  const rol = usuarioLogueado?.rol_nombre === 'asistente' ? 'Asistente' : 'Administrador';
 
   return (
     <aside className="w-64 bg-gradient-to-b from-slate-50 to-white h-full">
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
           <div className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white w-11 h-11 flex items-center justify-center rounded-lg font-bold shadow-lg text-sm">
-            MG
+            {iniciales}
           </div>
-          <div>
-            <p className="text-sm font-bold text-gray-900">María González</p>
-            <p className="text-xs text-gray-600">Administrador</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-gray-900 truncate">{nombre}</p>
+            <p className="text-xs text-gray-600">{rol}</p>
             <p className="text-xs text-blue-600 font-medium mt-0.5">Acceso Completo</p>
           </div>
         </div>

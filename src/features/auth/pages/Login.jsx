@@ -24,7 +24,14 @@ export default function Login() {
       navigate('/');
       // routes.jsx redirige según rol cuando estaLogueado
     } catch (err) {
-      setError(err.message || 'Credenciales inválidas. Por favor verifica tu email y contraseña.');
+      const msg = err.message ?? '';
+      if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+        setError('Email o contraseña incorrectos. Verifica que uses las credenciales creadas en Supabase Auth.');
+      } else if (msg.includes('Email not confirmed')) {
+        setError('Correo no confirmado. Pide al administrador que confirme la cuenta en Supabase Dashboard.');
+      } else {
+        setError(msg || 'Error al iniciar sesión. Intenta de nuevo.');
+      }
       console.error('Error de login:', err);
     }
   };

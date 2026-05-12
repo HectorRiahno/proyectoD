@@ -1,50 +1,77 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { categorias } from '../data/categorias';
-import { proveedores } from '../data/proveedores';
 
-export default function ProductModal({ product, onClose, onSave }) {
+// categorias se recibe como prop desde Inventario.jsx (ya cargadas de Supabase)
+export default function ProductModal({ product, categorias = [], onClose, onSave }) {
   const [formData, setFormData] = useState({
-    codigo: '',
-    nombre: '',
-    categoria: 'Medicamentos',
-    subcategoria: '',
-    descripcion: '',
-    stock: 0,
-    stockMinimo: 0,
-    unidad: '',
-    precio: 0,
-    proveedor: '',
-    fechaVencimiento: '',
-    ubicacion: '',
-    lote: '',
-    estado: 'Disponible'
+    id_categoria:       '',
+    nombre:             '',
+    nombre_generico:    '',
+    presentacion:       '',
+    concentracion:      '',
+    via_administracion: '',
+    stock:              0,
+    precio:             0,
+    activo:             true,
   });
 
   useEffect(() => {
     if (product) {
-      setFormData(product);
+      setFormData({
+        id_categoria:       product.id_categoria       ?? '',
+        nombre:             product.nombre              ?? '',
+        nombre_generico:    product.nombre_generico     ?? '',
+        presentacion:       product.presentacion        ?? '',
+        concentracion:      product.concentracion       ?? '',
+        via_administracion: product.via_administracion  ?? '',
+        stock:              product.stock               ?? 0,
+        precio:             product.precio              ?? 0,
+        activo:             product.activo              ?? true,
+      });
     }
   }, [product]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+    onSave({
+      ...formData,
+      id_categoria: formData.id_categoria ? Number(formData.id_categoria) : null,
+      stock:  Number(formData.stock),
+      precio: Number(formData.precio),
+    });
   };
 
-  const selectedCategory = categorias.find(c => c.nombre === formData.categoria);
+  const Field = ({ label, name, type = 'text', placeholder = '', required = false, children }) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label}{required && ' *'}</label>
+      {children ?? (
+        <input
+          name={name}
+          type={type}
+          value={formData[name]}
+          onChange={handleChange}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800">
-            {product ? 'Editar Producto' : 'Agregar Producto'}
+            {product ? 'Editar medicamento' : 'Agregar medicamento'}
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 transition">
             <X size={24} />
@@ -53,190 +80,50 @@ export default function ProductModal({ product, onClose, onSave }) {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Código *</label>
-              <input
-                name="codigo"
-                value={formData.codigo}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="MED-001"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
-              <input
-                name="nombre"
-                value={formData.nombre}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Nombre del producto"
-              />
-            </div>
+            <Field label="Nombre" name="nombre" required placeholder="Ej: Amoxicilina" />
+            <Field label="Nombre genérico" name="nombre_generico" placeholder="Ej: Amoxicilina trihidratada" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Categoría *</label>
+            <Field label="Categoría" name="id_categoria">
               <select
-                name="categoria"
-                value={formData.categoria}
+                name="id_categoria"
+                value={formData.id_categoria}
                 onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                {categorias.map(cat => (
-                  <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                <option value="">Sin categoría</option>
+                {categorias.map(c => (
+                  <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>
                 ))}
               </select>
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Subcategoría</label>
-              <select
-                name="subcategoria"
-                value={formData.subcategoria}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Seleccione subcategoría</option>
-                {selectedCategory?.subcategorias.map((sub, idx) => (
-                  <option key={idx} value={sub}>{sub}</option>
-                ))}
-              </select>
-            </div>
+            <Field label="Vía de administración" name="via_administracion" placeholder="Oral, IV, IM..." />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-            <textarea
-              name="descripcion"
-              value={formData.descripcion}
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Presentación" name="presentacion" placeholder="Tabletas, Cápsulas, Jarabe..." />
+            <Field label="Concentración" name="concentracion" placeholder="500 mg, 250 mg/5 ml..." />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Stock actual" name="stock" type="number" required />
+            <Field label="Precio unitario ($)" name="precio" type="number" required />
+          </div>
+
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <input
+              type="checkbox"
+              name="activo"
+              id="activo"
+              checked={formData.activo}
               onChange={handleChange}
-              rows="2"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Descripción del producto"
+              className="w-5 h-5 rounded text-blue-600"
             />
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Actual *</label>
-              <input
-                name="stock"
-                type="number"
-                value={formData.stock}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Mínimo *</label>
-              <input
-                name="stockMinimo"
-                type="number"
-                value={formData.stockMinimo}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Unidad *</label>
-              <input
-                name="unidad"
-                value={formData.unidad}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Tabletas, Unidades..."
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Precio Unitario *</label>
-              <input
-                name="precio"
-                type="number"
-                value={formData.precio}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Proveedor</label>
-              <select
-                name="proveedor"
-                value={formData.proveedor}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Seleccione proveedor</option>
-                {proveedores.map(prov => (
-                  <option key={prov.id} value={prov.nombre}>{prov.nombre}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Vencimiento</label>
-              <input
-                name="fechaVencimiento"
-                type="date"
-                value={formData.fechaVencimiento || ''}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Ubicación</label>
-              <input
-                name="ubicacion"
-                value={formData.ubicacion}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="A-12"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lote</label>
-              <input
-                name="lote"
-                value={formData.lote}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="LOT-2024-001"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
-            <select
-              name="estado"
-              value={formData.estado}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Disponible">Disponible</option>
-              <option value="Stock Bajo">Stock Bajo</option>
-              <option value="Agotado">Agotado</option>
-              <option value="Descontinuado">Descontinuado</option>
-            </select>
+            <label htmlFor="activo" className="text-sm font-medium text-gray-700">
+              Medicamento activo (disponible para prescribir)
+            </label>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-gray-200">
