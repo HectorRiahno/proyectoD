@@ -34,8 +34,8 @@ export default function Citas() {
   const [editando, setEditando]     = useState(null);
   const [creando, setCreando]       = useState(false);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true);
     setError('');
     const { data, error } = await supabase
       .from('vw_admin_citas')
@@ -43,10 +43,37 @@ export default function Citas() {
       .order('fecha_cita', { ascending: false });
     if (error) setError(error.message);
     else setCitas(data ?? []);
-    setLoading(false);
+    if (!silencioso) setLoading(false);
   }, []);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    cargar();
+
+    // Realtime: refrescar en vivo cuando otro rol (médico, asistente) o el
+    // propio admin cambien la tabla 'cita' (estado, fecha, etc.).
+    // Por ejemplo: el médico guarda la consulta → cita pasa a 'completada'
+    // y se ve aquí sin tener que recargar.
+    const channel = supabase
+      .channel('admin-citas')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'cita' },
+        () => cargar({ silencioso: true })
+      )
+      .subscribe();
+
+    // Fallback: refrescar al volver el foco a la pestaña.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') cargar({ silencioso: true });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [cargar]);
 
   const filtered = citas.filter(c => {
     const term = search.toLowerCase();
@@ -261,6 +288,19 @@ function ModalDetalle({ cita: c, onClose }) {
   );
 }
 
+// ─── Helpers para horario / día ────────────────────────────────────────────────
+const DIAS_JS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const diaSemanaDe = (fechaISO) => {
+  if (!fechaISO) return null;
+  const [y, m, d] = fechaISO.split('-').map(Number);
+  return DIAS_JS[new Date(y, m - 1, d).getDay()];
+};
+const horaAMin = (t) => {
+  if (!t) return -1;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
 // ─── Modal: Crear ──────────────────────────────────────────────────────────────
 function ModalCrear({ onClose }) {
   const [form, setForm] = useState({
@@ -270,6 +310,9 @@ function ModalCrear({ onClose }) {
   const [pacientes, setPacientes]         = useState([]);
   const [medicos, setMedicos]             = useState([]);
   const [tiposConsulta, setTiposConsulta] = useState([]);
+  const [horarios, setHorarios]           = useState([]);  // franjas horarias de todos los médicos
+  const [conflictos, setConflictos]       = useState([]);  // id_medico ocupados a fecha+hora
+  const [checkingConf, setCheckingConf]   = useState(false);
   const [loadingData, setLoadingData]     = useState(true);
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState('');
@@ -278,18 +321,63 @@ function ModalCrear({ onClose }) {
 
   useEffect(() => {
     const cargar = async () => {
-      const [rPac, rMed, rTipo] = await Promise.all([
+      const [rPac, rMed, rTipo, rHor] = await Promise.all([
         supabase.from('vw_admin_pacientes').select('id_paciente, nombre_completo, documento').order('nombre_completo'),
         supabase.from('vw_admin_medicos').select('id_medico, nombre_completo, especialidad').eq('activo', true).order('nombre_completo'),
         supabase.from('tipo_consulta').select('id_tipo_consulta, nombre').order('nombre'),
+        supabase.from('horario_medico').select('id_medico, dia_semana, hora_inicio, hora_fin, disponible').eq('disponible', true),
       ]);
       setPacientes(rPac.data ?? []);
       setMedicos(rMed.data ?? []);
       setTiposConsulta(rTipo.data ?? []);
+      setHorarios(rHor.data ?? []);
       setLoadingData(false);
     };
     cargar();
   }, []);
+
+  // Cada vez que cambian fecha+hora: consultar qué médicos ya tienen cita en ese slot
+  useEffect(() => {
+    if (!form.fecha || !form.hora) { setConflictos([]); return; }
+    let cancelado = false;
+    setCheckingConf(true);
+    supabase.from('vw_admin_citas')
+      .select('id_medico, hora, estado')
+      .eq('fecha', form.fecha)
+      .then(({ data }) => {
+        if (cancelado) return;
+        const ids = (data ?? [])
+          .filter(c => (c.hora ?? '').slice(0, 5) === form.hora && c.estado !== 'cancelada')
+          .map(c => c.id_medico);
+        setConflictos(ids);
+        setCheckingConf(false);
+      });
+    return () => { cancelado = true; };
+  }, [form.fecha, form.hora]);
+
+  // Calcular qué médicos están disponibles: tienen franja que cubre la hora Y no tienen cita en ese slot
+  const dia     = diaSemanaDe(form.fecha);
+  const horaMin = horaAMin(form.hora);
+  const medicosDisponibles = (!form.fecha || !form.hora)
+    ? []
+    : medicos.filter(m => {
+        const enFranja = horarios.some(h =>
+          h.id_medico === m.id_medico &&
+          h.dia_semana === dia &&
+          horaAMin(h.hora_inicio) <= horaMin &&
+          horaMin < horaAMin(h.hora_fin)
+        );
+        return enFranja && !conflictos.includes(m.id_medico);
+      });
+
+  // Si el médico seleccionado deja de ser válido (cambió fecha/hora), limpiar selección
+  useEffect(() => {
+    if (!form.id_medico) return;
+    if (!form.fecha || !form.hora) return;
+    if (!medicosDisponibles.some(m => String(m.id_medico) === String(form.id_medico))) {
+      setForm(p => ({ ...p, id_medico: '' }));
+    }
+  }, [medicosDisponibles, form.id_medico, form.fecha, form.hora]);
 
   const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
 
@@ -299,6 +387,19 @@ function ModalCrear({ onClose }) {
     setSaving(true);
     setError('');
     try {
+      // Verificación final contra race conditions: re-consultar el slot
+      const { data: ocup } = await supabase
+        .from('vw_admin_citas')
+        .select('id_cita, hora, estado')
+        .eq('fecha', form.fecha)
+        .eq('id_medico', Number(form.id_medico));
+      const choca = (ocup ?? []).some(c =>
+        (c.hora ?? '').slice(0, 5) === form.hora && c.estado !== 'cancelada'
+      );
+      if (choca) {
+        throw new Error('Ese médico ya tiene una cita a esa fecha y hora. Elige otro o cambia el horario.');
+      }
+
       const fecha_cita = `${form.fecha}T${form.hora}:00`;
       const { error } = await supabase.from('cita').insert({
         id_paciente:      Number(form.id_paciente),
@@ -328,10 +429,12 @@ function ModalCrear({ onClose }) {
     (p.documento ?? '').includes(searchPac)
   );
 
-  const medicosFiltrados = medicos.filter(m =>
+  const medicosFiltrados = medicosDisponibles.filter(m =>
     (m.nombre_completo ?? '').toLowerCase().includes(searchMed.toLowerCase()) ||
     (m.especialidad ?? '').toLowerCase().includes(searchMed.toLowerCase())
   );
+
+  const fechaHoraListas = !!(form.fecha && form.hora);
 
   if (loadingData) {
     return (
@@ -413,6 +516,11 @@ function ModalCrear({ onClose }) {
         <div>
           <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
             <Stethoscope size={14} /> Médico *
+            {fechaHoraListas && dia && (
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                — disponibles el {dia} a las {form.hora}
+              </span>
+            )}
           </label>
           <div className="relative mb-1">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
@@ -421,23 +529,47 @@ function ModalCrear({ onClose }) {
               placeholder="Filtrar por nombre o especialidad..."
               value={searchMed}
               onChange={e => { setSearchMed(e.target.value); setForm(p => ({ ...p, id_medico: '' })); }}
-              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+              disabled={!fechaHoraListas}
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
           <select
             name="id_medico" value={form.id_medico} onChange={handleChange} required
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+            disabled={!fechaHoraListas || checkingConf}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
-            <option value="">— Selecciona un médico —</option>
+            <option value="">
+              {!fechaHoraListas
+                ? '— Primero selecciona fecha y hora —'
+                : checkingConf
+                  ? '— Verificando disponibilidad... —'
+                  : medicosFiltrados.length === 0
+                    ? '— Ningún médico disponible en ese horario —'
+                    : '— Selecciona un médico —'}
+            </option>
             {medicosFiltrados.map(m => (
               <option key={m.id_medico} value={m.id_medico}>
                 Dr(a). {m.nombre_completo} — {m.especialidad ?? 'General'}
               </option>
             ))}
           </select>
+
+          {/* Feedback bajo el dropdown */}
           {form.id_medico && (
             <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
               <CheckCircle size={12} /> Médico seleccionado
+            </p>
+          )}
+          {fechaHoraListas && !checkingConf && medicosDisponibles.length === 0 && (
+            <p className="text-xs text-orange-600 mt-1 flex items-start gap-1">
+              <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
+              No hay médicos con franja horaria activa el {dia} a las {form.hora}, o todos ya tienen una cita en ese slot.
+              Revisa "Horarios" o cambia fecha/hora.
+            </p>
+          )}
+          {fechaHoraListas && !checkingConf && medicosDisponibles.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              {medicosDisponibles.length} médico{medicosDisponibles.length === 1 ? '' : 's'} con franja en ese horario y sin conflicto.
             </p>
           )}
           {medicos.length === 0 && (

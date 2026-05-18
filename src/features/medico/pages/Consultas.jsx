@@ -205,14 +205,17 @@ export default function Consultas() {
 function ModalDetalle({ consulta: c, onClose }) {
   const [diagnosticos, setDiagnosticos] = useState([]);
   const [sintomas, setSintomas]         = useState([]);
+  const [signos, setSignos]             = useState(null);
 
   useEffect(() => {
     Promise.all([
       supabase.from('diagnostico').select('*, tipo_diagnostico(nombre)').eq('id_consulta', c.id_consulta).order('es_principal', { ascending: false }),
       supabase.from('sintoma').select('*').eq('id_consulta', c.id_consulta),
-    ]).then(([{ data: d }, { data: s }]) => {
+      supabase.from('signos_vitales').select('*').eq('id_consulta', c.id_consulta).order('fecha_registro', { ascending: false }).limit(1).maybeSingle(),
+    ]).then(([{ data: d }, { data: s }, { data: sv }]) => {
       setDiagnosticos(d ?? []);
       setSintomas(s ?? []);
+      setSignos(sv ?? null);
     });
   }, [c.id_consulta]);
 
@@ -227,13 +230,42 @@ function ModalDetalle({ consulta: c, onClose }) {
           </div>
         </Seccion>
 
-        <Seccion titulo="Consulta" color="emerald">
+        <Seccion titulo="Anamnesis" color="emerald">
           <div className="space-y-3">
-            <Campo label="Motivo de consulta"     value={c.motivo_consulta} />
-            <Campo label="Examen físico"           value={c.examen_fisico} />
-            <Campo label="Impresión diagnóstica"   value={c.impresion_diagnostica} highlight />
-            <Campo label="Plan de tratamiento"     value={c.plan_tratamiento} />
-            <Campo label="Observaciones"           value={c.observaciones} />
+            <Campo label="Motivo de consulta"   value={c.motivo_consulta} />
+            <Campo label="Enfermedad actual"    value={c.enfermedad_actual} />
+            <Campo label="Revisión por sistemas" value={c.revision_sistemas} />
+          </div>
+        </Seccion>
+
+        <Seccion titulo="Examen" color="red">
+          <div className="space-y-3">
+            <Campo label="Examen físico"            value={c.examen_fisico} />
+            <Campo label="Exámenes complementarios" value={c.examenes_complementarios} />
+          </div>
+        </Seccion>
+
+        {signos && (
+          <Seccion titulo="Signos vitales" color="red">
+            <div className="grid grid-cols-4 gap-2 text-sm">
+              <Campo label="P. Sistólica"   value={signos.presion_sistolica}       />
+              <Campo label="P. Diastólica"  value={signos.presion_diastolica}      />
+              <Campo label="F. Cardíaca"    value={signos.frecuencia_cardiaca}     />
+              <Campo label="F. Respiratoria" value={signos.frecuencia_respiratoria} />
+              <Campo label="Temperatura"    value={signos.temperatura}             />
+              <Campo label="SpO₂"           value={signos.saturacion_oxigeno}      />
+              <Campo label="Peso"           value={signos.peso}                    />
+              <Campo label="Talla"          value={signos.talla}                   />
+            </div>
+          </Seccion>
+        )}
+
+        <Seccion titulo="Diagnóstico y plan" color="emerald">
+          <div className="space-y-3">
+            <Campo label="Impresión diagnóstica" value={c.impresion_diagnostica} highlight />
+            <Campo label="Análisis clínico"      value={c.analisis_clinico} />
+            <Campo label="Plan de tratamiento"   value={c.plan_tratamiento} />
+            <Campo label="Observaciones"         value={c.observaciones} />
           </div>
         </Seccion>
 
@@ -439,11 +471,13 @@ function ModalCrear({ citaInicial = null, onClose }) {
         if (e2) console.warn('Error diagnósticos (puede faltar migration-consulta.sql):', e2.message);
       }
 
-      // Insertar signos vitales
+      // Insertar signos vitales (enlazados a la consulta y al médico)
       const tieneSignos = Object.values(signos).some(v => v !== '');
       if (tieneSignos) {
         const { error: e3 } = await supabase.from('signos_vitales').insert({
           id_paciente:             Number(form.id_paciente),
+          id_consulta:             id_consulta,
+          id_medico:               idMedico,
           presion_sistolica:       signos.presion_sistolica       ? Number(signos.presion_sistolica)       : null,
           presion_diastolica:      signos.presion_diastolica      ? Number(signos.presion_diastolica)      : null,
           frecuencia_cardiaca:     signos.frecuencia_cardiaca     ? Number(signos.frecuencia_cardiaca)     : null,
@@ -453,12 +487,22 @@ function ModalCrear({ citaInicial = null, onClose }) {
           peso:                    signos.peso                    ? Number(signos.peso)                    : null,
           talla:                   signos.talla                   ? Number(signos.talla)                   : null,
         });
-        if (e3) console.warn('Error signos:', e3.message);
+        if (e3) console.warn('Error signos (puede faltar migration-consulta.sql):', e3.message);
       }
 
-      // Marcar cita como completada
+      // Marcar cita como completada (estado final).
+      // El "en_curso" intermedio se aplica desde MisCitas.jsx al "Tomar cita".
       if (citaVinculada) {
-        await supabase.from('cita').update({ estado: 'completada' }).eq('id_cita', Number(citaVinculada));
+        const { error: eCita } = await supabase
+          .from('cita')
+          .update({ estado: 'completada' })
+          .eq('id_cita', Number(citaVinculada));
+        if (eCita) {
+          if (eCita.code === '42501') {
+            throw new Error('Sin permisos para finalizar la cita. Ejecuta supabase/rls-medico.sql.');
+          }
+          throw new Error(eCita.message ?? 'No se pudo finalizar la cita');
+        }
       }
 
       onClose();

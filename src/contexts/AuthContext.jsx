@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
   // Refs para distinguir entre "nunca hubo sesión", "logout explícito" y "expiración"
   const wasLoggedInRef     = useRef(false);  // ¿el usuario estaba logueado antes?
   const explicitLogoutRef  = useRef(false);  // ¿el logout fue explícito (botón)?
+  const currentAuthUidRef  = useRef(null);   // UID auth ya cargado (evita re-fetch en SIGNED_IN duplicado)
 
   // Mantener wasLoggedInRef sincronizado con el estado
   useEffect(() => {
@@ -89,6 +90,7 @@ export function AuthProvider({ children }) {
         if (sessErr) throw sessErr;
 
         if (session?.user) {
+          currentAuthUidRef.current = session.user.id;
           const usuario = await fetchUsuario(session);
           if (mounted) setUsuarioLogueado(usuario);
         }
@@ -113,8 +115,12 @@ export function AuthProvider({ children }) {
         // ── INITIAL_SESSION: carga inicial del app, no es un cambio de estado ──
         if (event === 'INITIAL_SESSION') {
           if (session?.user) {
-            const usuario = await fetchUsuario(session);
-            if (mounted) setUsuarioLogueado(usuario);
+            // Si loadSession ya cargó el mismo UID, no volver a consultar.
+            if (currentAuthUidRef.current !== session.user.id) {
+              currentAuthUidRef.current = session.user.id;
+              const usuario = await fetchUsuario(session);
+              if (mounted) setUsuarioLogueado(usuario);
+            }
           }
           if (mounted) setLoading(false);
           return;
@@ -124,6 +130,17 @@ export function AuthProvider({ children }) {
         if (event === 'SIGNED_IN' && session?.user) {
           setSesionExpirada(false);
           explicitLogoutRef.current = false;
+
+          // Supabase v2 dispara SIGNED_IN al recuperar foco la pestaña.
+          // Si ya tenemos cargado el mismo UID, ignorar: re-consultar genera
+          // un nuevo objeto `usuarioLogueado` que cascadea useEffects de
+          // páginas y deja sus fetches en "cargando..." indefinido.
+          if (currentAuthUidRef.current === session.user.id) {
+            if (mounted) setLoading(false);
+            return;
+          }
+
+          currentAuthUidRef.current = session.user.id;
           const usuario = await fetchUsuario(session);
           if (mounted) {
             setUsuarioLogueado(usuario);
@@ -135,6 +152,9 @@ export function AuthProvider({ children }) {
         // ── Token renovado silenciosamente ────────────────────────────────────
         if (event === 'TOKEN_REFRESHED' && session?.user) {
           setSesionExpirada(false);
+          // Mismo UID: no hace falta re-consultar el perfil.
+          if (currentAuthUidRef.current === session.user.id) return;
+          currentAuthUidRef.current = session.user.id;
           const usuario = await fetchUsuario(session);
           if (mounted) setUsuarioLogueado(usuario);
           return;
@@ -143,6 +163,7 @@ export function AuthProvider({ children }) {
         // ── Sesión terminada: distinguir entre expiración vs logout vs nunca ──
         if (event === 'SIGNED_OUT' || !session?.user) {
           if (!mounted) return;
+          currentAuthUidRef.current = null;
           setUsuarioLogueado(null);
           setLoading(false);
 
@@ -200,6 +221,7 @@ export function AuthProvider({ children }) {
   // ─── Logout ──────────────────────────────────────────────────────────────────
   const logout = async () => {
     explicitLogoutRef.current = true;   // marca para que SIGNED_OUT no active el modal
+    currentAuthUidRef.current = null;
     try {
       setLoading(true);
       setError(null);

@@ -1,9 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, Search, User, AlertCircle, Loader2, Stethoscope, CheckCircle2 } from 'lucide-react';
+import {
+  Calendar, Clock, Search, User, AlertCircle, Loader2,
+  Stethoscope, CheckCircle2, ClipboardList, Hourglass,
+} from 'lucide-react';
 import citaService from '../../../services/citaService';
+import { supabase } from '../../../lib/supabase';
 
-const ESTADOS = ['todas', 'programada', 'confirmada', 'en_curso', 'completada', 'cancelada', 'no_asistio'];
+// Las "programadas" son las que crea el admin tal cual.
+// Las "confirmadas" son las que el admin marca cuando el paciente llegó al
+// consultorio a tiempo — son las que el médico puede tomar. Las que ya
+// están en_curso (médico abrió el modal pero no guardó) se muestran en el
+// mismo cuadro de confirmadas para que pueda retomarlas.
+const ESTADO_STYLES = {
+  programada: 'bg-blue-100 text-blue-700 border-blue-200',
+  confirmada: 'bg-green-100 text-green-700 border-green-200',
+  en_curso:   'bg-yellow-100 text-yellow-700 border-yellow-200',
+};
 
 export default function MisCitas() {
   const navigate = useNavigate();
@@ -11,47 +24,84 @@ export default function MisCitas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [filterEstado, setFilterEstado] = useState('todas');
+  const mountedRef = useRef(true);
 
-  useEffect(() => {
-    let mounted = true;
-    citaService.getMisCitasMedico()
-      .then((data) => { if (mounted) setCitas(data); })
-      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando citas'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
+  // Carga (o recarga) las citas del médico autenticado.
+  const cargarCitas = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true);
+    try {
+      const data = await citaService.getMisCitasMedico();
+      if (mountedRef.current) setCitas(data);
+    } catch (err) {
+      if (mountedRef.current) setError(err.message ?? 'Error cargando citas');
+    } finally {
+      if (mountedRef.current && !silencioso) setLoading(false);
+    }
   }, []);
 
-  // Navega a la página de consultas con el id de la cita para iniciar la atención.
-  // La cita se marcará como 'completada' cuando se guarde la consulta (lógica
-  // existente en Consultas.jsx → ModalCrear → handleSubmit).
-  const tomarCita = (cita) => {
+  useEffect(() => {
+    mountedRef.current = true;
+    cargarCitas();
+
+    // ── Realtime: refrescar cuando el admin (u otro) cambie la tabla cita.
+    // Requiere que la tabla 'cita' esté en la publicación supabase_realtime.
+    const channel = supabase
+      .channel('medico-mis-citas')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'cita' },
+        () => cargarCitas({ silencioso: true })
+      )
+      .subscribe();
+
+    // ── Fallback: refrescar al volver el foco a la pestaña.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') cargarCitas({ silencioso: true });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      mountedRef.current = false;
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [cargarCitas]);
+
+  // Inicia la atención: marca la cita como 'en_curso' (para que el admin la
+  // vea en proceso) y luego navega a consultas. Al guardar la consulta,
+  // Consultas.jsx → ModalCrear pasa el estado a 'completada'.
+  const tomarCita = async (cita) => {
+    setError('');
+    if (cita.estado !== 'en_curso') {
+      const { error: upErr } = await supabase
+        .from('cita')
+        .update({ estado: 'en_curso' })
+        .eq('id_cita', cita.id_cita);
+      if (upErr) {
+        setError(upErr.code === '42501'
+          ? 'Sin permisos para iniciar la cita. Ejecuta supabase/rls-medico.sql.'
+          : (upErr.message ?? 'No se pudo iniciar la cita'));
+        return;
+      }
+      setCitas(prev => prev.map(c =>
+        c.id_cita === cita.id_cita ? { ...c, estado: 'en_curso' } : c
+      ));
+    }
     navigate(`/medico/consultas?citaId=${cita.id_cita}`);
   };
 
-  const filtered = citas.filter((c) => {
+  const matchSearch = (c) => {
     const term = search.toLowerCase();
-    const matchSearch =
-      (c.paciente_nombre ?? '').toLowerCase().includes(term) ||
+    return (
+      (c.paciente_nombre    ?? '').toLowerCase().includes(term) ||
       (c.paciente_documento ?? '').includes(search) ||
-      (c.motivo ?? '').toLowerCase().includes(term);
-    const matchEstado = filterEstado === 'todas' || c.estado === filterEstado;
-    return matchSearch && matchEstado;
-  });
-
-  const estadoStyles = {
-    programada: 'bg-blue-100 text-blue-700 border-blue-200',
-    confirmada: 'bg-green-100 text-green-700 border-green-200',
-    en_curso:   'bg-yellow-100 text-yellow-700 border-yellow-200',
-    completada: 'bg-gray-100 text-gray-700 border-gray-200',
-    cancelada:  'bg-red-100 text-red-700 border-red-200',
-    no_asistio: 'bg-orange-100 text-orange-700 border-orange-200',
+      (c.motivo             ?? '').toLowerCase().includes(term)
+    );
   };
 
-  const counts = ESTADOS.reduce((acc, e) => {
-    acc[e] = e === 'todas' ? citas.length : citas.filter((c) => c.estado === e).length;
-    return acc;
-  }, {});
+  const programadas = citas.filter(c => c.estado === 'programada' && matchSearch(c));
+  const confirmadas = citas.filter(c => ['confirmada', 'en_curso'].includes(c.estado) && matchSearch(c));
 
   return (
     <div className="space-y-6">
@@ -59,11 +109,11 @@ export default function MisCitas() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Mis citas</h1>
-            <p className="text-emerald-100">Todas las citas asignadas a ti</p>
+            <p className="text-emerald-100">Citas pendientes asignadas a ti</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-emerald-100 mb-1">Total</p>
-            <p className="text-4xl font-bold">{loading ? '···' : citas.length}</p>
+          <div className="flex gap-6 text-center">
+            <KPI label="Programadas" value={loading ? '···' : programadas.length} />
+            <KPI label="Confirmadas" value={loading ? '···' : confirmadas.length} />
           </div>
         </div>
       </div>
@@ -74,7 +124,8 @@ export default function MisCitas() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 space-y-4">
+      {/* Buscador (aplica a ambos cuadros) */}
+      <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
         <div className="relative">
           <Search className="absolute left-3 top-3 text-gray-400" size={20} />
           <input
@@ -85,110 +136,135 @@ export default function MisCitas() {
             className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
           />
         </div>
+      </div>
 
-        <div className="flex flex-wrap gap-2">
-          {ESTADOS.map((e) => (
+      {/* Dos cuadros lado a lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ── Cuadro 1: Programadas ────────────────────────────────────────── */}
+        <CuadroCitas
+          titulo="Programadas"
+          subtitulo="Citas asignadas por el administrador, aún sin confirmar"
+          icono={<ClipboardList size={22} className="text-blue-600" />}
+          color="blue"
+          loading={loading}
+          citas={programadas}
+          vacioMsg="No hay citas programadas"
+          renderAccion={() => (
+            <span className="inline-flex items-center gap-1 text-xs text-gray-500 italic">
+              <Hourglass size={12} /> Esperando confirmación
+            </span>
+          )}
+        />
+
+        {/* ── Cuadro 2: Confirmadas ────────────────────────────────────────── */}
+        <CuadroCitas
+          titulo="Confirmadas"
+          subtitulo="El paciente ya llegó al consultorio — listas para atender"
+          icono={<CheckCircle2 size={22} className="text-green-600" />}
+          color="green"
+          loading={loading}
+          citas={confirmadas}
+          vacioMsg="No hay citas confirmadas"
+          renderAccion={(c) => (
             <button
-              key={e}
-              onClick={() => setFilterEstado(e)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition capitalize ${
-                filterEstado === e
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              onClick={() => tomarCita(c)}
+              title="Iniciar consulta médica para esta cita"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition text-xs font-semibold shadow-sm"
             >
-              {e === 'no_asistio' ? 'No asistió' : e === 'en_curso' ? 'En curso' : e}
-              <span className="ml-2 text-xs opacity-80">({counts[e] ?? 0})</span>
+              <Stethoscope size={14} />
+              {c.estado === 'en_curso' ? 'Continuar' : 'Tomar cita'}
             </button>
-          ))}
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Cuadro de lista de citas ──────────────────────────────────────────────────
+function CuadroCitas({ titulo, subtitulo, icono, color, loading, citas, vacioMsg, renderAccion }) {
+  const headerBg = {
+    blue:  'from-blue-50 to-indigo-50 border-blue-200',
+    green: 'from-green-50 to-emerald-50 border-green-200',
+  }[color] ?? 'from-gray-50 to-gray-100 border-gray-200';
+
+  return (
+    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
+      <div className={`px-5 py-4 bg-gradient-to-r ${headerBg} border-b-2`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {icono}
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">{titulo}</h2>
+              <p className="text-xs text-gray-600">{subtitulo}</p>
+            </div>
+          </div>
+          <span className="text-2xl font-bold text-gray-900">
+            {loading ? '···' : citas.length}
+          </span>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Fecha / Hora</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Paciente</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Tipo</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Motivo</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Estado</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400">
-                    <Loader2 size={32} className="mx-auto mb-2 animate-spin text-emerald-600" />
-                    Cargando...
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-500">
-                    <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
-                    No hay citas que coincidan
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((c, idx) => (
-                  <tr key={c.id_cita} className={`hover:bg-emerald-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                        <Calendar size={14} className="text-emerald-600" />
-                        {c.fecha}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                        <Clock size={12} />
-                        {c.hora?.slice(0, 5)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
-                          <User size={14} className="text-emerald-600" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-sm">{c.paciente_nombre ?? '—'}</p>
-                          <p className="text-xs text-gray-500 font-mono">{c.paciente_documento ?? ''}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{c.tipo_consulta ?? '—'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title={c.motivo}>
-                      {c.motivo ?? '—'}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`text-xs px-3 py-1 rounded-full font-medium border ${estadoStyles[c.estado] ?? 'bg-gray-100'}`}>
-                        {c.estado}
+      <div className="divide-y divide-gray-100 flex-1">
+        {loading ? (
+          <div className="text-center py-12">
+            <Loader2 size={28} className="mx-auto mb-2 animate-spin text-emerald-600" />
+            <p className="text-gray-500 text-sm">Cargando...</p>
+          </div>
+        ) : citas.length === 0 ? (
+          <div className="text-center py-12">
+            <Calendar size={40} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-gray-400 text-sm">{vacioMsg}</p>
+          </div>
+        ) : (
+          citas.map(c => (
+            <div key={c.id_cita} className="p-4 hover:bg-gray-50 transition">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="w-9 h-9 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User size={15} className="text-emerald-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 text-sm truncate">{c.paciente_nombre ?? '—'}</p>
+                    <p className="text-xs text-gray-500 font-mono">{c.paciente_documento ?? ''}</p>
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={11} className="text-emerald-600" /> {c.fecha}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {['programada', 'confirmada', 'en_curso'].includes(c.estado) ? (
-                        <button
-                          onClick={() => tomarCita(c)}
-                          title="Iniciar consulta médica para esta cita"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition text-xs font-semibold shadow-sm"
-                        >
-                          <Stethoscope size={14} /> Tomar cita
-                        </button>
-                      ) : c.estado === 'completada' ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                          <CheckCircle2 size={14} /> Atendida
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={11} /> {c.hora?.slice(0, 5)}
+                      </span>
+                      {c.tipo_consulta && (
+                        <span className="text-gray-500 truncate">· {c.tipo_consulta}</span>
                       )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                    {c.motivo && (
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2" title={c.motivo}>
+                        <span className="font-medium">Motivo:</span> {c.motivo}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${ESTADO_STYLES[c.estado] ?? 'bg-gray-100'}`}>
+                    {c.estado === 'en_curso' ? 'En curso' : c.estado}
+                  </span>
+                  {renderAccion(c)}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
+    </div>
+  );
+}
+
+function KPI({ label, value }) {
+  return (
+    <div>
+      <p className="text-sm text-emerald-100">{label}</p>
+      <p className="text-4xl font-bold">{value}</p>
     </div>
   );
 }

@@ -6,6 +6,17 @@
 -- Se usa mi_id_medico() de views.sql (auth.uid → usuario → medico)
 -- =====================================================================
 
+-- ─── cita ────────────────────────────────────────────────────────────
+-- El médico puede actualizar (cambiar estado) sus propias citas, lo que
+-- permite marcarlas como 'en_curso' al iniciar la consulta y 'completada'
+-- al guardarla. Admin/asistente conservan su propio policy (rls-admin.sql).
+DROP POLICY IF EXISTS "medico_update_cita" ON cita;
+
+CREATE POLICY "medico_update_cita"
+    ON cita FOR UPDATE TO authenticated
+    USING    (id_medico = mi_id_medico())
+    WITH CHECK (id_medico = mi_id_medico());
+
 -- ─── consulta_medica ─────────────────────────────────────────────────
 DROP POLICY IF EXISTS "medico_read_consulta"   ON consulta_medica;
 DROP POLICY IF EXISTS "medico_insert_consulta" ON consulta_medica;

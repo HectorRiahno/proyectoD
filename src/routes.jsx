@@ -26,8 +26,6 @@ import MedicoAgenda from './features/medico/pages/Agenda';
 import MedicoMisCitas from './features/medico/pages/MisCitas';
 import MedicoMisPacientes from './features/medico/pages/MisPacientes';
 import MedicoConsultas from './features/medico/pages/Consultas';
-import MedicoDiagnosticos from './features/medico/pages/Diagnosticos';
-import MedicoRecetas from './features/medico/pages/Recetas';
 
 import ClientDashboard from './features/clients/pages/ClientDashboard';
 import MiPerfil from './features/clients/pages/MiPerfil';
@@ -136,8 +134,6 @@ export default function AppRoutes() {
         <Route path="citas"        element={<MedicoMisCitas />} />
         <Route path="pacientes"    element={<MedicoMisPacientes />} />
         <Route path="consultas"    element={<MedicoConsultas />} />
-        <Route path="diagnosticos" element={<MedicoDiagnosticos />} />
-        <Route path="recetas"      element={<MedicoRecetas />} />
       </Route>
 
       {/* Paciente / cliente */}

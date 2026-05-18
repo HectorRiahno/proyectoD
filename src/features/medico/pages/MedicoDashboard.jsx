@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Calendar, Clock, Users, ClipboardList, Pill, AlertCircle,
-  Stethoscope, CalendarClock, Activity, ArrowRight
+  Calendar, Clock, Users, ClipboardList, AlertCircle,
+  CalendarClock, Activity, ArrowRight
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../hooks/useAuth';
@@ -12,7 +12,7 @@ export default function MedicoDashboard() {
   const { usuarioLogueado } = useAuth();
   const [agenda, setAgenda] = useState([]);
   const [proximas, setProximas] = useState([]);
-  const [counts, setCounts] = useState({ pacientes: 0, consultas: 0, recetas: 0 });
+  const [counts, setCounts] = useState({ pacientes: 0, consultas: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -27,7 +27,6 @@ export default function MedicoDashboard() {
           { data: prox, error: e2 },
           { count: cPacientes },
           { count: cConsultas },
-          { count: cRecetas },
         ] = await Promise.all([
           supabase.from('vw_medico_agenda_hoy').select('*'),
           supabase
@@ -38,7 +37,6 @@ export default function MedicoDashboard() {
             .limit(5),
           supabase.from('vw_medico_mis_pacientes').select('*', { count: 'exact', head: true }),
           supabase.from('vw_medico_consultas').select('*', { count: 'exact', head: true }),
-          supabase.from('vw_medico_ordenes').select('*', { count: 'exact', head: true }),
         ]);
         if (e1) throw e1;
         if (e2) throw e2;
@@ -48,7 +46,6 @@ export default function MedicoDashboard() {
           setCounts({
             pacientes: cPacientes ?? 0,
             consultas: cConsultas ?? 0,
-            recetas:   cRecetas ?? 0,
           });
         }
       } catch (err) {
@@ -65,14 +62,12 @@ export default function MedicoDashboard() {
     { title: 'Citas hoy',     value: agenda.length,    icon: CalendarClock, color: 'emerald', path: '/medico/agenda' },
     { title: 'Mis pacientes', value: counts.pacientes, icon: Users,         color: 'blue',    path: '/medico/pacientes' },
     { title: 'Consultas',     value: counts.consultas, icon: ClipboardList, color: 'purple',  path: '/medico/consultas' },
-    { title: 'Recetas',       value: counts.recetas,   icon: Pill,          color: 'pink',    path: '/medico/recetas' },
   ];
 
   const colors = {
     emerald: 'from-emerald-500 to-teal-600',
     blue:    'from-blue-500 to-indigo-600',
     purple:  'from-purple-500 to-pink-600',
-    pink:    'from-pink-500 to-rose-600',
   };
 
   const estadoColor = (estado) => ({
@@ -114,7 +109,7 @@ export default function MedicoDashboard() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-3 gap-6">
         {cards.map((c, i) => {
           const Icon = c.icon;
           return (

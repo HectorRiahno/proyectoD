@@ -8,8 +8,6 @@ const medicoSidebarItems = [
   { id: 2, title: "Mis citas",     icon: "Calendar",        path: "/medico/citas" },
   { id: 3, title: "Mis pacientes", icon: "Users",           path: "/medico/pacientes" },
   { id: 4, title: "Consultas",     icon: "Stethoscope",     path: "/medico/consultas" },
-  { id: 5, title: "Diagnósticos",  icon: "ClipboardList",   path: "/medico/diagnosticos" },
-  { id: 6, title: "Recetas",       icon: "Pill",            path: "/medico/recetas" },
 ];
 
 function MedicoSidebar() {
