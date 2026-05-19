@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  UserPlus, ShieldCheck, Mail, Lock, User, Users, Search,
+  UserPlus, ShieldCheck, Mail, User, Users, Search,
   Loader2, AlertCircle, CheckCircle, X, Edit, Trash2,
-  ToggleLeft, ToggleRight, Eye, EyeOff, Info
+  ToggleLeft, ToggleRight, Info, Send
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
-import { createUserAccount } from '../../../services/adminService';
+import { inviteUser } from '../../../services/adminService';
+import { normalizeRoleName } from '../../../config/roles';
 
 // ─── Roles disponibles ─────────────────────────────────────────────────────────
 const ROLES = [
@@ -53,12 +54,15 @@ export default function Usuarios() {
       (u.email           ?? '').toLowerCase().includes(term) ||
       (u.username        ?? '').toLowerCase().includes(term) ||
       (u.documento       ?? '').includes(search);
-    const matchRol = filterRol === 'todos' || u.rol_nombre === filterRol;
+    // Normalizar: la BD podría aún tener 'paciente' del seed original;
+    // normalizeRoleName lo traduce a 'cliente' para que el filtro matchee.
+    const rolNormalizado = normalizeRoleName(u.rol_nombre);
+    const matchRol = filterRol === 'todos' || rolNormalizado === filterRol;
     return matchSearch && matchRol;
   });
 
   const totalPorRol = ROLES.reduce((acc, r) => {
-    acc[r.value] = usuarios.filter(u => u.rol_nombre === r.value).length;
+    acc[r.value] = usuarios.filter(u => normalizeRoleName(u.rol_nombre) === r.value).length;
     return acc;
   }, { todos: usuarios.length });
 
@@ -159,7 +163,7 @@ export default function Usuarios() {
             onClick={() => setCreando(true)}
             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg"
           >
-            <UserPlus size={20} /> Crear usuario
+            <UserPlus size={20} /> Invitar usuario
           </button>
         </div>
       </div>
@@ -207,8 +211,8 @@ export default function Usuarios() {
                   <td className="px-6 py-4 text-sm text-gray-700">{u.email || '—'}</td>
                   <td className="px-6 py-4 text-sm font-mono text-gray-700">{u.documento || '—'}</td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`text-xs px-3 py-1 rounded-full font-medium ${rolColor(u.rol_nombre)}`}>
-                      {u.rol_nombre || 'sin rol'}
+                    <span className={`text-xs px-3 py-1 rounded-full font-medium ${rolColor(normalizeRoleName(u.rol_nombre))}`}>
+                      {normalizeRoleName(u.rol_nombre) || 'sin rol'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -255,94 +259,55 @@ export default function Usuarios() {
   );
 }
 
-// ─── Modal: Crear usuario ──────────────────────────────────────────────────────
+// ─── Modal: Invitar usuario ───────────────────────────────────────────────────
 function ModalCrear({ onClose }) {
   const [form, setForm] = useState({
-    email: '', password: '', nombre: '', rol: 'cliente', especialidad: '',
+    email: '', nombre: '', rol: 'cliente',
+    especialidad: '', numero_licencia: '', consultorio: '',
   });
-  const [showPass, setShowPass] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState('');
+  const [ok, setOk]                 = useState('');
 
   const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
 
   const handleSubmit = async e => {
     e.preventDefault();
-    setError('');
+    setError(''); setOk('');
     setSubmitting(true);
     try {
-      await createUserAccount({
-        email:       form.email,
-        password:    form.password,
-        nombre:      form.nombre,
-        rol:         form.rol,
-        especialidad: form.rol === 'medico' ? form.especialidad : undefined,
+      const res = await inviteUser({
+        email:           form.email,
+        nombre:          form.nombre,
+        rol:             form.rol,
+        especialidad:    form.rol === 'medico' ? form.especialidad    : undefined,
+        numero_licencia: form.rol === 'medico' ? form.numero_licencia : undefined,
+        consultorio:     form.rol === 'medico' ? form.consultorio     : undefined,
       });
-      onClose();
+      setOk(res.message ?? `Invitación enviada a ${form.email}.`);
+      // Cierra automáticamente tras 1.5s para que el admin alcance a leer el mensaje
+      setTimeout(onClose, 1500);
     } catch (err) {
-      setError(err.message ?? 'No se pudo crear la cuenta');
+      setError(err.message ?? 'No se pudo enviar la invitación');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const strength = (() => {
-    const p = form.password;
-    if (!p) return 0;
-    let s = 0;
-    if (p.length >= 8) s++;
-    if (/[A-Z]/.test(p)) s++;
-    if (/[a-z]/.test(p)) s++;
-    if (/\d/.test(p)) s++;
-    if (/[^A-Za-z0-9]/.test(p)) s++;
-    return s;
-  })();
-
   return (
-    <Modal titulo="Crear nuevo usuario" onClose={onClose}>
+    <Modal titulo="Invitar nuevo usuario" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Aviso */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-800">
           <Info size={16} className="flex-shrink-0 mt-0.5" />
-          <p>Se crea la cuenta en Supabase Auth y automáticamente se registran los datos en la BD.</p>
+          <p>
+            Se enviará un correo de invitación al usuario con un enlace para que
+            <strong> defina su propia contraseña</strong>. El admin nunca conoce la clave.
+          </p>
         </div>
 
         <FieldInput label="Nombre completo *" name="nombre" value={form.nombre} onChange={handleChange} required placeholder="Ej: María Gómez Pérez" icon={<User size={16} />} />
         <FieldInput label="Correo electrónico *" name="email" type="email" value={form.email} onChange={handleChange} required placeholder="usuario@correo.com" icon={<Mail size={16} />} />
-
-        {/* Contraseña con medidor */}
-        <div>
-          <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-            <Lock size={16} /> Contraseña *
-          </label>
-          <div className="relative">
-            <input
-              name="password" type={showPass ? 'text' : 'password'} value={form.password}
-              onChange={handleChange} required placeholder="Mínimo 8 caracteres"
-              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button type="button" onClick={() => setShowPass(p => !p)}
-              className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600">
-              {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
-          </div>
-          {form.password && (
-            <>
-              <div className="flex gap-1 h-1.5 mt-2">
-                {[1,2,3,4,5].map(n => (
-                  <div key={n} className={`flex-1 rounded-full transition-all ${
-                    n <= strength
-                      ? strength <= 2 ? 'bg-red-400' : strength <= 3 ? 'bg-yellow-400' : 'bg-green-500'
-                      : 'bg-gray-200'
-                  }`} />
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Fortaleza: <span className="font-medium">{['','Muy débil','Débil','Regular','Fuerte','Muy fuerte'][strength]}</span>
-              </p>
-            </>
-          )}
-        </div>
 
         {/* Rol */}
         <div>
@@ -356,11 +321,30 @@ function ModalCrear({ onClose }) {
         </div>
 
         {form.rol === 'medico' && (
-          <FieldInput label="Especialidad *" name="especialidad" value={form.especialidad} onChange={handleChange} required placeholder="Ej: Cardiología" />
+          <>
+            <FieldInput label="Especialidad *"  name="especialidad"    value={form.especialidad}    onChange={handleChange} required placeholder="Ej: Cardiología" />
+            <FieldInput label="N° de licencia"   name="numero_licencia" value={form.numero_licencia} onChange={handleChange} placeholder="Opcional — se autogenera si lo dejas vacío" />
+            <FieldInput label="Consultorio"      name="consultorio"     value={form.consultorio}     onChange={handleChange} placeholder="Ej: Consultorio 301" />
+          </>
         )}
 
         {error && <ErrorBox msg={error} />}
-        <BotonesForm onCancel={onClose} saving={submitting} labelSave="Crear usuario" />
+        {ok && (
+          <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-xl text-sm flex items-start gap-2">
+            <CheckCircle size={16} className="flex-shrink-0 mt-0.5" /> {ok}
+          </div>
+        )}
+        <div className="flex gap-3 pt-4 border-t border-gray-200">
+          <button type="button" onClick={onClose}
+            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold">
+            Cancelar
+          </button>
+          <button type="submit" disabled={submitting}
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+            <Send size={16} />
+            {submitting ? 'Enviando...' : 'Enviar invitación'}
+          </button>
+        </div>
       </form>
     </Modal>
   );
@@ -413,9 +397,17 @@ function ModalEditar({ usuario: u, onClose }) {
 
       // 3. Actualizar rol si cambió
       if (form.rol !== u.rol_nombre) {
-        // Obtener id del nuevo rol
-        const { data: rolData } = await supabase.from('rol').select('id_rol').eq('nombre', form.rol).maybeSingle();
-        if (!rolData?.id_rol) throw new Error(`Rol "${form.rol}" no encontrado en la BD.`);
+        // Obtener id del rol. Si pide 'cliente' y la BD aún tiene 'paciente'
+        // del seed original (mismatch histórico), aceptamos 'paciente' como
+        // sinónimo — solución definitiva: ejecutar supabase/migration-rol-cliente.sql.
+        const candidatos = form.rol === 'cliente'
+          ? ['cliente', 'paciente']
+          : [form.rol];
+        const { data: rolData } = await supabase
+          .from('rol').select('id_rol, nombre').in('nombre', candidatos).maybeSingle();
+        if (!rolData?.id_rol) {
+          throw new Error(`Rol "${form.rol}" no existe en la BD. Ejecuta supabase/migration-rol-cliente.sql.`);
+        }
 
         // Eliminar asignación anterior
         await supabase.from('asignacion_rol').delete().eq('id_usuario', u.id_usuario);
@@ -428,6 +420,39 @@ function ModalEditar({ usuario: u, onClose }) {
         if (e3) {
           if (e3.code === '42501') throw new Error('Sin permisos sobre asignacion_rol. Ejecuta supabase/rls-admin.sql.');
           throw new Error(e3.message);
+        }
+
+        // 3.b Provisionar la fila específica del rol si no existe.
+        //     Sin esto el usuario no aparece en "Pacientes" / "Médicos"
+        //     (esas vistas leen de paciente/medico, no de asignacion_rol).
+        if (form.rol === 'cliente' && u.id_persona) {
+          const { data: existePac } = await supabase
+            .from('paciente').select('id_paciente').eq('id_persona', u.id_persona).maybeSingle();
+          if (!existePac) {
+            const { error: ePac } = await supabase.from('paciente').insert({
+              id_persona:      u.id_persona,
+              numero_historia: `HC-${u.id_persona}-${Date.now().toString(36)}`,
+            });
+            if (ePac && ePac.code !== '23505') {
+              throw new Error(`Rol asignado, pero falló crear el paciente: ${ePac.message}`);
+            }
+          }
+        }
+
+        if (form.rol === 'medico' && u.id_persona) {
+          const { data: existeMed } = await supabase
+            .from('medico').select('id_medico').eq('id_persona', u.id_persona).maybeSingle();
+          if (!existeMed) {
+            const { error: eMed } = await supabase.from('medico').insert({
+              id_persona:      u.id_persona,
+              numero_licencia: `LIC-${Date.now().toString(36)}`,
+              activo:          true,
+            });
+            if (eMed && eMed.code !== '23505') {
+              throw new Error(`Rol asignado, pero falló crear el médico: ${eMed.message}. ` +
+                              `Después complétalo desde "Médicos".`);
+            }
+          }
         }
       }
 

@@ -88,7 +88,7 @@ export default function MisCitas() {
         c.id_cita === cita.id_cita ? { ...c, estado: 'en_curso' } : c
       ));
     }
-    navigate(`/medico/consultas?citaId=${cita.id_cita}`);
+    navigate(`/medico/atender/${cita.id_cita}`);
   };
 
   const matchSearch = (c) => {

@@ -9,6 +9,7 @@ import MedicoLayout from './shared/layouts/MedicoLayout';
 
 import Login from './features/auth/pages/Login';
 import Register from './features/auth/pages/Register';
+import SetPassword from './features/auth/pages/SetPassword';
 
 import AdminHome from './features/admin/pages/Home';
 import AdminCitas from './features/admin/pages/Citas';
@@ -26,6 +27,7 @@ import MedicoAgenda from './features/medico/pages/Agenda';
 import MedicoMisCitas from './features/medico/pages/MisCitas';
 import MedicoMisPacientes from './features/medico/pages/MisPacientes';
 import MedicoConsultas from './features/medico/pages/Consultas';
+import MedicoAtenderCita from './features/medico/pages/AtenderCita';
 
 import ClientDashboard from './features/clients/pages/ClientDashboard';
 import MiPerfil from './features/clients/pages/MiPerfil';
@@ -110,6 +112,10 @@ export default function AppRoutes() {
       <Route path="/login"    element={!estaLogueado ? <Login />    : <Navigate to={home} replace />} />
       <Route path="/register" element={!estaLogueado ? <Register /> : <Navigate to={home} replace />} />
 
+      {/* Set-password: accesible siempre. La página decide qué mostrar según si
+          el invitado tiene sesión activa (vía detectSessionInUrl) o no. */}
+      <Route path="/set-password" element={<SetPassword />} />
+
       {/* Sin rol */}
       <Route path="/sin-rol" element={estaLogueado ? <SinRol /> : <Navigate to="/login" replace />} />
 
@@ -134,6 +140,7 @@ export default function AppRoutes() {
         <Route path="citas"        element={<MedicoMisCitas />} />
         <Route path="pacientes"    element={<MedicoMisPacientes />} />
         <Route path="consultas"    element={<MedicoConsultas />} />
+        <Route path="atender/:citaId" element={<MedicoAtenderCita />} />
       </Route>
 
       {/* Paciente / cliente */}

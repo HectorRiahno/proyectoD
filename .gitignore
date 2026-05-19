@@ -8,7 +8,15 @@ pnpm-debug.log*
 lerna-debug.log*
 
 .env
-supabase/fuctions
+.supabase/auth-trigger.sql
+supabase/migration-consulta.sql
+supabase/migration-factura-fk.sql
+supabase/realtime.sql
+supabase/rls-admin.sql
+supabase/rls-medico.sql
+supabase/schema.sql
+supabase/seed.sql
+supabase/views.sql
 
 node_modules
 dist

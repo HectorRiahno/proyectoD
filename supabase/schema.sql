@@ -410,7 +410,7 @@ INSERT INTO rol (nombre, descripcion) VALUES
     ('admin',     'Administrador del sistema'),
     ('medico',    'Profesional médico'),
     ('asistente', 'Asistente médico / recepción'),
-    ('paciente',  'Paciente del centro');
+    ('cliente',   'Paciente / cliente del centro');
 
 INSERT INTO tipo_consulta (nombre, descripcion, duracion_min) VALUES
     ('General',     'Consulta médica general',            30),

@@ -1,76 +1,85 @@
+// @ts-nocheck
+// Este archivo corre en el runtime de Deno (Supabase Edge Functions).
+// Los imports https://, Deno.* y otros símbolos son válidos en ese contexto,
+// no en el TS del proyecto. Por eso se desactiva el type-check del IDE.
+
 // =====================================================================
-// Edge Function: create-user
+// Edge Function: create-user (flujo de invitación)
 //
-// Sólo un ADMIN autenticado puede llamarla. Crea una cuenta en auth.users
-// usando supabase.auth.admin.createUser, con email confirmado para que
-// el usuario pueda hacer login inmediatamente.
+// Solo un ADMIN autenticado puede invocarla. NO recibe contraseña.
+// Invita por correo usando `auth.admin.inviteUserByEmail`:
+//   - Crea la fila en auth.users con un token de invitación.
+//   - El trigger `on_auth_user_created` crea persona + usuario + asignacion_rol
+//     con los datos de raw_user_meta_data (nombre, rol).
+//   - Si el rol es médico, además inserta la fila en public.medico.
+//   - Envía correo con un magic link al usuario invitado.
+//   - El invitado lo abre, Supabase activa la sesión y lo redirige a
+//     `redirectTo` (página /set-password de la app) donde define su clave.
 //
-// El trigger SQL `on_auth_user_created` crea automáticamente las filas
-// en public.persona, public.usuario y public.asignacion_rol con el
-// mismo UUID y el rol indicado.
+// El admin NUNCA conoce la contraseña.
 //
 // Deploy:
-//   supabase functions deploy create-user
+//   npx supabase functions deploy create-user --no-verify-jwt
 //
-// Variables de entorno requeridas en el proyecto Supabase:
-//   SUPABASE_URL
-//   SUPABASE_SERVICE_ROLE_KEY    (NO la anon — esto solo en el servidor)
+// Variables de entorno (Supabase Dashboard → Project Settings → Edge Functions):
+//   SUPABASE_URL                  (auto-disponible)
+//   SUPABASE_SERVICE_ROLE_KEY     (auto-disponible)
+//   ALLOWED_ORIGINS  (opcional)   ej: "https://tudominio.com,http://localhost:5173"
+//                                  Por defecto acepta '*' (DEV). En producción
+//                                  setearlo con la lista exacta de dominios.
 // =====================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "*")
+  .split(",").map(s => s.trim()).filter(Boolean);
+
+function buildCors(req: Request) {
+  const origin = req.headers.get("Origin") ?? "";
+  const allow = ALLOWED_ORIGINS.includes("*")
+    ? "*"
+    : ALLOWED_ORIGINS.includes(origin) ? origin : "null";
+  return {
+    "Access-Control-Allow-Origin":  allow,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 interface Payload {
   email: string;
-  password: string;
   nombre?: string;
   rol?: "admin" | "medico" | "asistente" | "cliente";
   especialidad?: string;
   numero_licencia?: string;
   consultorio?: string;
+  redirectTo?: string;          // URL absoluta a la página /set-password
 }
 
-function validarPassword(password: string): string | null {
-  if (!password || password.length < 8) return "La contraseña debe tener al menos 8 caracteres";
-  if (!/[A-Za-z]/.test(password)) return "Debe contener al menos una letra";
-  if (!/\d/.test(password)) return "Debe contener al menos un número";
-  return null;
+function json(body: unknown, status: number, cors: Record<string,string>) {
+  return new Response(JSON.stringify(body), {
+    status, headers: { ...cors, "Content-Type": "application/json" },
+  });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  const CORS = buildCors(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Cliente con service_role (puede crear usuarios)
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
-    // 1. Validar que quien llama sea admin
+    // 1. Validar caller = admin
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace("Bearer ", "");
-    if (!jwt) {
-      return new Response(JSON.stringify({ error: "Falta token de autorización" }), {
-        status: 401, headers: { ...CORS, "Content-Type": "application/json" },
-      });
-    }
+    if (!jwt) return json({ error: "Falta token de autorización" }, 401, CORS);
 
     const { data: { user: caller }, error: callerErr } = await supabaseAdmin.auth.getUser(jwt);
-    if (callerErr || !caller) {
-      return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401, headers: { ...CORS, "Content-Type": "application/json" },
-      });
-    }
+    if (callerErr || !caller) return json({ error: "Token inválido" }, 401, CORS);
 
-    // Verificar rol admin del que llama
     const { data: rolData } = await supabaseAdmin
       .from("vw_admin_usuarios")
       .select("rol_nombre")
@@ -78,81 +87,100 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (rolData?.rol_nombre !== "admin") {
-      return new Response(JSON.stringify({ error: "Solo administradores pueden crear cuentas" }), {
-        status: 403, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+      return json({ error: "Solo administradores pueden invitar usuarios" }, 403, CORS);
     }
 
-    // 2. Parsear payload
+    // 2. Payload
     const body: Payload = await req.json();
     const email = body.email?.toLowerCase().trim();
-    if (!email) {
-      return new Response(JSON.stringify({ error: "Email requerido" }), {
-        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json({ error: "Email inválido" }, 400, CORS);
     }
-
-    const pwdError = validarPassword(body.password);
-    if (pwdError) {
-      return new Response(JSON.stringify({ error: pwdError }), {
-        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+    if (!body.nombre?.trim()) {
+      return json({ error: "Nombre requerido" }, 400, CORS);
     }
-
     const rol = body.rol ?? "cliente";
-
-    // 3. Crear en auth.users (con email_confirm para que pueda hacer login al instante)
-    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: body.password,
-      email_confirm: true,
-      user_metadata: {
-        nombre: body.nombre,
-        rol,
-      },
-    });
-
-    if (createErr) {
-      return new Response(JSON.stringify({ error: createErr.message }), {
-        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+    if (!["admin","medico","asistente","cliente"].includes(rol)) {
+      return json({ error: `Rol no válido: ${rol}` }, 400, CORS);
+    }
+    if (rol === "medico" && !body.especialidad?.trim()) {
+      return json({ error: "Especialidad requerida para médicos" }, 400, CORS);
     }
 
-    const newAuthUserId = created.user!.id;
+    // 3. Invitar por email — el usuario pondrá su propia contraseña al aceptar
+    const { data: invited, error: inviteErr } =
+      await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data: {
+          nombre: body.nombre,
+          rol,
+        },
+        redirectTo: body.redirectTo,
+      });
 
-    // 4. Si el rol es médico, completar la fila en public.medico
+    if (inviteErr) {
+      // Errores comunes: usuario ya existe, email inválido, etc.
+      return json({ error: inviteErr.message }, 400, CORS);
+    }
+
+    const newAuthUserId = invited.user!.id;
+
+    // 4. Para médico o cliente, completar la fila específica del rol.
     //    (el trigger ya creó persona + usuario + asignacion_rol)
-    if (rol === "medico") {
-      // Obtener id_persona vía el usuario recién creado
-      const { data: usr } = await supabaseAdmin
-        .from("usuario")
-        .select("id_persona")
-        .eq("auth_user_id", newAuthUserId)
-        .single();
+    if (rol === "medico" || rol === "cliente") {
+      // Esperar un instante a que el trigger termine
+      let attempts = 0;
+      let usr: { id_persona: number } | null = null;
+      while (attempts < 5 && !usr?.id_persona) {
+        const { data } = await supabaseAdmin
+          .from("usuario")
+          .select("id_persona")
+          .eq("auth_user_id", newAuthUserId)
+          .maybeSingle();
+        usr = data;
+        if (!usr?.id_persona) {
+          await new Promise(r => setTimeout(r, 200));
+          attempts++;
+        }
+      }
 
       if (usr?.id_persona) {
-        await supabaseAdmin.from("medico").insert({
-          id_persona: usr.id_persona,
-          numero_licencia: body.numero_licencia ?? `LIC-${Date.now()}`,
-          especialidad: body.especialidad,
-          consultorio: body.consultorio,
-          activo: true,
-        });
+        if (rol === "medico") {
+          const { error: medErr } = await supabaseAdmin.from("medico").insert({
+            id_persona:      usr.id_persona,
+            numero_licencia: body.numero_licencia ?? `LIC-${Date.now()}`,
+            especialidad:    body.especialidad,
+            consultorio:     body.consultorio,
+            activo:          true,
+          });
+          if (medErr) console.error("Error insertando médico:", medErr.message);
+        }
+
+        if (rol === "cliente") {
+          // Comprobar primero si ya existe (la persona podría haber sido
+          // paciente antes en otro proyecto, o haberse provisionado dos veces)
+          const { data: existing } = await supabaseAdmin
+            .from("paciente").select("id_paciente").eq("id_persona", usr.id_persona).maybeSingle();
+          if (!existing) {
+            const { error: pacErr } = await supabaseAdmin.from("paciente").insert({
+              id_persona:      usr.id_persona,
+              numero_historia: `HC-${usr.id_persona}-${Date.now().toString(36)}`,
+            });
+            if (pacErr) console.error("Error insertando paciente:", pacErr.message);
+          }
+        }
       }
     }
 
-    return new Response(JSON.stringify({
+    return json({
       ok: true,
       auth_user_id: newAuthUserId,
       email,
       rol,
-    }), {
-      status: 200, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+      invited: true,
+      message: `Se envió una invitación a ${email}. El usuario debe revisar su correo y definir su contraseña.`,
+    }, 200, CORS);
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return json({ error: (err as Error).message }, 500, CORS);
   }
 });

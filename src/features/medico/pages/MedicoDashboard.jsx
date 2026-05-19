@@ -22,17 +22,23 @@ export default function MedicoDashboard() {
       try {
         setLoading(true);
         setError('');
+        const hoyISO = new Date().toISOString().split('T')[0];
         const [
           { data: hoy, error: e1 },
           { data: prox, error: e2 },
           { count: cPacientes },
           { count: cConsultas },
         ] = await Promise.all([
-          supabase.from('vw_medico_agenda_hoy').select('*'),
+          // Agenda de hoy: solo confirmadas y programadas del día actual
+          supabase.from('vw_medico_agenda_hoy')
+            .select('id_cita, fecha, hora, estado, paciente_nombre, motivo, tipo_consulta')
+            .in('estado', ['confirmada', 'programada']),
+          // Próximas: programadas para los días siguientes (no hoy)
           supabase
             .from('vw_medico_mis_citas')
             .select('id_cita, fecha, hora, estado, paciente_nombre, motivo, tipo_consulta')
-            .gte('fecha', new Date().toISOString().split('T')[0])
+            .gt('fecha', hoyISO)
+            .eq('estado', 'programada')
             .order('fecha_cita', { ascending: true })
             .limit(5),
           supabase.from('vw_medico_mis_pacientes').select('*', { count: 'exact', head: true }),
@@ -40,8 +46,18 @@ export default function MedicoDashboard() {
         ]);
         if (e1) throw e1;
         if (e2) throw e2;
+
+        // Orden: confirmadas primero, luego programadas; cada grupo por hora.
+        const ordenado = [...(hoy ?? [])].sort((a, b) => {
+          const peso = { confirmada: 0, programada: 1 };
+          const pa = peso[a.estado] ?? 9;
+          const pb = peso[b.estado] ?? 9;
+          if (pa !== pb) return pa - pb;
+          return (a.hora ?? '').localeCompare(b.hora ?? '');
+        });
+
         if (mounted) {
-          setAgenda(hoy ?? []);
+          setAgenda(ordenado);
           setProximas(prox ?? []);
           setCounts({
             pacientes: cPacientes ?? 0,
