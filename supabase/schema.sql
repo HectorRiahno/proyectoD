@@ -95,14 +95,28 @@ CREATE TABLE paciente (
     id_paciente            BIGSERIAL PRIMARY KEY,
     id_persona             BIGINT UNIQUE NOT NULL REFERENCES persona(id_persona) ON DELETE CASCADE,
     numero_historia        VARCHAR(30) UNIQUE NOT NULL,
-    tipo_sangre            VARCHAR(5),
-    alergias               TEXT,
-    enfermedades_cronicas  TEXT,
     contacto_emergencia    VARCHAR(120),
     telefono_emergencia    VARCHAR(20),
     ocupacion              VARCHAR(80),
     estado_civil           VARCHAR(20),
     created_at             TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Historia clínica: datos médicos que evolucionan con el tiempo.
+-- 1:1 con paciente. Editable solo por médico/admin/asistente.
+CREATE TABLE historial_clinico (
+    id_historial              BIGSERIAL PRIMARY KEY,
+    id_paciente               BIGINT UNIQUE NOT NULL REFERENCES paciente(id_paciente) ON DELETE CASCADE,
+    tipo_sangre               VARCHAR(5),
+    alergias                  TEXT,
+    enfermedades_cronicas     TEXT,
+    antecedentes_familiares   TEXT,
+    antecedentes_quirurgicos  TEXT,
+    medicamentos_permanentes  TEXT,
+    habitos                   TEXT,
+    notas_generales           TEXT,
+    created_at                TIMESTAMPTZ DEFAULT NOW(),
+    updated_at                TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE estado_general (

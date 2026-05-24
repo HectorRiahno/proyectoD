@@ -1,43 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Search, Plus, Package, AlertTriangle, TrendingUp,
   Filter, Edit, Trash2, Loader2, AlertCircle
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { useInventario } from '../../../hooks';
 import ProductModal from '../inventory/components/ProductModal';
 import StatsCard from '../inventory/components/StatsCard';
 
 export default function Inventario() {
-  const [medicamentos, setMedicamentos] = useState([]);
-  const [categorias, setCategorias]     = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState('');
+  const {
+    medicamentos, categorias, loading, error,
+    eliminar: eliminarHook, guardar: guardarHook,
+  } = useInventario();
   const [searchTerm, setSearchTerm]     = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [viewMode, setViewMode]         = useState('list');
   const [modalOpen, setModalOpen]       = useState(false);
   const [selected, setSelected]         = useState(null);
-
-  const cargar = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const [{ data: meds, error: e1 }, { data: cats, error: e2 }] = await Promise.all([
-        supabase.from('medicamento').select('*, categoria_medicamento(nombre)').order('nombre'),
-        supabase.from('categoria_medicamento').select('*').order('nombre'),
-      ]);
-      if (e1) throw e1;
-      if (e2) throw e2;
-      setMedicamentos(meds ?? []);
-      setCategorias(cats ?? []);
-    } catch (err) {
-      setError(err.message ?? 'Error cargando inventario');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { cargar(); }, []);
 
   const filtered = medicamentos.filter(m => {
     const term = searchTerm.toLowerCase();
@@ -56,19 +35,9 @@ export default function Inventario() {
 
   const handleGuardar = async (formData) => {
     try {
-      if (selected) {
-        const { error } = await supabase
-          .from('medicamento')
-          .update(formData)
-          .eq('id_medicamento', selected.id_medicamento);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('medicamento').insert(formData);
-        if (error) throw error;
-      }
+      await guardarHook(selected, formData);
       setModalOpen(false);
       setSelected(null);
-      cargar();
     } catch (err) {
       alert('Error al guardar: ' + err.message);
     }
@@ -76,9 +45,8 @@ export default function Inventario() {
 
   const handleEliminar = async (id) => {
     if (!window.confirm('¿Eliminar este medicamento?')) return;
-    const { error } = await supabase.from('medicamento').delete().eq('id_medicamento', id);
-    if (error) { alert('Error: ' + error.message); return; }
-    cargar();
+    try { await eliminarHook(id); }
+    catch (err) { alert('Error: ' + err.message); }
   };
 
   return (

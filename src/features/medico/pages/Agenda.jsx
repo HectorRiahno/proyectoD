@@ -1,23 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { CalendarClock, Clock, User, Phone, AlertCircle, Loader2, Mail } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { useAgendaHoyMedico } from '../../../hooks';
 
 export default function Agenda() {
-  const [citas, setCitas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    supabase.from('vw_medico_agenda_hoy').select('*')
-      .then(({ data, error }) => {
-        if (error) throw error;
-        if (mounted) setCitas(data ?? []);
-      })
-      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando agenda'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
+  const { citas, loading, error } = useAgendaHoyMedico();
 
   const estadoColor = (estado) => ({
     programada: 'bg-blue-100 text-blue-700 border-blue-200',

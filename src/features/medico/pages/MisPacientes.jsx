@@ -2,29 +2,17 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Users, Eye, AlertCircle, Loader2, Phone, Mail,
   Heart, FileText, ClipboardList, Activity, Pill, X,
-  Calendar, ChevronDown, ChevronUp, Stethoscope
+  Calendar, ChevronDown, ChevronUp, Stethoscope, Paperclip,
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { consultaService } from '../../../services';
+import { useMisPacientesMedico, useAdjuntosPacienteMedico } from '../../../hooks';
+import { AdjuntoListPorConsulta, AdjuntoViewer } from '../../../shared/components/ui';
 
 export default function MisPacientes() {
-  const [pacientes, setPacientes] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
+  const { pacientes, loading, error } = useMisPacientesMedico();
   const [search, setSearch]       = useState('');
   const [selected, setSelected]   = useState(null);
   const [historial, setHistorial] = useState(null);
-
-  useEffect(() => {
-    let mounted = true;
-    supabase.from('vw_medico_mis_pacientes').select('*')
-      .then(({ data, error }) => {
-        if (error) throw error;
-        if (mounted) setPacientes(data ?? []);
-      })
-      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando pacientes'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
 
   const filtered = pacientes.filter((p) => {
     const term = search.toLowerCase();
@@ -208,39 +196,29 @@ function ModalHistorial({ paciente, onClose }) {
   const [diagnosticos, setDiag]     = useState([]);
   const [ordenes, setOrdenes]       = useState([]);
   const [loading, setLoading]       = useState(true);
-  const [abierto, setAbierto]       = useState({ consultas: true, signos: false, diagnosticos: false, recetas: false });
+  const [abierto, setAbierto]       = useState({
+    consultas: true, signos: false, diagnosticos: false, recetas: false, adjuntos: false,
+  });
+  const [visorAdjunto, setVisorAdjunto] = useState(null);
+  const { adjuntos: adjuntosPaciente } = useAdjuntosPacienteMedico(paciente.id_paciente);
 
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const [rC, rS, rD, rO] = await Promise.all([
-        supabase.from('consulta_medica')
-          .select('id_consulta, fecha_consulta, motivo_consulta, impresion_diagnostica, plan_tratamiento, observaciones')
-          .eq('id_paciente', paciente.id_paciente)
-          .order('fecha_consulta', { ascending: false }),
-        supabase.from('signos_vitales')
-          .select('*')
-          .eq('id_paciente', paciente.id_paciente)
-          .order('fecha_registro', { ascending: false })
-          .limit(10),
-        supabase.from('diagnostico')
-          .select('id_diagnostico, codigo_cie10, descripcion, es_principal, fecha, id_consulta, tipo_diagnostico(nombre)')
-          .in('id_consulta',
-            (await supabase.from('consulta_medica').select('id_consulta').eq('id_paciente', paciente.id_paciente)).data?.map(c => c.id_consulta) ?? []
-          )
-          .order('fecha', { ascending: false }),
-        supabase.from('orden_medica')
-          .select('id_orden, dosis, frecuencia, duracion, indicaciones, fecha_emision, medicamento(nombre, presentacion)')
-          .in('id_consulta',
-            (await supabase.from('consulta_medica').select('id_consulta').eq('id_paciente', paciente.id_paciente)).data?.map(c => c.id_consulta) ?? []
-          )
-          .order('fecha_emision', { ascending: false }),
-      ]);
-      setConsultas(rC.data ?? []);
-      setSignos(rS.data ?? []);
-      setDiag(rD.data ?? []);
-      setOrdenes(rO.data ?? []);
-      setLoading(false);
+      try {
+        const [c, s, d, o] = await Promise.all([
+          consultaService.getConsultasPacienteFichaMedico(paciente.id_paciente),
+          consultaService.getSignosPacienteRecientes(paciente.id_paciente, 10),
+          consultaService.getDiagnosticosPaciente(paciente.id_paciente),
+          consultaService.getOrdenesPaciente(paciente.id_paciente),
+        ]);
+        setConsultas(c ?? []);
+        setSignos(s ?? []);
+        setDiag(d ?? []);
+        setOrdenes(o ?? []);
+      } finally {
+        setLoading(false);
+      }
     };
     cargar();
   }, [paciente.id_paciente]);
@@ -252,6 +230,7 @@ function ModalHistorial({ paciente, onClose }) {
     { key: 'diagnosticos', label: `Diagnósticos (${diagnosticos.length})`, icon: <ClipboardList size={16} /> },
     { key: 'recetas',      label: `Recetas (${ordenes.length})`,        icon: <Pill size={16} /> },
     { key: 'signos',       label: `Signos vitales (${signos.length})`,  icon: <Activity size={16} /> },
+    { key: 'adjuntos',     label: `Adjuntos (${adjuntosPaciente.length})`, icon: <Paperclip size={16} /> },
   ];
 
   return (
@@ -368,6 +347,14 @@ function ModalHistorial({ paciente, onClose }) {
                           </div>
                         ))
                       )}
+
+                      {/* Adjuntos: PDFs / imágenes de consultas previas */}
+                      {s.key === 'adjuntos' && (
+                        <AdjuntoListPorConsulta
+                          adjuntos={adjuntosPaciente}
+                          onPreview={setVisorAdjunto}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -376,6 +363,7 @@ function ModalHistorial({ paciente, onClose }) {
           )}
         </div>
       </div>
+      {visorAdjunto && <AdjuntoViewer adjunto={visorAdjunto} onClose={() => setVisorAdjunto(null)} />}
     </div>
   );
 }

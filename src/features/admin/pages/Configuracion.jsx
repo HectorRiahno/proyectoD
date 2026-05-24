@@ -5,6 +5,7 @@ import {
   Loader2, Shield, Mail, Phone, IdCard, Calendar
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
+import { dashboardService } from '../../../services';
 import { useAuth } from '../../../hooks/useAuth';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -432,16 +433,9 @@ function TabSistema() {
   const [counts, setCounts]     = useState(null);
 
   useEffect(() => {
-    const verificar = async () => {
-      const [{ count: cPacientes }, { count: cMedicos }, { count: cCitas }] = await Promise.all([
-        supabase.from('paciente').select('*', { count: 'exact', head: true }),
-        supabase.from('medico').select('*', { count: 'exact', head: true }),
-        supabase.from('cita').select('*', { count: 'exact', head: true }),
-      ]);
-      setDbStatus('Conectado ✓');
-      setCounts({ pacientes: cPacientes ?? 0, medicos: cMedicos ?? 0, citas: cCitas ?? 0 });
-    };
-    verificar();
+    dashboardService.getCountsCore()
+      .then(c => { setDbStatus('Conectado ✓'); setCounts(c); })
+      .catch(() => setDbStatus('Error de conexión ✗'));
   }, []);
 
   return (

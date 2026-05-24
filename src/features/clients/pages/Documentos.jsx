@@ -1,36 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, FileDown, AlertCircle, Loader2, Calendar, Pill, ClipboardList, Activity } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { useDashboardCliente } from '../../../hooks';
 
 export default function Documentos() {
   const navigate = useNavigate();
-  const [counts, setCounts] = useState({ consultas: 0, recetas: 0, diagnosticos: 0, signos: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    Promise.all([
-      supabase.from('vw_paciente_mi_historial').select('*', { count: 'exact', head: true }),
-      supabase.from('vw_paciente_mis_medicamentos').select('*', { count: 'exact', head: true }),
-      supabase.from('vw_paciente_mis_diagnosticos').select('*', { count: 'exact', head: true }),
-      supabase.from('vw_paciente_mis_signos').select('*', { count: 'exact', head: true }),
-    ])
-      .then(([a, b, c, d]) => {
-        if (mounted) {
-          setCounts({
-            consultas: a.count ?? 0,
-            recetas: b.count ?? 0,
-            diagnosticos: c.count ?? 0,
-            signos: d.count ?? 0,
-          });
-        }
-      })
-      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando documentos'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
+  const { counts: full, loading, error } = useDashboardCliente();
+  const counts = {
+    consultas:    full.consultas,
+    recetas:      full.medicamentos,
+    diagnosticos: full.diagnosticos,
+    signos:       full.signos,
+  };
 
   const docs = [
     {

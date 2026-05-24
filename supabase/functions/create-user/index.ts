@@ -124,52 +124,84 @@ Deno.serve(async (req: Request) => {
 
     const newAuthUserId = invited.user!.id;
 
-    // 4. Para médico o cliente, completar la fila específica del rol.
-    //    (el trigger ya creó persona + usuario + asignacion_rol)
-    if (rol === "medico" || rol === "cliente") {
-      // Esperar un instante a que el trigger termine
-      let attempts = 0;
-      let usr: { id_persona: number } | null = null;
-      while (attempts < 5 && !usr?.id_persona) {
-        const { data } = await supabaseAdmin
-          .from("usuario")
-          .select("id_persona")
-          .eq("auth_user_id", newAuthUserId)
-          .maybeSingle();
-        usr = data;
-        if (!usr?.id_persona) {
-          await new Promise(r => setTimeout(r, 200));
-          attempts++;
-        }
-      }
-
-      if (usr?.id_persona) {
-        if (rol === "medico") {
-          const { error: medErr } = await supabaseAdmin.from("medico").insert({
-            id_persona:      usr.id_persona,
-            numero_licencia: body.numero_licencia ?? `LIC-${Date.now()}`,
-            especialidad:    body.especialidad,
-            consultorio:     body.consultorio,
-            activo:          true,
-          });
-          if (medErr) console.error("Error insertando médico:", medErr.message);
-        }
-
-        if (rol === "cliente") {
-          // Comprobar primero si ya existe (la persona podría haber sido
-          // paciente antes en otro proyecto, o haberse provisionado dos veces)
-          const { data: existing } = await supabaseAdmin
-            .from("paciente").select("id_paciente").eq("id_persona", usr.id_persona).maybeSingle();
-          if (!existing) {
-            const { error: pacErr } = await supabaseAdmin.from("paciente").insert({
-              id_persona:      usr.id_persona,
-              numero_historia: `HC-${usr.id_persona}-${Date.now().toString(36)}`,
-            });
-            if (pacErr) console.error("Error insertando paciente:", pacErr.message);
-          }
-        }
+    // 4. Esperar a que el trigger provision_user_from_auth termine.
+    //    El trigger SIEMPRE crea asignacion_rol con 'cliente' (por seguridad).
+    //    Esta función — con service_role — hace el override si pidieron un
+    //    rol elevado, y luego inserta la fila específica (medico / paciente).
+    let attempts = 0;
+    let usr: { id_usuario: number; id_persona: number } | null = null;
+    while (attempts < 8 && !usr) {
+      const { data } = await supabaseAdmin
+        .from("usuario")
+        .select("id_usuario, id_persona")
+        .eq("auth_user_id", newAuthUserId)
+        .maybeSingle();
+      usr = data;
+      if (!usr) {
+        await new Promise(r => setTimeout(r, 250));
+        attempts++;
       }
     }
+
+    if (!usr) {
+      return json({
+        error: "El trigger no provisionó al usuario en BD. " +
+               "Verifica auth-trigger.sql está cargado en Supabase.",
+      }, 500, CORS);
+    }
+
+    // 4a. Si el rol pedido NO es 'cliente', sobreescribir asignacion_rol.
+    //     (El trigger dejó 'cliente' por defecto, sin importar metadata.rol).
+    if (rol !== "cliente") {
+      const { data: targetRol } = await supabaseAdmin
+        .from("rol").select("id_rol").eq("nombre", rol).maybeSingle();
+
+      if (!targetRol?.id_rol) {
+        return json({
+          error: `El rol '${rol}' no existe en la tabla rol. Ejecuta supabase/migration-rol-cliente.sql.`,
+        }, 500, CORS);
+      }
+
+      // Borra la asignación 'cliente' que dejó el trigger, e inserta la real.
+      const { error: delErr } = await supabaseAdmin
+        .from("asignacion_rol").delete().eq("id_usuario", usr.id_usuario);
+      if (delErr) console.error("Error borrando asignacion previa:", delErr.message);
+
+      const { error: insErr } = await supabaseAdmin
+        .from("asignacion_rol")
+        .insert({ id_usuario: usr.id_usuario, id_rol: targetRol.id_rol });
+      if (insErr) {
+        return json({
+          error: `Cuenta creada pero no se pudo asignar el rol '${rol}': ${insErr.message}`,
+        }, 500, CORS);
+      }
+    }
+
+    // 4b. Insertar fila en la tabla específica del rol.
+    if (rol === "medico") {
+      const { error: medErr } = await supabaseAdmin.from("medico").insert({
+        id_persona:      usr.id_persona,
+        numero_licencia: body.numero_licencia ?? `LIC-${Date.now()}`,
+        especialidad:    body.especialidad,
+        consultorio:     body.consultorio,
+        activo:          true,
+      });
+      if (medErr) console.error("Error insertando médico:", medErr.message);
+    }
+
+    if (rol === "cliente") {
+      const { data: existing } = await supabaseAdmin
+        .from("paciente").select("id_paciente").eq("id_persona", usr.id_persona).maybeSingle();
+      if (!existing) {
+        const { error: pacErr } = await supabaseAdmin.from("paciente").insert({
+          id_persona:      usr.id_persona,
+          numero_historia: `HC-${usr.id_persona}-${Date.now().toString(36)}`,
+        });
+        if (pacErr) console.error("Error insertando paciente:", pacErr.message);
+      }
+    }
+
+    // (admin y asistente no requieren fila adicional fuera de asignacion_rol)
 
     return json({
       ok: true,

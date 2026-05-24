@@ -1,54 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Calendar, Activity, AlertCircle, Clock, ArrowUp,
   UserPlus, Stethoscope, ClipboardList, TrendingUp
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../hooks/useAuth';
+import { useAuth, useDashboardAdmin } from '../../../hooks';
 import NuevaCitaModal from '../components/NuevaCitaModal';
 
 function Home() {
   const navigate = useNavigate();
   const { usuarioLogueado } = useAuth();
-  const [stats, setStats] = useState(null);
-  const [proximasCitas, setProximasCitas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { stats, proximasCitas, loading, error } = useDashboardAdmin(5);
   const [showCitaModal, setShowCitaModal] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError('');
-
-        const [{ data: kpis, error: e1 }, { data: citas, error: e2 }] = await Promise.all([
-          supabase.from('vw_admin_estadisticas').select('*').maybeSingle(),
-          supabase
-            .from('vw_admin_citas')
-            .select('id_cita, fecha, hora, estado, paciente_nombre, medico_nombre, medico_especialidad')
-            .gte('fecha', new Date().toISOString().split('T')[0])
-            .order('fecha_cita', { ascending: true })
-            .limit(5),
-        ]);
-
-        if (e1) throw e1;
-        if (e2) throw e2;
-        if (mounted) {
-          setStats(kpis);
-          setProximasCitas(citas ?? []);
-        }
-      } catch (err) {
-        if (mounted) setError(err.message ?? 'Error cargando datos');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
 
   const cards = [
     { title: 'Pacientes', value: stats?.total_pacientes ?? 0, icon: Users,        color: 'blue',   sub: 'registrados' },

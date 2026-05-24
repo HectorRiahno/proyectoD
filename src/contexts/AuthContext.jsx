@@ -79,27 +79,73 @@ export function AuthProvider({ children }) {
   // ─── Inicialización y listener de cambios de sesión ─────────────────────────
   useEffect(() => {
     let mounted = true;
+    // Flag para indicar que la sesión está rota y debemos ignorar eventos
+    // residuales del listener (evita race con SIGNED_IN tras un timeout).
+    let sesionRota = false;
+
+    // Helper: race contra un timeout. Devuelve `Promise.race`.
+    const withTimeout = (promise, ms, label) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error(`Timeout en ${label} tras ${ms}ms`)),
+        ms
+      )),
+    ]);
+
+    // Limpieza nuclear + redirección dura. Al detectar sesión zombi tras
+    // AFK largo (token vencido, supabase client wedged, etc.) borramos
+    // todas las claves de auth y forzamos navegación a /login, lo que
+    // remonta toda la app con un cliente Supabase fresco.
+    const limpiarYRedirigir = async () => {
+      if (sesionRota) return;
+      sesionRota = true;
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
+      try {
+        localStorage.removeItem('hospitalis-session');
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith('sb-') || k.includes('supabase')) localStorage.removeItem(k);
+        });
+        sessionStorage.clear();
+      } catch (_) {}
+      // replace evita que el usuario vuelva con back a la pantalla zombi
+      window.location.replace('/login');
+    };
+
+    // Carga el perfil con timeout; si falla, intenta el fallback de metadata
+    // de sesión. Si TODO falla → limpiar.
+    const cargarUsuarioConTimeout = async (session, label) => {
+      try {
+        return await withTimeout(fetchUsuario(session), 6000, label);
+      } catch (eFetch) {
+        console.warn(`${label} timeout/fallo; usando metadata:`, eFetch.message);
+        return buildUserFromSession(session);
+      }
+    };
 
     const loadSession = async () => {
       try {
         setLoading(true);
         setError(null);
-        // No tocar sesionExpirada aquí — lo maneja onAuthStateChange
 
-        const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+        const { data: { session }, error: sessErr } =
+          await withTimeout(supabase.auth.getSession(), 6000, 'getSession');
         if (sessErr) throw sessErr;
 
         if (session?.user) {
           currentAuthUidRef.current = session.user.id;
-          const usuario = await fetchUsuario(session);
-          if (mounted) setUsuarioLogueado(usuario);
+          const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(loadSession)');
+          if (mounted && !sesionRota) setUsuarioLogueado(usuario);
         }
-        // Si no hay sesión, simplemente quedamos en estado deslogueado (sin modal)
       } catch (err) {
         console.error('Error verificando sesión:', err);
+        const esTimeout = (err?.message ?? '').toLowerCase().includes('timeout');
+        if (esTimeout) {
+          await limpiarYRedirigir();
+          return; // ya se va a recargar; no tocar más estado
+        }
         if (mounted) setError(err.message ?? 'Error verificando sesión');
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted && !sesionRota) setLoading(false);
       }
     };
 
@@ -108,41 +154,35 @@ export function AuthProvider({ children }) {
     // ── Escuchar eventos de Auth ──────────────────────────────────────────────
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return;
+        if (!mounted || sesionRota) return;
         console.info('[Auth event]', event, '— wasLoggedIn:', wasLoggedInRef.current,
           '— explicitLogout:', explicitLogoutRef.current);
 
-        // ── INITIAL_SESSION: carga inicial del app, no es un cambio de estado ──
+        // ── INITIAL_SESSION: carga inicial, no cuenta como cambio de estado ──
         if (event === 'INITIAL_SESSION') {
-          if (session?.user) {
-            // Si loadSession ya cargó el mismo UID, no volver a consultar.
-            if (currentAuthUidRef.current !== session.user.id) {
-              currentAuthUidRef.current = session.user.id;
-              const usuario = await fetchUsuario(session);
-              if (mounted) setUsuarioLogueado(usuario);
-            }
+          if (session?.user && currentAuthUidRef.current !== session.user.id) {
+            currentAuthUidRef.current = session.user.id;
+            const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(INITIAL_SESSION)');
+            if (mounted && !sesionRota) setUsuarioLogueado(usuario);
           }
-          if (mounted) setLoading(false);
+          if (mounted && !sesionRota) setLoading(false);
           return;
         }
 
-        // ── Nuevo login ────────────────────────────────────────────────────────
+        // ── Nuevo login (o re-emisión al recuperar foco) ──────────────────────
         if (event === 'SIGNED_IN' && session?.user) {
           setSesionExpirada(false);
           explicitLogoutRef.current = false;
 
-          // Supabase v2 dispara SIGNED_IN al recuperar foco la pestaña.
-          // Si ya tenemos cargado el mismo UID, ignorar: re-consultar genera
-          // un nuevo objeto `usuarioLogueado` que cascadea useEffects de
-          // páginas y deja sus fetches en "cargando..." indefinido.
+          // Mismo UID ya cargado → ignorar (Supabase v2 emite duplicados).
           if (currentAuthUidRef.current === session.user.id) {
             if (mounted) setLoading(false);
             return;
           }
 
           currentAuthUidRef.current = session.user.id;
-          const usuario = await fetchUsuario(session);
-          if (mounted) {
+          const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(SIGNED_IN)');
+          if (mounted && !sesionRota) {
             setUsuarioLogueado(usuario);
             setLoading(false);
           }
@@ -152,31 +192,25 @@ export function AuthProvider({ children }) {
         // ── Token renovado silenciosamente ────────────────────────────────────
         if (event === 'TOKEN_REFRESHED' && session?.user) {
           setSesionExpirada(false);
-          // Mismo UID: no hace falta re-consultar el perfil.
           if (currentAuthUidRef.current === session.user.id) return;
           currentAuthUidRef.current = session.user.id;
-          const usuario = await fetchUsuario(session);
-          if (mounted) setUsuarioLogueado(usuario);
+          const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(TOKEN_REFRESHED)');
+          if (mounted && !sesionRota) setUsuarioLogueado(usuario);
           return;
         }
 
-        // ── Sesión terminada: distinguir entre expiración vs logout vs nunca ──
+        // ── Sesión terminada ──────────────────────────────────────────────────
         if (event === 'SIGNED_OUT' || !session?.user) {
           if (!mounted) return;
           currentAuthUidRef.current = null;
           setUsuarioLogueado(null);
           setLoading(false);
 
-          // Solo mostrar modal de expiración si:
-          // 1. El usuario estaba logueado previamente, Y
-          // 2. NO fue un logout explícito (botón)
           if (wasLoggedInRef.current && !explicitLogoutRef.current) {
             setSesionExpirada(true);
           } else {
             setSesionExpirada(false);
           }
-
-          // Reset refs después de manejar el evento
           wasLoggedInRef.current    = false;
           explicitLogoutRef.current = false;
           return;

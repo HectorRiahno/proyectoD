@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { roleHomePath, normalizeRoleName } from './config/roles';
+import { supabase } from './lib/supabase';
 
 import EmployeeLayout from './shared/layouts/EmployeeLayout';
 import ClientLayout from './shared/layouts/ClientLayout';
@@ -10,6 +11,7 @@ import MedicoLayout from './shared/layouts/MedicoLayout';
 import Login from './features/auth/pages/Login';
 import Register from './features/auth/pages/Register';
 import SetPassword from './features/auth/pages/SetPassword';
+import ForgotPassword from './features/auth/pages/ForgotPassword';
 
 import AdminHome from './features/admin/pages/Home';
 import AdminCitas from './features/admin/pages/Citas';
@@ -20,6 +22,9 @@ import AdminConfiguracion from './features/admin/pages/Configuracion';
 import AdminUsuarios from './features/admin/pages/Usuarios';
 import AdminMedicos  from './features/admin/pages/Medicos';
 import AdminHorarios from './features/admin/pages/Horarios';
+import AdminAuditoria from './features/admin/pages/Auditoria';
+import AdminPapelera from './features/admin/pages/Papelera';
+import AdminFacturacion from './features/admin/pages/Facturacion';
 import CreateDoctor from './features/admin/components/CreateDoctor';
 
 import MedicoDashboard from './features/medico/pages/MedicoDashboard';
@@ -36,14 +41,54 @@ import MisMedicamentos from './features/clients/pages/MisMedicamentos';
 import Resultados from './features/clients/pages/Resultados';
 import MiHistorial from './features/clients/pages/MiHistorial';
 import Documentos from './features/clients/pages/Documentos';
+import MisFacturas from './features/clients/pages/MisFacturas';
 
 // ─── Loading screen ────────────────────────────────────────────────────────────
+// Tras 5 segundos cargando, muestra una vía de escape para casos donde la
+// sesión queda en estado corrupto (token expirado, refresh fallido, etc.).
 function LoadingScreen() {
+  const [mostrarEmergencia, setMostrarEmergencia] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMostrarEmergencia(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const limpiarYVolverAlLogin = async () => {
+    setLimpiando(true);
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
+    try {
+      localStorage.removeItem('hospitalis-session');
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') || k.includes('supabase')) localStorage.removeItem(k);
+      });
+      sessionStorage.clear();
+    } catch (_) {}
+    window.location.replace('/login');
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="text-center max-w-sm">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
         <p className="mt-4 text-gray-600">Cargando sesión...</p>
+
+        {mostrarEmergencia && (
+          <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+            <p className="text-sm text-amber-800">
+              ¿Llevas mucho tiempo cargando? La sesión puede estar atascada
+              (token expirado, conexión perdida).
+            </p>
+            <button
+              onClick={limpiarYVolverAlLogin}
+              disabled={limpiando}
+              className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition text-sm font-semibold disabled:opacity-60"
+            >
+              {limpiando ? 'Limpiando...' : 'Limpiar sesión e ir al login'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -116,6 +161,10 @@ export default function AppRoutes() {
           el invitado tiene sesión activa (vía detectSessionInUrl) o no. */}
       <Route path="/set-password" element={<SetPassword />} />
 
+      {/* Forgot-password: público, dispara el correo de recuperación. */}
+      <Route path="/forgot-password"
+        element={!estaLogueado ? <ForgotPassword /> : <Navigate to={home} replace />} />
+
       {/* Sin rol */}
       <Route path="/sin-rol" element={estaLogueado ? <SinRol /> : <Navigate to="/login" replace />} />
 
@@ -130,6 +179,9 @@ export default function AppRoutes() {
         <Route path="horarios"     element={<AdminHorarios />} />
         <Route path="crear-medico" element={<CreateDoctor />} />
         <Route path="reportes"     element={<AdminReportes />} />
+        <Route path="facturacion"  element={<AdminFacturacion />} />
+        <Route path="auditoria"    element={<AdminAuditoria />} />
+        <Route path="papelera"     element={<AdminPapelera />} />
         <Route path="configuracion" element={<AdminConfiguracion />} />
       </Route>
 
@@ -152,6 +204,7 @@ export default function AppRoutes() {
         <Route path="resultados"    element={<Resultados />} />
         <Route path="historial"     element={<MiHistorial />} />
         <Route path="documentos"    element={<Documentos />} />
+        <Route path="facturas"      element={<MisFacturas />} />
       </Route>
 
       {/* Raíz y wildcard */}

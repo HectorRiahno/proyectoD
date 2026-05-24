@@ -1,62 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, FileText, Pill, Activity, AlertCircle, Clock,
   Stethoscope, ChevronRight, Heart, ClipboardList
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../hooks/useAuth';
+import { useAuth, useDashboardCliente } from '../../../hooks';
 
 export default function ClientDashboard() {
   const navigate = useNavigate();
   const { usuarioLogueado } = useAuth();
-  const [perfil, setPerfil] = useState(null);
-  const [proximas, setProximas] = useState([]);
-  const [medicamentos, setMedicamentos] = useState([]);
-  const [ultimoSigno, setUltimoSigno] = useState(null);
-  const [counts, setCounts] = useState({ citas: 0, consultas: 0, diagnosticos: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const [
-          { data: p },
-          { data: prox },
-          { data: meds },
-          { data: signos },
-          { count: cCitas },
-          { count: cConsultas },
-          { count: cDx },
-        ] = await Promise.all([
-          supabase.from('vw_paciente_mi_perfil').select('*').maybeSingle(),
-          supabase.from('vw_paciente_proximas_citas').select('*').limit(3),
-          supabase.from('vw_paciente_mis_medicamentos').select('*').limit(3),
-          supabase.from('vw_paciente_mis_signos').select('*').limit(1).maybeSingle(),
-          supabase.from('vw_paciente_mis_citas').select('*', { count: 'exact', head: true }),
-          supabase.from('vw_paciente_mi_historial').select('*', { count: 'exact', head: true }),
-          supabase.from('vw_paciente_mis_diagnosticos').select('*', { count: 'exact', head: true }),
-        ]);
-        if (mounted) {
-          setPerfil(p);
-          setProximas(prox ?? []);
-          setMedicamentos(meds ?? []);
-          setUltimoSigno(signos);
-          setCounts({ citas: cCitas ?? 0, consultas: cConsultas ?? 0, diagnosticos: cDx ?? 0 });
-        }
-      } catch (err) {
-        if (mounted) setError(err.message ?? 'Error cargando información');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
+  const {
+    perfil, proximas, medicamentos, ultimoSigno, counts, loading, error,
+  } = useDashboardCliente();
 
   const estadoColor = (estado) => ({
     programada: 'bg-blue-100 text-blue-700',

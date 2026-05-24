@@ -100,19 +100,13 @@ BEGIN
         FROM public.usuario WHERE auth_user_id = p_id;
     END IF;
 
-    -- Asignar rol (desde metadata o 'cliente' por defecto)
-    v_rol_nombre := COALESCE(
-        p_meta ->> 'rol',
-        p_meta ->> 'rol_nombre',
-        'cliente'
-    );
-
-    SELECT id_rol INTO v_id_rol
-    FROM public.rol WHERE nombre = v_rol_nombre LIMIT 1;
-
-    IF v_id_rol IS NULL THEN
-        SELECT id_rol INTO v_id_rol FROM public.rol WHERE nombre = 'cliente' LIMIT 1;
-    END IF;
+    -- 🔒 SEGURIDAD: el trigger SIEMPRE asigna 'cliente'. No confiamos en
+    --    metadata.rol porque supabase.auth.signUp permite que cualquier
+    --    cliente envíe { rol: 'admin' } y se autopromueva.
+    --    Si la invitación viene de la Edge Function con un rol elevado
+    --    (medico/admin/asistente), esa función — usando service_role —
+    --    actualiza asignacion_rol después de que este trigger termine.
+    SELECT id_rol INTO v_id_rol FROM public.rol WHERE nombre = 'cliente' LIMIT 1;
 
     IF v_id_rol IS NOT NULL AND v_id_usuario IS NOT NULL THEN
         INSERT INTO public.asignacion_rol (id_usuario, id_rol)

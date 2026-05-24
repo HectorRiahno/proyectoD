@@ -53,10 +53,31 @@ const employeeSidebarItems = [
     badge: "CRUD"
   },
   {
+    id: 9,
+    title: "Facturación",
+    icon: "Receipt",
+    path: "/dashboard/facturacion",
+    badge: "CRUD"
+  },
+  {
     id: 5,
     title: "Reportes",
     icon: "BarChart3",
     path: "/dashboard/reportes"
+  },
+  {
+    id: 7,
+    title: "Auditoría",
+    icon: "ShieldCheck",
+    path: "/dashboard/auditoria",
+    badge: "ADMIN"
+  },
+  {
+    id: 8,
+    title: "Papelera",
+    icon: "Trash2",
+    path: "/dashboard/papelera",
+    badge: "ADMIN"
   },
   {
     id: 6,

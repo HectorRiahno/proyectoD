@@ -12,11 +12,17 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
     "@tailwindcss/vite": "^4.1.14",
+    "date-fns": "^4.3.0",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.545.0",
     "lucide-react-native": "^0.545.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.4",
+    "recharts": "^3.8.1",
     "tailwindcss": "^4.1.14"
   },
   "devDependencies": {

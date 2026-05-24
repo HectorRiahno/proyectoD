@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   ClipboardList, Search, Plus, Edit, Eye, Trash2,
@@ -7,8 +7,10 @@ import {
   CheckCircle, FileText, Heart, ChevronDown, ChevronUp,
   BookOpen, FlaskConical, Brain, Star
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../hooks/useAuth';
+import {
+  consultaService, citaService, pacienteService,
+} from '../../../services';
+import { useAuth, useConsultas } from '../../../hooks';
 
 // ─── Constantes médicas ────────────────────────────────────────────────────────
 const SISTEMAS = [
@@ -34,9 +36,10 @@ const INTENSIDADES = ['Leve', 'Moderada', 'Severa'];
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Consultas() {
-  const [consultas, setConsultas] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
+  const {
+    consultas, loading, error, setError,
+    reload: cargar, softDelete,
+  } = useConsultas();
   const [search, setSearch]       = useState('');
   const [detalle, setDetalle]     = useState(null);
   const [editando, setEditando]   = useState(null);
@@ -59,20 +62,6 @@ export default function Consultas() {
     }
   }, [searchParams, setSearchParams]);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    const { data, error } = await supabase
-      .from('vw_medico_consultas')
-      .select('*')
-      .order('fecha_consulta', { ascending: false });
-    if (error) setError(error.message);
-    else setConsultas(data ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { cargar(); }, [cargar]);
-
   const filtered = consultas.filter(c => {
     const term = search.toLowerCase();
     return (
@@ -84,15 +73,13 @@ export default function Consultas() {
   });
 
   const eliminarConfirmado = async (c) => {
-    const { error } = await supabase.from('consulta_medica').delete().eq('id_consulta', c.id_consulta);
-    if (error) {
-      setError(error.code === '42501'
-        ? 'Sin permisos. Ejecuta supabase/rls-medico.sql.'
-        : error.message);
+    try {
+      await softDelete(c.id_consulta);
+      return true;
+    } catch (err) {
+      setError(err.message);
       return false;
     }
-    cargar();
-    return true;
   };
 
   return (
@@ -216,23 +203,12 @@ function ModalDetalle({ consulta: c, onClose }) {
 
   useEffect(() => {
     Promise.all([
-      // Datos completos del paciente (persona + paciente)
-      supabase.from('paciente')
-        .select(`
-          id_paciente, numero_historia, tipo_sangre, alergias, enfermedades_cronicas,
-          contacto_emergencia, telefono_emergencia, ocupacion, estado_civil, created_at,
-          persona:persona!inner(
-            id_persona, documento, tipo_documento, nombres, apellidos,
-            fecha_nacimiento, genero, telefono, email, direccion
-          )
-        `)
-        .eq('id_paciente', c.id_paciente)
-        .maybeSingle(),
-      supabase.from('diagnostico').select('*, tipo_diagnostico(nombre)').eq('id_consulta', c.id_consulta).order('es_principal', { ascending: false }),
-      supabase.from('sintoma').select('*').eq('id_consulta', c.id_consulta),
-      supabase.from('signos_vitales').select('*').eq('id_consulta', c.id_consulta).order('fecha_registro', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('orden_medica').select('*, medicamento(nombre, presentacion, concentracion, via_administracion)').eq('id_consulta', c.id_consulta).order('fecha_emision', { ascending: false }),
-    ]).then(([{ data: p }, { data: d }, { data: s }, { data: sv }, { data: om }]) => {
+      pacienteService.getDatosCompletos(c.id_paciente),
+      consultaService.getDiagnosticosConsulta(c.id_consulta),
+      consultaService.getSintomasConsulta(c.id_consulta),
+      consultaService.getUltimoSignoConsulta(c.id_consulta),
+      consultaService.getOrdenesConsulta(c.id_consulta),
+    ]).then(([p, d, s, sv, om]) => {
       setPaciente(p ?? null);
       setDiagnosticos(d ?? []);
       setSintomas(s ?? []);
@@ -278,9 +254,9 @@ function ModalDetalle({ consulta: c, onClose }) {
         <Seccion titulo="Información clínica del paciente" color="red">
           <div className="grid grid-cols-2 gap-3">
             <Campo label="N° historia clínica" value={paciente?.numero_historia} />
-            <Campo label="Tipo de sangre"      value={paciente?.tipo_sangre} highlight={!!paciente?.tipo_sangre} />
-            <Campo label="Alergias"            value={paciente?.alergias} className="col-span-2" highlight={!!paciente?.alergias} />
-            <Campo label="Enfermedades crónicas" value={paciente?.enfermedades_cronicas} className="col-span-2" />
+            <Campo label="Tipo de sangre"      value={paciente?.historial?.tipo_sangre} highlight={!!paciente?.historial?.tipo_sangre} />
+            <Campo label="Alergias"            value={paciente?.historial?.alergias} className="col-span-2" highlight={!!paciente?.historial?.alergias} />
+            <Campo label="Enfermedades crónicas" value={paciente?.historial?.enfermedades_cronicas} className="col-span-2" />
             <Campo label="Contacto emergencia" value={paciente?.contacto_emergencia} />
             <Campo label="Tel. emergencia"     value={paciente?.telefono_emergencia} />
           </div>
@@ -486,27 +462,23 @@ function ModalCrear({ citaInicial = null, onClose }) {
       // ya fue marcada como en proceso, y traemos esa cita aunque no esté en
       // los estados habituales (para que aparezca en el dropdown).
       const estadosCita = ['programada', 'confirmada', 'en_curso'];
-      const [rPac, rCitas, rTipos] = await Promise.all([
-        supabase.from('vw_admin_pacientes').select('id_paciente, nombre_completo, documento').order('nombre_completo'),
-        supabase.from('vw_medico_mis_citas').select('id_cita, fecha, hora, paciente_nombre, estado, id_paciente').in('estado', estadosCita).order('fecha', { ascending: true }),
-        supabase.from('tipo_diagnostico').select('id_tipo_diagnostico, nombre').order('nombre'),
+      const [pacs, citas, tipos] = await Promise.all([
+        pacienteService.getCatalogo(),
+        citaService.getMisCitasMedicoPorEstado(estadosCita),
+        consultaService.getTiposDiagnostico(),
       ]);
-      let citasList = rCitas.data ?? [];
+      let citasList = citas;
 
       // Si la cita inicial no está en el listado (por ejemplo, ya completada),
       // la buscamos explícitamente para poder mostrar el contexto al médico.
       if (citaInicial && !citasList.some(c => String(c.id_cita) === String(citaInicial))) {
-        const { data: citaExtra } = await supabase
-          .from('vw_medico_mis_citas')
-          .select('id_cita, fecha, hora, paciente_nombre, estado, id_paciente')
-          .eq('id_cita', citaInicial)
-          .maybeSingle();
+        const citaExtra = await citaService.getCitaMedicoExtra(citaInicial);
         if (citaExtra) citasList = [citaExtra, ...citasList];
       }
 
-      setPacientes(rPac.data ?? []);
+      setPacientes(pacs ?? []);
       setCitas(citasList);
-      setTiposDx(rTipos.data ?? []);
+      setTiposDx(tipos ?? []);
 
       // Pre-rellenar el paciente si hay cita inicial
       if (citaInicial) {
@@ -524,9 +496,9 @@ function ModalCrear({ citaInicial = null, onClose }) {
   // Cargar antecedentes cuando cambia el paciente
   useEffect(() => {
     if (!form.id_paciente) { setAntecedentes(null); return; }
-    supabase.from('vw_admin_pacientes').select('tipo_sangre, alergias, enfermedades_cronicas, ocupacion, estado_civil, nombre_completo, fecha_nacimiento, edad')
-      .eq('id_paciente', Number(form.id_paciente)).maybeSingle()
-      .then(({ data }) => setAntecedentes(data));
+    pacienteService.getAntecedentes(Number(form.id_paciente))
+      .then(setAntecedentes)
+      .catch(() => setAntecedentes(null));
   }, [form.id_paciente]);
 
   const handleForm   = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
@@ -545,13 +517,12 @@ function ModalCrear({ citaInicial = null, onClose }) {
   const toggleHistorial = async () => {
     if (!historialOpen && historial.length === 0 && form.id_paciente) {
       setLoadingHist(true);
-      const { data } = await supabase.from('consulta_medica')
-        .select('id_consulta, fecha_consulta, motivo_consulta, impresion_diagnostica, plan_tratamiento')
-        .eq('id_paciente', Number(form.id_paciente))
-        .order('fecha_consulta', { ascending: false })
-        .limit(5);
-      setHistorial(data ?? []);
-      setLoadingHist(false);
+      try {
+        const data = await consultaService.getConsultasPacienteResumen(Number(form.id_paciente), 5);
+        setHistorial(data ?? []);
+      } finally {
+        setLoadingHist(false);
+      }
     }
     setHistorialOpen(p => !p);
   };
@@ -562,90 +533,23 @@ function ModalCrear({ citaInicial = null, onClose }) {
     setSaving(true);
     setError('');
     try {
-      // Obtener id_medico
-      let idMedico = null;
-      const { data: rpcData } = await supabase.rpc('mi_id_medico');
-      if (rpcData) {
-        idMedico = rpcData;
-      } else {
-        const { data: mData } = await supabase.from('medico').select('id_medico').eq('id_persona', usuarioLogueado?.id_persona).maybeSingle();
-        idMedico = mData?.id_medico ?? null;
-      }
+      const idMedico = await consultaService.resolveIdMedico(usuarioLogueado?.id_persona);
       if (!idMedico) throw new Error('No se encontró tu perfil de médico. Pide al administrador que lo cree en "Médicos".');
 
-      // Crear consulta
-      const rC = await supabase.from('consulta_medica').insert({
-        id_paciente: Number(form.id_paciente), id_medico: idMedico,
-        id_cita: citaVinculada ? Number(citaVinculada) : null,
-        motivo_consulta:         form.motivo_consulta        || null,
-        enfermedad_actual:       form.enfermedad_actual       || null,
-        revision_sistemas:       form.revision_sistemas       || null,
-        examen_fisico:           form.examen_fisico            || null,
-        examenes_complementarios: form.examenes_complementarios || null,
-        analisis_clinico:        form.analisis_clinico         || null,
-        impresion_diagnostica:   form.impresion_diagnostica    || null,
-        plan_tratamiento:        form.plan_tratamiento         || null,
-        observaciones:           form.observaciones            || null,
-      }).select('id_consulta');
-
-      if (rC.error) {
-        const { code, message } = rC.error;
-        if (code === '42501') throw new Error('Sin permisos. Ejecuta supabase/rls-medico.sql.');
-        if (code === '42703') throw new Error('Columnas nuevas no encontradas. Ejecuta supabase/migration-consulta.sql primero.');
-        throw new Error(message ?? 'Error al crear la consulta');
-      }
-      const id_consulta = rC.data?.[0]?.id_consulta;
-      if (!id_consulta) throw new Error('No se obtuvo ID de consulta. Intenta de nuevo.');
-
-      // Insertar diagnósticos
-      const dxValidos = diagnosticos.filter(d => d.descripcion.trim());
-      if (dxValidos.length > 0) {
-        const { error: e2 } = await supabase.from('diagnostico').insert(
-          dxValidos.map((d, i) => ({
-            id_consulta,
-            id_tipo_diagnostico: d.id_tipo_diagnostico ? Number(d.id_tipo_diagnostico) : null,
-            codigo_cie10:  d.codigo_cie10.trim() || null,
-            descripcion:   d.descripcion.trim(),
-            es_principal:  i === 0,
-            tipo_dx:       d.tipo_dx || 'impresion',
-            prioridad:     d.prioridad || (i + 1),
-          }))
-        );
-        if (e2) console.warn('Error diagnósticos (puede faltar migration-consulta.sql):', e2.message);
-      }
-
-      // Insertar signos vitales (enlazados a la consulta y al médico)
-      const tieneSignos = Object.values(signos).some(v => v !== '');
-      if (tieneSignos) {
-        const { error: e3 } = await supabase.from('signos_vitales').insert({
-          id_paciente:             Number(form.id_paciente),
-          id_consulta:             id_consulta,
-          id_medico:               idMedico,
-          presion_sistolica:       signos.presion_sistolica       ? Number(signos.presion_sistolica)       : null,
-          presion_diastolica:      signos.presion_diastolica      ? Number(signos.presion_diastolica)      : null,
-          frecuencia_cardiaca:     signos.frecuencia_cardiaca     ? Number(signos.frecuencia_cardiaca)     : null,
-          frecuencia_respiratoria: signos.frecuencia_respiratoria ? Number(signos.frecuencia_respiratoria) : null,
-          temperatura:             signos.temperatura             ? Number(signos.temperatura)             : null,
-          saturacion_oxigeno:      signos.saturacion_oxigeno      ? Number(signos.saturacion_oxigeno)      : null,
-          peso:                    signos.peso                    ? Number(signos.peso)                    : null,
-          talla:                   signos.talla                   ? Number(signos.talla)                   : null,
-        });
-        if (e3) console.warn('Error signos (puede faltar migration-consulta.sql):', e3.message);
-      }
+      await consultaService.crearConsultaCompleta(idMedico, {
+        consulta: {
+          id_paciente: Number(form.id_paciente),
+          id_cita:     citaVinculada ? Number(citaVinculada) : null,
+          ...form,
+        },
+        diagnosticos,
+        signos,
+      });
 
       // Marcar cita como completada (estado final).
       // El "en_curso" intermedio se aplica desde MisCitas.jsx al "Tomar cita".
       if (citaVinculada) {
-        const { error: eCita } = await supabase
-          .from('cita')
-          .update({ estado: 'completada' })
-          .eq('id_cita', Number(citaVinculada));
-        if (eCita) {
-          if (eCita.code === '42501') {
-            throw new Error('Sin permisos para finalizar la cita. Ejecuta supabase/rls-medico.sql.');
-          }
-          throw new Error(eCita.message ?? 'No se pudo finalizar la cita');
-        }
+        await citaService.marcarCompletada(Number(citaVinculada));
       }
 
       onClose();
@@ -1068,10 +972,10 @@ function ModalEditar({ consulta, onClose }) {
   // Cargar signos y diagnósticos existentes
   useEffect(() => {
     Promise.all([
-      supabase.from('signos_vitales').select('*').eq('id_consulta', consulta.id_consulta).order('fecha_registro', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('diagnostico').select('*').eq('id_consulta', consulta.id_consulta).order('prioridad', { ascending: true }),
-      supabase.from('tipo_diagnostico').select('id_tipo_diagnostico, nombre').order('nombre'),
-    ]).then(([{ data: sv }, { data: d }, { data: t }]) => {
+      consultaService.getUltimoSignoConsulta(consulta.id_consulta),
+      consultaService.getDiagnosticosConsultaSimple(consulta.id_consulta),
+      consultaService.getTiposDiagnostico(),
+    ]).then(([sv, d, t]) => {
       if (sv) {
         setSignos({
           id_signos:               sv.id_signos,
@@ -1114,70 +1018,12 @@ function ModalEditar({ consulta, onClose }) {
     setSaving(true);
     setError('');
     try {
-      // 1. Actualizar consulta_medica
-      const { error: eC } = await supabase.from('consulta_medica').update({
-        motivo_consulta:          form.motivo_consulta          || null,
-        enfermedad_actual:        form.enfermedad_actual         || null,
-        revision_sistemas:        form.revision_sistemas         || null,
-        examen_fisico:            form.examen_fisico             || null,
-        examenes_complementarios: form.examenes_complementarios  || null,
-        impresion_diagnostica:    form.impresion_diagnostica     || null,
-        analisis_clinico:         form.analisis_clinico          || null,
-        plan_tratamiento:         form.plan_tratamiento          || null,
-        observaciones:            form.observaciones             || null,
-      }).eq('id_consulta', consulta.id_consulta);
-      if (eC) {
-        if (eC.code === '42501') throw new Error('Sin permisos. Ejecuta supabase/rls-medico.sql.');
-        throw new Error(eC.message);
-      }
-
-      // 2. Signos vitales: UPDATE si ya existe, INSERT si no, y solo si hay algún valor
-      const tieneSignos = ['presion_sistolica','presion_diastolica','frecuencia_cardiaca','frecuencia_respiratoria','temperatura','saturacion_oxigeno','peso','talla']
-        .some(k => signos[k] !== '' && signos[k] !== null);
-      if (tieneSignos) {
-        const payload = {
-          presion_sistolica:       signos.presion_sistolica       !== '' ? Number(signos.presion_sistolica)       : null,
-          presion_diastolica:      signos.presion_diastolica      !== '' ? Number(signos.presion_diastolica)      : null,
-          frecuencia_cardiaca:     signos.frecuencia_cardiaca     !== '' ? Number(signos.frecuencia_cardiaca)     : null,
-          frecuencia_respiratoria: signos.frecuencia_respiratoria !== '' ? Number(signos.frecuencia_respiratoria) : null,
-          temperatura:             signos.temperatura             !== '' ? Number(signos.temperatura)             : null,
-          saturacion_oxigeno:      signos.saturacion_oxigeno      !== '' ? Number(signos.saturacion_oxigeno)      : null,
-          peso:                    signos.peso                    !== '' ? Number(signos.peso)                    : null,
-          talla:                   signos.talla                   !== '' ? Number(signos.talla)                   : null,
-        };
-        if (signos.id_signos) {
-          const { error: eS } = await supabase.from('signos_vitales').update(payload).eq('id_signos', signos.id_signos);
-          if (eS) console.warn('Error actualizando signos:', eS.message);
-        } else {
-          const { error: eS } = await supabase.from('signos_vitales').insert({
-            ...payload,
-            id_paciente: consulta.id_paciente,
-            id_consulta: consulta.id_consulta,
-          });
-          if (eS) console.warn('Error insertando signos:', eS.message);
-        }
-      }
-
-      // 3. Diagnósticos: borrar todos los existentes y reinsertar (más simple que diff)
-      const { error: eDel } = await supabase.from('diagnostico').delete().eq('id_consulta', consulta.id_consulta);
-      if (eDel) console.warn('Error borrando diagnósticos previos:', eDel.message);
-
-      const dxValidos = diagnosticos.filter(d => d.descripcion.trim());
-      if (dxValidos.length > 0) {
-        const { error: eIns } = await supabase.from('diagnostico').insert(
-          dxValidos.map((d, i) => ({
-            id_consulta:         consulta.id_consulta,
-            id_tipo_diagnostico: d.id_tipo_diagnostico ? Number(d.id_tipo_diagnostico) : null,
-            codigo_cie10:        d.codigo_cie10.trim() || null,
-            descripcion:         d.descripcion.trim(),
-            es_principal:        i === 0,
-            tipo_dx:             d.tipo_dx || 'impresion',
-            prioridad:           d.prioridad || (i + 1),
-          }))
-        );
-        if (eIns) console.warn('Error insertando diagnósticos:', eIns.message);
-      }
-
+      await consultaService.editarConsultaCompleta(
+        consulta.id_consulta,
+        consulta.id_paciente,
+        { consulta: { ...form }, diagnosticos, signos },
+        signos.id_signos,
+      );
       onClose();
     } catch (err) {
       setError(err.message ?? 'Error al guardar');

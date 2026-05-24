@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Search, Plus, Edit, Trash2, Eye, AlertCircle, Loader2,
-  Stethoscope, Phone, Mail, ToggleLeft, ToggleRight, X,
-  User, Lock, Info
+  Search, Plus, Edit, Trash2, Eye, AlertCircle,
+  Stethoscope, Phone, Mail, ToggleLeft, ToggleRight,
+  User, Info,
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { medicoService } from '../../../services';
+import { useMedicos } from '../../../hooks';
+import {
+  Modal, PageHeader, KPI, Input, Campo, ErrorBox, ErrorBanner,
+  BotonesForm, SearchBar, LoadingRow, EmptyRow,
+} from '../../../shared/components/ui';
 
 const ESPECIALIDADES = [
   'Medicina General', 'Cardiología', 'Pediatría', 'Ginecología',
@@ -18,29 +23,16 @@ const initials = (n) =>
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Medicos() {
-  const [medicos, setMedicos]           = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState('');
+  const {
+    medicos, loading, error, setError,
+    reload: cargar, toggleActivo: toggleActivoHook, eliminar: eliminarHook,
+  } = useMedicos();
   const [search, setSearch]             = useState('');
   const [filtroEsp, setFiltroEsp]       = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [detalle, setDetalle]           = useState(null);
   const [editando, setEditando]         = useState(null);
   const [creando, setCreando]           = useState(false);
-
-  const cargar = async () => {
-    setLoading(true);
-    setError('');
-    const { data, error } = await supabase
-      .from('vw_admin_medicos')
-      .select('*')
-      .order('nombre_completo', { ascending: true });
-    if (error) setError(error.message);
-    else setMedicos(data ?? []);
-    setLoading(false);
-  };
-
-  useEffect(() => { cargar(); }, []);
 
   const filtered = medicos.filter(m => {
     const term = search.toLowerCase();
@@ -60,67 +52,39 @@ export default function Medicos() {
   const especialidades = [...new Set(medicos.map(m => m.especialidad).filter(Boolean))].sort();
 
   const toggleActivo = async (m) => {
-    const { error } = await supabase
-      .from('medico')
-      .update({ activo: !m.activo })
-      .eq('id_medico', m.id_medico);
-    if (error) {
-      const msg = error.code === '42501'
-        ? 'Sin permisos. Ejecuta supabase/rls-admin.sql primero.'
-        : error.message;
-      return setError(msg);
-    }
-    cargar();
+    try { await toggleActivoHook(m); }
+    catch (err) { setError(err.message); }
   };
 
   const eliminar = async (m) => {
     if (!window.confirm(`¿Eliminar a ${m.nombre_completo}?\nEsta acción no se puede deshacer.`)) return;
-    const { error } = await supabase.from('medico').delete().eq('id_medico', m.id_medico);
-    if (error) {
-      const msg = error.code === '42501'
-        ? 'Sin permisos. Ejecuta supabase/rls-admin.sql primero.'
-        : error.message;
-      return setError(msg);
-    }
-    cargar();
+    try { await eliminarHook(m.id_medico); }
+    catch (err) { setError(err.message); }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Gestión de Médicos</h1>
-            <p className="text-blue-100">Administra el personal médico del centro</p>
-          </div>
-          <div className="flex gap-8 text-center">
-            <KPI label="Total"        value={loading ? '···' : medicos.length} />
-            <KPI label="Activos"      value={loading ? '···' : medicos.filter(m => m.activo).length} />
-            <KPI label="Especialidades" value={loading ? '···' : especialidades.length} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Gestión de Médicos"
+        descripcion="Administra el personal médico del centro"
+        variant="blueDeep"
+      >
+        <KPI label="Total"        value={loading ? '···' : medicos.length} />
+        <KPI label="Activos"      value={loading ? '···' : medicos.filter(m => m.activo).length} />
+        <KPI label="Especialidades" value={loading ? '···' : especialidades.length} />
+      </PageHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBanner msg={error} onDismiss={() => setError('')} />
 
       {/* Filtros */}
       <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
         <div className="flex flex-wrap gap-4 items-center">
-          <div className="flex-1 relative min-w-[220px]">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Buscar por nombre, especialidad, email..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          <SearchBar
+            className="min-w-[220px]"
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por nombre, especialidad, email..."
+          />
 
           <select
             value={filtroEsp}
@@ -166,15 +130,9 @@ export default function Medicos() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12">
-                  <Loader2 size={32} className="mx-auto mb-2 animate-spin text-blue-600" />
-                  <p className="text-gray-500">Cargando médicos...</p>
-                </td></tr>
+                <LoadingRow colSpan={7} mensaje="Cargando médicos..." />
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12">
-                  <Stethoscope size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p className="text-gray-500">No se encontraron médicos</p>
-                </td></tr>
+                <EmptyRow colSpan={7} icon={Stethoscope} mensaje="No se encontraron médicos" />
               ) : filtered.map((m, idx) => (
                 <tr key={m.id_medico} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                   <td className="px-6 py-4">
@@ -296,36 +254,10 @@ function ModalEditar({ medico, onClose }) {
     setSaving(true);
     setError('');
     try {
-      // 1. Actualizar persona
-      const r1 = await supabase
-        .from('persona')
-        .update({ nombres: form.nombres, apellidos: form.apellidos, telefono: form.telefono })
-        .eq('id_persona', medico.id_persona);
-
-      if (r1.error) {
-        if (r1.error.code === '42501')
-          throw new Error('Sin permisos. Ejecuta supabase/rls-admin.sql en Supabase SQL Editor.');
-        throw new Error(r1.error.message);
-      }
-
-      // 2. Actualizar medico
-      const r2 = await supabase
-        .from('medico')
-        .update({
-          especialidad:      form.especialidad,
-          numero_licencia:   form.numero_licencia,
-          consultorio:       form.consultorio,
-          anios_experiencia: Number(form.anios_experiencia),
-          activo:            form.activo,
-        })
-        .eq('id_medico', medico.id_medico);
-
-      if (r2.error) {
-        if (r2.error.code === '42501')
-          throw new Error('Sin permisos para actualizar medico. Ejecuta supabase/rls-admin.sql.');
-        throw new Error(r2.error.message);
-      }
-
+      await medicoService.editarCompleto(
+        { id_persona: medico.id_persona, id_medico: medico.id_medico },
+        form,
+      );
       onClose();
     } catch (err) {
       console.error('[ModalEditar] Error:', err);
@@ -390,105 +322,8 @@ function ModalCrear({ onClose }) {
 
     setSaving(true);
     setError('');
-
     try {
-      // ── 1. Obtener o crear persona ─────────────────────────────────
-      // Si ya existe una persona con ese email (ej: creada por el trigger
-      // de auth cuando el médico se registró), la reutilizamos y solo
-      // actualizamos los datos faltantes.
-      let id_persona = null;
-      let personaCreada = false;
-
-      // Buscar por email si fue proporcionado
-      if (form.email) {
-        const { data: existente } = await supabase
-          .from('persona')
-          .select('id_persona')
-          .eq('email', form.email.trim().toLowerCase())
-          .maybeSingle();
-
-        if (existente?.id_persona) {
-          id_persona = existente.id_persona;
-          // Completar datos que el trigger no llenó
-          await supabase
-            .from('persona')
-            .update({
-              documento:  form.documento.trim(),
-              nombres:    form.nombres.trim(),
-              apellidos:  form.apellidos.trim(),
-              telefono:   form.telefono || null,
-            })
-            .eq('id_persona', id_persona);
-        }
-      }
-
-      // Si no encontramos por email, crear persona nueva
-      if (!id_persona) {
-        const resPersona = await supabase
-          .from('persona')
-          .insert({
-            documento:      form.documento.trim(),
-            tipo_documento: 'CC',
-            nombres:        form.nombres.trim(),
-            apellidos:      form.apellidos.trim(),
-            telefono:       form.telefono || null,
-            email:          form.email ? form.email.trim().toLowerCase() : null,
-          })
-          .select('id_persona');
-
-        if (resPersona.error) {
-          const { code, message, details } = resPersona.error;
-          if (code === '23505') {
-            const campo = details?.includes('email') ? 'email' : 'documento';
-            throw new Error(`Ya existe una persona con ese ${campo}. Si el médico tiene cuenta en el sistema, ingresa su email para vincularlo automáticamente.`);
-          }
-          if (code === '42501')
-            throw new Error('Sin permisos. Ejecuta supabase/rls-admin.sql en Supabase SQL Editor.');
-          throw new Error(message ?? 'Error al crear persona');
-        }
-
-        id_persona = resPersona.data?.[0]?.id_persona;
-        if (!id_persona) throw new Error('No se obtuvo id_persona tras la inserción.');
-        personaCreada = true;
-      }
-
-      // ── 2. Verificar que esta persona no tenga ya un médico ────────
-      const { data: medicoExiste } = await supabase
-        .from('medico')
-        .select('id_medico')
-        .eq('id_persona', id_persona)
-        .maybeSingle();
-
-      if (medicoExiste) {
-        throw new Error('Esta persona ya tiene un perfil de médico registrado.');
-      }
-
-      // ── 3. Insertar médico ─────────────────────────────────────────
-      const licencia = form.numero_licencia.trim() || `LIC-${Date.now()}`;
-      const resMedico = await supabase
-        .from('medico')
-        .insert({
-          id_persona,
-          numero_licencia:   licencia,
-          especialidad:      form.especialidad,
-          consultorio:       form.consultorio || null,
-          anios_experiencia: Number(form.anios_experiencia) || 0,
-          activo:            true,
-        });
-
-      if (resMedico.error) {
-        // Revertir persona si fue recién creada
-        if (personaCreada) {
-          await supabase.from('persona').delete().eq('id_persona', id_persona);
-        }
-        const { code, message } = resMedico.error;
-        if (code === '23505')
-          throw new Error('Ya existe un médico con ese número de licencia.');
-        if (code === '42501')
-          throw new Error('Sin permisos para insertar en medico. Ejecuta supabase/rls-admin.sql.');
-        throw new Error(message ?? 'Error al crear médico');
-      }
-
+      await medicoService.crearCompleto(form);
       onClose();
     } catch (err) {
       console.error('[ModalCrear] Error:', err);
@@ -548,76 +383,3 @@ function ModalCrear({ onClose }) {
   );
 }
 
-// ─── Sub-componentes UI ────────────────────────────────────────────────────────
-function Modal({ titulo, subtitulo, onClose, children }) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl">
-          <div>
-            <h2 className="text-2xl font-bold">{titulo}</h2>
-            {subtitulo && <p className="text-blue-100 text-sm">{subtitulo}</p>}
-          </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <X size={24} />
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function KPI({ label, value }) {
-  return (
-    <div>
-      <p className="text-sm text-blue-100">{label}</p>
-      <p className="text-3xl font-bold">{value}</p>
-    </div>
-  );
-}
-
-function Campo({ label, value, className = '' }) {
-  return (
-    <div className={`p-3 bg-gray-50 rounded-lg ${className}`}>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="font-semibold text-gray-900">{value ?? '—'}</p>
-    </div>
-  );
-}
-
-function Input({ label, name, type = 'text', value, onChange, required = false, placeholder = '', className = '' }) {
-  return (
-    <div className={className}>
-      <label className="text-sm font-medium text-gray-700 mb-2 block">{label}</label>
-      <input
-        name={name} type={type} value={value} onChange={onChange}
-        required={required} placeholder={placeholder}
-        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-    </div>
-  );
-}
-
-function ErrorBox({ msg }) {
-  return (
-    <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-center gap-2">
-      <AlertCircle size={16} className="flex-shrink-0" /> {msg}
-    </div>
-  );
-}
-
-function BotonesForm({ onCancel, saving, labelSave }) {
-  return (
-    <div className="flex gap-3 pt-4 border-t border-gray-200">
-      <button type="button" onClick={onCancel}
-        className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold">
-        Cancelar
-      </button>
-      <button type="submit" disabled={saving}
-        className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60">
-        {saving ? 'Guardando...' : labelSave}
-      </button>
-    </div>
-  );
-}

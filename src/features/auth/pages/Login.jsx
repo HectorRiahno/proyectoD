@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Mail, LogIn } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function Login() {
@@ -66,7 +66,15 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">Contraseña</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">Contraseña</label>
+              <Link
+                to="/forgot-password"
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 type="password"

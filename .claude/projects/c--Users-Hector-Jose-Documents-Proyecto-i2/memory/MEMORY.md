@@ -1,0 +1,1 @@
+- [PowerShell + UTF-8 = mojibake](feedback-utf8-encoding.md) — usar Edit con replace_all, nunca Get-Content/Set-Content para reemplazos

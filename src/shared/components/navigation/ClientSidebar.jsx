@@ -9,6 +9,7 @@ const clientSidebarItems = [
   { id: 3, title: 'Mi Historial',     icon: 'FileText',        path: '/cliente/historial',    description: 'Consultas' },
   { id: 4, title: 'Mis Medicamentos', icon: 'Pill',            path: '/cliente/medicamentos', description: 'Tratamiento' },
   { id: 5, title: 'Resultados',       icon: 'ClipboardList',   path: '/cliente/resultados',   description: 'Signos y diagnósticos' },
+  { id: 8, title: 'Mis Facturas',     icon: 'Receipt',         path: '/cliente/facturas',     description: 'Cobros y pagos' },
   { id: 6, title: 'Documentos',       icon: 'FileDown',        path: '/cliente/documentos',   description: 'Archivos médicos' },
   { id: 7, title: 'Mi Perfil',        icon: 'User',            path: '/cliente/perfil',       description: 'Información personal' },
 ];

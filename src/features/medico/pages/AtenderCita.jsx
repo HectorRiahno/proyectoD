@@ -4,10 +4,12 @@ import {
   ArrowLeft, AlertCircle, Loader2, User, Calendar, Clock,
   Stethoscope, ClipboardList, Pill, Activity, Heart,
   CheckCircle, FileText, Brain, BookOpen, PlusCircle, MinusCircle,
-  Star, ChevronDown, ChevronUp, Search,
+  Star, ChevronDown, ChevronUp, Search, Paperclip,
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { citaService, consultaService, adjuntoService } from '../../../services';
 import { useAuth } from '../../../hooks/useAuth';
+import { useAdjuntosPacienteMedico } from '../../../hooks';
+import { FileUpload, AdjuntoListPorConsulta, AdjuntoViewer } from '../../../shared/components/ui';
 
 // ─── Constantes médicas ────────────────────────────────────────────────────────
 const SISTEMAS = [
@@ -69,6 +71,10 @@ export default function AtenderCita() {
     codigo_cie10: '', descripcion: '', tipo_dx: 'impresion',
     prioridad: 1, id_tipo_diagnostico: '', es_principal: true,
   }]);
+  // Archivos seleccionados por el médico antes de guardar la consulta.
+  // Se suben al bucket DESPUÉS de crear la consulta (necesitamos id_consulta).
+  const [adjuntosPendientes, setAdjuntosPendientes] = useState([]); // [{file, descripcion}]
+  const [visorAdjunto, setVisorAdjunto] = useState(null);
 
   // ─── Carga inicial ──────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
@@ -76,23 +82,8 @@ export default function AtenderCita() {
     setError('');
     try {
       // 1. Cita + paciente + persona
-      const { data: citaData, error: eCita } = await supabase
-        .from('cita')
-        .select(`
-          id_cita, fecha_cita, estado, motivo, observaciones, id_paciente,
-          paciente:paciente!inner(
-            id_paciente, numero_historia, tipo_sangre, alergias, enfermedades_cronicas,
-            contacto_emergencia, telefono_emergencia, ocupacion, estado_civil,
-            persona:persona!inner(documento, tipo_documento, nombres, apellidos,
-              fecha_nacimiento, genero, telefono, email, direccion)
-          )
-        `)
-        .eq('id_cita', citaId)
-        .single();
-
-      if (eCita || !citaData) {
-        throw new Error(eCita?.message ?? 'No se encontró la cita');
-      }
+      const citaData = await citaService.getCitaConPaciente(citaId);
+      if (!citaData) throw new Error('No se encontró la cita');
 
       const pac = citaData.paciente;
       const per = pac?.persona;
@@ -100,9 +91,9 @@ export default function AtenderCita() {
       setPaciente({
         id_paciente:           pac?.id_paciente,
         numero_historia:       pac?.numero_historia,
-        tipo_sangre:           pac?.tipo_sangre,
-        alergias:              pac?.alergias,
-        enfermedades_cronicas: pac?.enfermedades_cronicas,
+        tipo_sangre:           pac?.historial?.tipo_sangre,
+        alergias:              pac?.historial?.alergias,
+        enfermedades_cronicas: pac?.historial?.enfermedades_cronicas,
         contacto_emergencia:   pac?.contacto_emergencia,
         telefono_emergencia:   pac?.telefono_emergencia,
         ocupacion:             pac?.ocupacion,
@@ -120,50 +111,24 @@ export default function AtenderCita() {
       // 2. Historia clínica completa
       const pacId = pac?.id_paciente;
       if (pacId) {
-        const [rConsultas, rSignos, rTipos] = await Promise.all([
-          supabase.from('consulta_medica')
-            .select(`
-              id_consulta, fecha_consulta, motivo_consulta, enfermedad_actual,
-              impresion_diagnostica, plan_tratamiento, observaciones, id_medico,
-              medico:medico(persona:persona(nombres, apellidos), especialidad)
-            `)
-            .eq('id_paciente', pacId)
-            .order('fecha_consulta', { ascending: false }),
-          supabase.from('signos_vitales')
-            .select('*')
-            .eq('id_paciente', pacId)
-            .order('fecha_registro', { ascending: false })
-            .limit(10),
-          supabase.from('tipo_diagnostico').select('*').order('nombre'),
+        const [consultas, signos, tipos] = await Promise.all([
+          consultaService.getConsultasPaciente(pacId),
+          consultaService.getSignosPacienteRecientes(pacId, 10),
+          consultaService.getTiposDiagnostico(),
         ]);
 
-        const consultas    = rConsultas.data ?? [];
-        const consultaIds  = consultas.map(c => c.id_consulta);
-
-        let diagsData   = [];
-        let ordenesData = [];
-        if (consultaIds.length > 0) {
-          const [rDiag, rOrd] = await Promise.all([
-            supabase.from('diagnostico')
-              .select('*, tipo_diagnostico(nombre)')
-              .in('id_consulta', consultaIds)
-              .order('fecha', { ascending: false }),
-            supabase.from('orden_medica')
-              .select('*, medicamento(nombre, presentacion, concentracion, via_administracion)')
-              .in('id_consulta', consultaIds)
-              .order('fecha_emision', { ascending: false }),
-          ]);
-          diagsData   = rDiag.data ?? [];
-          ordenesData = rOrd.data ?? [];
-        }
+        const [diagsData, ordenesData] = await Promise.all([
+          consultaService.getDiagnosticosPacienteHistoria(pacId),
+          consultaService.getOrdenesPacienteHistoria(pacId),
+        ]);
 
         setHistoria({
           consultas,
           diagnosticos: diagsData,
-          signos:       rSignos.data ?? [],
-          ordenes:      ordenesData,
+          signos,
+          ordenes: ordenesData,
         });
-        setTiposDx(rTipos.data ?? []);
+        setTiposDx(tipos);
       }
     } catch (err) {
       setError(err.message ?? 'Error cargando datos');
@@ -192,87 +157,33 @@ export default function AtenderCita() {
     setSaving(true);
     setError('');
     try {
-      let idMedico = null;
-      const { data: rpcData } = await supabase.rpc('mi_id_medico');
-      if (rpcData) {
-        idMedico = rpcData;
-      } else {
-        const { data: mData } = await supabase.from('medico')
-          .select('id_medico').eq('id_persona', usuarioLogueado?.id_persona).maybeSingle();
-        idMedico = mData?.id_medico ?? null;
-      }
+      const idMedico = await consultaService.resolveIdMedico(usuarioLogueado?.id_persona);
       if (!idMedico) throw new Error('No se encontró tu perfil de médico.');
 
-      // Crear consulta
-      const rC = await supabase.from('consulta_medica').insert({
-        id_paciente:              Number(paciente.id_paciente),
-        id_medico:                idMedico,
-        id_cita:                  Number(citaId),
-        motivo_consulta:          form.motivo_consulta         || null,
-        enfermedad_actual:        form.enfermedad_actual        || null,
-        revision_sistemas:        form.revision_sistemas        || null,
-        examen_fisico:            form.examen_fisico             || null,
-        examenes_complementarios: form.examenes_complementarios  || null,
-        analisis_clinico:         form.analisis_clinico          || null,
-        impresion_diagnostica:    form.impresion_diagnostica     || null,
-        plan_tratamiento:         form.plan_tratamiento          || null,
-        observaciones:            form.observaciones             || null,
-      }).select('id_consulta');
+      const idConsulta = await consultaService.crearConsultaCompleta(idMedico, {
+        consulta: {
+          id_paciente: Number(paciente.id_paciente),
+          id_cita:     Number(citaId),
+          ...form,
+        },
+        diagnosticos,
+        signos,
+      });
 
-      if (rC.error) {
-        const { code, message } = rC.error;
-        if (code === '42501') throw new Error('Sin permisos. Ejecuta supabase/rls-medico.sql.');
-        if (code === '42703') throw new Error('Faltan columnas. Ejecuta supabase/migration-consulta.sql.');
-        throw new Error(message ?? 'Error al crear la consulta');
+      // Subir adjuntos pendientes (uno a uno, errores no abortan).
+      const erroresAdjuntos = [];
+      for (const a of adjuntosPendientes) {
+        try {
+          await adjuntoService.subir(a.file, idConsulta, a.descripcion);
+        } catch (errA) {
+          erroresAdjuntos.push(`${a.file.name}: ${errA.message}`);
+        }
       }
-      const id_consulta = rC.data?.[0]?.id_consulta;
-      if (!id_consulta) throw new Error('No se obtuvo ID de consulta.');
-
-      // Insertar diagnósticos
-      const dxValidos = diagnosticos.filter(d => d.descripcion.trim());
-      if (dxValidos.length > 0) {
-        const { error: eDx } = await supabase.from('diagnostico').insert(
-          dxValidos.map((d, i) => ({
-            id_consulta,
-            id_tipo_diagnostico: d.id_tipo_diagnostico ? Number(d.id_tipo_diagnostico) : null,
-            codigo_cie10:        d.codigo_cie10.trim() || null,
-            descripcion:         d.descripcion.trim(),
-            es_principal:        i === 0,
-            tipo_dx:             d.tipo_dx || 'impresion',
-            prioridad:           d.prioridad || (i + 1),
-          }))
-        );
-        if (eDx) console.warn('Error diagnósticos:', eDx.message);
+      if (erroresAdjuntos.length > 0) {
+        console.warn('[AtenderCita] adjuntos con error:', erroresAdjuntos);
       }
 
-      // Insertar signos vitales
-      const tieneSignos = Object.values(signos).some(v => v !== '');
-      if (tieneSignos) {
-        const { error: eSig } = await supabase.from('signos_vitales').insert({
-          id_paciente:             Number(paciente.id_paciente),
-          id_consulta,
-          id_medico:               idMedico,
-          presion_sistolica:       signos.presion_sistolica       ? Number(signos.presion_sistolica)       : null,
-          presion_diastolica:      signos.presion_diastolica      ? Number(signos.presion_diastolica)      : null,
-          frecuencia_cardiaca:     signos.frecuencia_cardiaca     ? Number(signos.frecuencia_cardiaca)     : null,
-          frecuencia_respiratoria: signos.frecuencia_respiratoria ? Number(signos.frecuencia_respiratoria) : null,
-          temperatura:             signos.temperatura             ? Number(signos.temperatura)             : null,
-          saturacion_oxigeno:      signos.saturacion_oxigeno      ? Number(signos.saturacion_oxigeno)      : null,
-          peso:                    signos.peso                    ? Number(signos.peso)                    : null,
-          talla:                   signos.talla                   ? Number(signos.talla)                   : null,
-        });
-        if (eSig) console.warn('Error signos:', eSig.message);
-      }
-
-      // Marcar cita como completada
-      const { error: eCita } = await supabase
-        .from('cita').update({ estado: 'completada' }).eq('id_cita', Number(citaId));
-      if (eCita) {
-        if (eCita.code === '42501')
-          throw new Error('Sin permisos para finalizar la cita. Ejecuta supabase/rls-medico.sql.');
-        throw new Error(eCita.message ?? 'No se pudo finalizar la cita');
-      }
-
+      await citaService.marcarCompletada(citaId);
       navigate('/medico/citas');
     } catch (err) {
       console.error('[AtenderCita]', err);
@@ -314,6 +225,7 @@ export default function AtenderCita() {
     { id: 1, label: 'Examen',      icon: <Stethoscope size={15} /> },
     { id: 2, label: 'Diagnóstico', icon: <ClipboardList size={15} /> },
     { id: 3, label: 'Plan',        icon: <Brain size={15} /> },
+    { id: 4, label: 'Adjuntos',    icon: <Paperclip size={15} /> },
   ];
 
   return (
@@ -530,6 +442,28 @@ export default function AtenderCita() {
                 </div>
               )}
 
+              {/* ── TAB 4: ADJUNTOS ──────────────────────────────────────── */}
+              {tab === 4 && (
+                <div className="space-y-4">
+                  <Seccion titulo="Resultados, radiografías y otros archivos" color="purple">
+                    <p className="text-xs text-gray-500 mb-3">
+                      Adjunta PDFs (resultados de laboratorio) o imágenes (radiografías, fotografías clínicas).
+                      Los archivos se suben automáticamente al <strong>Guardar y finalizar cita</strong>.
+                    </p>
+                    <AdjuntosFormPicker
+                      pendientes={adjuntosPendientes}
+                      onAdd={(file) => setAdjuntosPendientes(prev => [
+                        ...prev, { file, descripcion: '' },
+                      ])}
+                      onChangeDescripcion={(idx, valor) => setAdjuntosPendientes(prev =>
+                        prev.map((p, i) => i === idx ? { ...p, descripcion: valor } : p),
+                      )}
+                      onRemove={(idx) => setAdjuntosPendientes(prev => prev.filter((_, i) => i !== idx))}
+                    />
+                  </Seccion>
+                </div>
+              )}
+
               {/* Navegación entre tabs */}
               <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                 <button type="button" onClick={() => setTab(t => Math.max(0, t - 1))} disabled={tab === 0}
@@ -562,18 +496,28 @@ export default function AtenderCita() {
 
         {/* ── COLUMNA DERECHA: historia clínica ─────────────────────────── */}
         <aside className="lg:col-span-1 space-y-4">
-          <PanelHistoria paciente={paciente} historia={historia} citaActual={cita} />
+          <PanelHistoria
+            paciente={paciente}
+            historia={historia}
+            citaActual={cita}
+            onPreviewAdjunto={setVisorAdjunto}
+          />
         </aside>
       </div>
+
+      {visorAdjunto && <AdjuntoViewer adjunto={visorAdjunto} onClose={() => setVisorAdjunto(null)} />}
     </div>
   );
 }
 
 // ─── Panel de historia clínica (solo lectura) ─────────────────────────────────
-function PanelHistoria({ paciente, historia, citaActual }) {
+function PanelHistoria({ paciente, historia, citaActual, onPreviewAdjunto }) {
+  // Adjuntos de TODAS las consultas previas del paciente
+  const { adjuntos: adjuntosPaciente } = useAdjuntosPacienteMedico(paciente?.id_paciente);
+
   const [open, setOpen] = useState({
     datos: true, antecedentes: true, consultas: true,
-    diagnosticos: false, signos: false, recetas: false,
+    diagnosticos: false, signos: false, recetas: false, adjuntos: false,
   });
   const toggle = (k) => setOpen(p => ({ ...p, [k]: !p[k] }));
 
@@ -729,6 +673,15 @@ function PanelHistoria({ paciente, historia, citaActual }) {
           </div>
         )}
       </Acordeon>
+
+      {/* Adjuntos de consultas previas */}
+      <Acordeon titulo={`Adjuntos previos (${adjuntosPaciente.length})`}
+        icon={<Paperclip size={15} className="text-indigo-600" />}
+        abierto={open.adjuntos} onToggle={() => toggle('adjuntos')}>
+        <div className="max-h-72 overflow-y-auto">
+          <AdjuntoListPorConsulta adjuntos={adjuntosPaciente} onPreview={onPreviewAdjunto} />
+        </div>
+      </Acordeon>
     </div>
   );
 }
@@ -791,6 +744,97 @@ function Mini({ label, value, highlight = false }) {
     <div className={`px-2 py-1 rounded ${highlight ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
       <p className="text-[10px] text-gray-500 leading-tight">{label}</p>
       <p className={`font-semibold leading-tight ${highlight ? 'text-red-700' : 'text-gray-800'}`}>{value || '—'}</p>
+    </div>
+  );
+}
+
+// ─── Selector de adjuntos diferido ────────────────────────────────────────────
+// A diferencia de <FileUpload>, NO sube en el momento — solo acumula archivos
+// en el estado del padre. El submit del formulario los sube tras crear la
+// consulta (porque necesitamos id_consulta para asociarlos).
+function AdjuntosFormPicker({ pendientes, onAdd, onChangeDescripcion, onRemove }) {
+  const [error, setError] = React.useState('');
+  const inputRef = React.useRef(null);
+
+  const handleFiles = (files) => {
+    setError('');
+    for (const file of Array.from(files)) {
+      try {
+        adjuntoService.validarArchivo(file);
+        onAdd(file);
+      } catch (err) {
+        setError(prev => prev ? `${prev}; ${file.name}: ${err.message}` : `${file.name}: ${err.message}`);
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div
+        onClick={() => inputRef.current?.click()}
+        className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50/30 transition"
+      >
+        <Paperclip size={28} className="mx-auto mb-2 text-gray-400" />
+        <p className="text-sm text-gray-600">
+          Haz clic o arrastra archivos para adjuntar
+        </p>
+        <p className="text-xs text-gray-400 mt-1">PDF e imágenes · Máx 10 MB</p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={adjuntoService.acceptString}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.length) handleFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-2 rounded text-xs">{error}</div>
+      )}
+
+      {pendientes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-gray-600">Archivos pendientes ({pendientes.length})</p>
+          {pendientes.map((p, idx) => {
+            const isImg = p.file.type.startsWith('image/');
+            return (
+              <div key={idx} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                {isImg
+                  ? <FileText size={18} className="text-purple-600 flex-shrink-0 mt-0.5" />
+                  : <FileText size={18} className="text-red-600   flex-shrink-0 mt-0.5" />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{p.file.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {(p.file.size / 1024).toFixed(0)} KB · {p.file.type}
+                  </p>
+                  <input
+                    type="text"
+                    value={p.descripcion}
+                    onChange={(e) => onChangeDescripcion(idx, e.target.value)}
+                    placeholder="Descripción (opcional, ej: Radiografía PA)"
+                    className="w-full mt-2 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(idx)}
+                  className="text-gray-400 hover:text-red-600 transition flex-shrink-0"
+                  aria-label="Quitar"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+          <p className="text-xs text-emerald-700 italic">
+            ✓ Se subirán al guardar y finalizar la cita.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

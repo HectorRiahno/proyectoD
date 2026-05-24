@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, Edit, Trash2, AlertCircle, Loader2,
   Clock, Calendar, ToggleLeft, ToggleRight, X,
   Stethoscope, CalendarDays, RefreshCw,
 } from 'lucide-react';
-import { supabase, esErrorDeSesion } from '../../../lib/supabase';
+import { horarioService } from '../../../services';
+import { useHorarios } from '../../../hooks';
+import { Modal, PageHeader, KPI, ErrorBanner, BotonesForm } from '../../../shared/components/ui';
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -33,60 +35,14 @@ function calcDuracion(inicio, fin) {
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Horarios() {
-  const [medicos, setMedicos]     = useState([]);
-  const [horarios, setHorarios]   = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
+  const {
+    medicos, horarios, loading, error, setError,
+    reload: cargar, toggleDisponible: toggleHook, eliminar: eliminarHook,
+  } = useHorarios();
   const [search, setSearch]       = useState('');
   const [medicoSelId, setMedicoSelId] = useState(null);
   const [editando, setEditando]   = useState(null);
   const [creando, setCreando]     = useState(false);
-
-  // Ref para evitar setState tras desmontar el componente o cuando hay
-  // múltiples cargas concurrentes (ej: re-fetch al volver del background).
-  const mountedRef  = useRef(true);
-  const requestIdRef = useRef(0);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  const cargar = useCallback(async () => {
-    const myId = ++requestIdRef.current;
-    if (mountedRef.current) {
-      setLoading(true);
-      setError('');
-    }
-    try {
-      const [resMedicos, resHorarios] = await Promise.all([
-        supabase.from('vw_admin_medicos').select('*').order('nombre_completo'),
-        supabase.from('horario_medico').select('*').order('id_medico, hora_inicio'),
-      ]);
-
-      // Si el componente se desmontó o llegó otra carga posterior, abortar
-      if (!mountedRef.current || myId !== requestIdRef.current) return;
-
-      const errSesion = [resMedicos.error, resHorarios.error].find(esErrorDeSesion);
-      if (errSesion) {
-        setError('Tu sesión expiró. Cierra sesión y vuelve a entrar para continuar.');
-      } else if (resMedicos.error) {
-        setError(resMedicos.error.message);
-      } else if (resHorarios.error) {
-        setError(resHorarios.error.message);
-      }
-      if (!resMedicos.error)  setMedicos(resMedicos.data ?? []);
-      if (!resHorarios.error) setHorarios(resHorarios.data ?? []);
-    } catch (err) {
-      if (!mountedRef.current || myId !== requestIdRef.current) return;
-      setError(err?.message ?? 'Error de red al cargar datos.');
-    } finally {
-      if (mountedRef.current && myId === requestIdRef.current) setLoading(false);
-    }
-  }, []);
-
-  // Carga inicial
-  useEffect(() => { cargar(); }, [cargar]);
 
   // Refrescar cuando la pestaña vuelve a estar visible — esto evita que
   // queden datos viejos o un estado "cargando" eterno tras inactividad.
@@ -126,66 +82,31 @@ export default function Horarios() {
   const medicosConHorario = medicos.filter(m => countHorarios(m.id_medico) > 0).length;
 
   const toggleDisponible = async (h) => {
-    const { error: e } = await supabase
-      .from('horario_medico')
-      .update({ disponible: !h.disponible })
-      .eq('id_horario', h.id_horario);
-    if (e) {
-      setError(e.code === '42501'
-        ? 'Sin permisos. Ejecuta supabase/rls-admin.sql primero.'
-        : e.message);
-      return;
-    }
-    cargar();
+    try { await toggleHook(h); }
+    catch (err) { setError(err.message); }
   };
 
   const eliminar = async (h) => {
     if (!window.confirm(
       `¿Eliminar la franja del ${h.dia_semana} de ${fmtTime(h.hora_inicio)} a ${fmtTime(h.hora_fin)}?`
     )) return;
-    const { error: e } = await supabase
-      .from('horario_medico')
-      .delete()
-      .eq('id_horario', h.id_horario);
-    if (e) {
-      setError(e.code === '42501'
-        ? 'Sin permisos. Ejecuta supabase/rls-admin.sql primero.'
-        : e.message);
-      return;
-    }
-    cargar();
+    try { await eliminarHook(h.id_horario); }
+    catch (err) { setError(err.message); }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Horarios Médicos</h1>
-            <p className="text-blue-100">Asigna y gestiona las franjas horarias del personal médico</p>
-          </div>
-          <div className="flex gap-8 text-center">
-            <KPI label="Total médicos"       value={loading ? '···' : medicos.length} />
-            <KPI label="Con horario"         value={loading ? '···' : medicosConHorario} />
-            <KPI label="Franjas registradas" value={loading ? '···' : horarios.length} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Horarios Médicos"
+        descripcion="Asigna y gestiona las franjas horarias del personal médico"
+        variant="blueDeep"
+      >
+        <KPI label="Total médicos"       value={loading ? '···' : medicos.length} />
+        <KPI label="Con horario"         value={loading ? '···' : medicosConHorario} />
+        <KPI label="Franjas registradas" value={loading ? '···' : horarios.length} />
+      </PageHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <AlertCircle size={20} /> {error}
-          </div>
-          <button
-            onClick={cargar}
-            className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
-          >
-            <RefreshCw size={14} /> Reintentar
-          </button>
-        </div>
-      )}
+      <ErrorBanner msg={error} onRetry={cargar} />
 
       {/* Layout de dos columnas */}
       <div className="flex gap-6 items-start">
@@ -438,18 +359,8 @@ function ModalHorario({ horario, idMedico, onClose }) {
         hora_fin:    form.hora_fin,
         disponible:  form.disponible,
       };
-      const result = esEdicion
-        ? await supabase.from('horario_medico').update(payload).eq('id_horario', horario.id_horario)
-        : await supabase.from('horario_medico').insert(payload);
-
-      if (result.error) {
-        const { code, message } = result.error;
-        if (code === '42501')
-          throw new Error('Sin permisos. Ejecuta supabase/rls-admin.sql en Supabase SQL Editor.');
-        if (code === '23514')
-          throw new Error('La hora de fin debe ser mayor que la hora de inicio (restricción de BD).');
-        throw new Error(message ?? 'Error desconocido');
-      }
+      if (esEdicion) await horarioService.actualizar(horario.id_horario, payload);
+      else           await horarioService.crear(payload);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -549,57 +460,12 @@ function ModalHorario({ horario, idMedico, onClose }) {
   );
 }
 
-// ─── Sub-componentes UI ────────────────────────────────────────────────────────
-function Modal({ titulo, onClose, children }) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl">
-          <h2 className="text-xl font-bold">{titulo}</h2>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <X size={22} />
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function KPI({ label, value }) {
-  return (
-    <div>
-      <p className="text-sm text-blue-100">{label}</p>
-      <p className="text-3xl font-bold">{value}</p>
-    </div>
-  );
-}
-
+// ─── Local: ErrorBox inline (mantener — el global es similar, no vale la pena cambiar) ─────
 function ErrorBox({ msg }) {
+  if (!msg) return null;
   return (
     <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-center gap-2">
       <AlertCircle size={16} className="flex-shrink-0" /> {msg}
-    </div>
-  );
-}
-
-function BotonesForm({ onCancel, saving, labelSave }) {
-  return (
-    <div className="flex gap-3 pt-4 border-t border-gray-200">
-      <button
-        type="button"
-        onClick={onCancel}
-        className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold"
-      >
-        Cancelar
-      </button>
-      <button
-        type="submit"
-        disabled={saving}
-        className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60"
-      >
-        {saving ? 'Guardando...' : labelSave}
-      </button>
     </div>
   );
 }

@@ -1,78 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Clock, Users, ClipboardList, AlertCircle,
   CalendarClock, Activity, ArrowRight
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../hooks/useAuth';
+import { useAuth, useDashboardMedico } from '../../../hooks';
 
 export default function MedicoDashboard() {
   const navigate = useNavigate();
   const { usuarioLogueado } = useAuth();
-  const [agenda, setAgenda] = useState([]);
-  const [proximas, setProximas] = useState([]);
-  const [counts, setCounts] = useState({ pacientes: 0, consultas: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const hoyISO = new Date().toISOString().split('T')[0];
-        const [
-          { data: hoy, error: e1 },
-          { data: prox, error: e2 },
-          { count: cPacientes },
-          { count: cConsultas },
-        ] = await Promise.all([
-          // Agenda de hoy: solo confirmadas y programadas del día actual
-          supabase.from('vw_medico_agenda_hoy')
-            .select('id_cita, fecha, hora, estado, paciente_nombre, motivo, tipo_consulta')
-            .in('estado', ['confirmada', 'programada']),
-          // Próximas: programadas para los días siguientes (no hoy)
-          supabase
-            .from('vw_medico_mis_citas')
-            .select('id_cita, fecha, hora, estado, paciente_nombre, motivo, tipo_consulta')
-            .gt('fecha', hoyISO)
-            .eq('estado', 'programada')
-            .order('fecha_cita', { ascending: true })
-            .limit(5),
-          supabase.from('vw_medico_mis_pacientes').select('*', { count: 'exact', head: true }),
-          supabase.from('vw_medico_consultas').select('*', { count: 'exact', head: true }),
-        ]);
-        if (e1) throw e1;
-        if (e2) throw e2;
-
-        // Orden: confirmadas primero, luego programadas; cada grupo por hora.
-        const ordenado = [...(hoy ?? [])].sort((a, b) => {
-          const peso = { confirmada: 0, programada: 1 };
-          const pa = peso[a.estado] ?? 9;
-          const pb = peso[b.estado] ?? 9;
-          if (pa !== pb) return pa - pb;
-          return (a.hora ?? '').localeCompare(b.hora ?? '');
-        });
-
-        if (mounted) {
-          setAgenda(ordenado);
-          setProximas(prox ?? []);
-          setCounts({
-            pacientes: cPacientes ?? 0,
-            consultas: cConsultas ?? 0,
-          });
-        }
-      } catch (err) {
-        if (mounted) setError(err.message ?? 'Error cargando dashboard');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
+  const { agenda, proximas, counts, loading, error } = useDashboardMedico();
 
   const cards = [
     { title: 'Citas hoy',     value: agenda.length,    icon: CalendarClock, color: 'emerald', path: '/medico/agenda' },

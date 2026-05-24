@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Calendar, Clock, AlertCircle, Loader2, Stethoscope, MapPin, FileText } from 'lucide-react';
-import citaService from '../../../services/citaService';
+import { useCitas } from '../../../hooks';
+
 
 const FILTROS = [
   { value: 'todas',     label: 'Todas' },
@@ -9,19 +10,8 @@ const FILTROS = [
 ];
 
 export default function MisCitas() {
-  const [citas, setCitas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { citas, loading, error } = useCitas({ role: 'cliente' });
   const [filtro, setFiltro] = useState('todas');
-
-  useEffect(() => {
-    let mounted = true;
-    citaService.getMisCitasPaciente()
-      .then((data) => { if (mounted) setCitas(data); })
-      .catch((err) => { if (mounted) setError(err.message ?? 'Error cargando citas'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
 
   const hoy = new Date().toISOString().split('T')[0];
   const filtered = citas.filter((c) => {

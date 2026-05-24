@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Clock, Search, User, AlertCircle, Loader2,
   Stethoscope, CheckCircle2, ClipboardList, Hourglass,
 } from 'lucide-react';
-import citaService from '../../../services/citaService';
-import { supabase } from '../../../lib/supabase';
+import { useCitas } from '../../../hooks';
 
 // Las "programadas" son las que crea el admin tal cual.
 // Las "confirmadas" son las que el admin marca cuando el paciente llegó al
@@ -20,53 +19,10 @@ const ESTADO_STYLES = {
 
 export default function MisCitas() {
   const navigate = useNavigate();
-  const [citas, setCitas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const {
+    citas, loading, error, setError, marcarEnCurso,
+  } = useCitas({ role: 'medico', realtime: true });
   const [search, setSearch] = useState('');
-  const mountedRef = useRef(true);
-
-  // Carga (o recarga) las citas del médico autenticado.
-  const cargarCitas = useCallback(async ({ silencioso = false } = {}) => {
-    if (!silencioso) setLoading(true);
-    try {
-      const data = await citaService.getMisCitasMedico();
-      if (mountedRef.current) setCitas(data);
-    } catch (err) {
-      if (mountedRef.current) setError(err.message ?? 'Error cargando citas');
-    } finally {
-      if (mountedRef.current && !silencioso) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    cargarCitas();
-
-    // ── Realtime: refrescar cuando el admin (u otro) cambie la tabla cita.
-    // Requiere que la tabla 'cita' esté en la publicación supabase_realtime.
-    const channel = supabase
-      .channel('medico-mis-citas')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'cita' },
-        () => cargarCitas({ silencioso: true })
-      )
-      .subscribe();
-
-    // ── Fallback: refrescar al volver el foco a la pestaña.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') cargarCitas({ silencioso: true });
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
-
-    return () => {
-      mountedRef.current = false;
-      supabase.removeChannel(channel);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
-    };
-  }, [cargarCitas]);
 
   // Inicia la atención: marca la cita como 'en_curso' (para que el admin la
   // vea en proceso) y luego navega a consultas. Al guardar la consulta,
@@ -74,19 +30,8 @@ export default function MisCitas() {
   const tomarCita = async (cita) => {
     setError('');
     if (cita.estado !== 'en_curso') {
-      const { error: upErr } = await supabase
-        .from('cita')
-        .update({ estado: 'en_curso' })
-        .eq('id_cita', cita.id_cita);
-      if (upErr) {
-        setError(upErr.code === '42501'
-          ? 'Sin permisos para iniciar la cita. Ejecuta supabase/rls-medico.sql.'
-          : (upErr.message ?? 'No se pudo iniciar la cita'));
-        return;
-      }
-      setCitas(prev => prev.map(c =>
-        c.id_cita === cita.id_cita ? { ...c, estado: 'en_curso' } : c
-      ));
+      try { await marcarEnCurso(cita.id_cita); }
+      catch (err) { setError(err.message); return; }
     }
     navigate(`/medico/atender/${cita.id_cita}`);
   };
