@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { User, Activity, LogOut } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../hooks";
+import NotificacionesBell from "./NotificacionesBell";
 
 const ROLE_LABEL = {
   admin:     "Administrador",
@@ -13,7 +14,7 @@ const ROLE_LABEL = {
 
 function EmployeeNavbar() {
   const navigate = useNavigate();
-  const { usuarioLogueado } = useAuth();
+  const { usuarioLogueado, esAdmin } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
@@ -64,6 +65,9 @@ function EmployeeNavbar() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2">
+          {esAdmin && <NotificacionesBell />}
+
         <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -93,6 +97,7 @@ function EmployeeNavbar() {
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
     </header>

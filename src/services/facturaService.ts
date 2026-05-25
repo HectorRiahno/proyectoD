@@ -110,6 +110,17 @@ export const facturaService = {
     if (error) throw new ServiceError(`Error: ${error.message}`, error.code);
   },
 
+  /**
+   * Actualiza varios campos del item en una sola transacción.
+   * Usado al aplicar una plantilla del catálogo (descripcion + precio +
+   * id_tipo_consulta) para evitar dos round-trips y dos eventos realtime.
+   */
+  async actualizarItemCampos(idItem: number | string, updates: Partial<FacturaItem> & Record<string, unknown>): Promise<void> {
+    const { error } = await supabase
+      .from('factura_item').update(updates).eq('id_item', idItem);
+    if (error) throw new ServiceError(`Error: ${error.message}`, error.code);
+  },
+
   async eliminarItem(idItem: number | string): Promise<void> {
     const { error } = await supabase
       .from('factura_item').delete().eq('id_item', idItem);
@@ -124,10 +135,24 @@ export const facturaService = {
   },
 
   async marcarPagada(idFactura: number | string, metodoPago: string): Promise<void> {
+    const updates: Record<string, unknown> = {
+      estado: 'pagada',
+      metodo_pago: metodoPago,
+    };
+
+    // Cobertura EPS: el paciente no paga nada. Aplicamos descuento = subtotal
+    // en el mismo UPDATE; el trigger trg_factura_recalc se encarga de
+    // recomputar impuesto/total a 0. El trigger trg_factura_estado permite
+    // esta transición (ver migration-factura-eps.sql).
+    if (metodoPago.toUpperCase() === 'EPS') {
+      const { data: f } = await supabase
+        .from(TABLE).select('subtotal').eq('id_factura', idFactura).maybeSingle();
+      const sub = Number(f?.subtotal ?? 0);
+      if (sub > 0) updates.descuento = sub;
+    }
+
     const { error } = await supabase
-      .from(TABLE)
-      .update({ estado: 'pagada', metodo_pago: metodoPago })
-      .eq('id_factura', idFactura);
+      .from(TABLE).update(updates).eq('id_factura', idFactura);
     if (error) throw new ServiceError(error.message, error.code);
   },
 

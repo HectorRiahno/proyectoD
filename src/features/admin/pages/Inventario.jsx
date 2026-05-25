@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Search, Plus, Package, AlertTriangle, TrendingUp,
+  Search, Plus, Package, AlertTriangle,
   Filter, Edit, Trash2, Loader2, AlertCircle
 } from 'lucide-react';
 import { useInventario } from '../../../hooks';
@@ -18,18 +19,55 @@ export default function Inventario() {
   const [modalOpen, setModalOpen]       = useState(false);
   const [selected, setSelected]         = useState(null);
 
-  const filtered = medicamentos.filter(m => {
-    const term = searchTerm.toLowerCase();
-    const matchSearch =
-      (m.nombre ?? '').toLowerCase().includes(term) ||
-      (m.nombre_generico ?? '').toLowerCase().includes(term) ||
-      (m.presentacion ?? '').toLowerCase().includes(term);
-    const matchCat = !filtroCategoria || String(m.id_categoria) === filtroCategoria;
-    return matchSearch && matchCat;
-  });
+  // ?highlight=<id_medicamento> — viene de la campana de notificaciones.
+  // Ese item se pone primero, se hace scroll y se destaca por unos segundos.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = Number(searchParams.get('highlight')) || null;
+  const highlightRef = useRef(null);
 
-  const stockBajo  = medicamentos.filter(m => m.stock <= 10).length;
-  const valorTotal = medicamentos.reduce((acc, m) => acc + (m.stock * m.precio), 0);
+  // Auto-limpia el highlight de la URL después de 6s para que un F5
+  // no lo mantenga destacado para siempre.
+  useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => {
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('highlight');
+        return next;
+      }, { replace: true });
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [highlightId, setSearchParams]);
+
+  // Scroll suave al item destacado en cuanto se renderice.
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightId, loading, viewMode]);
+
+  const filtered = useMemo(() => {
+    const list = medicamentos.filter(m => {
+      const term = searchTerm.toLowerCase();
+      const matchSearch =
+        (m.nombre ?? '').toLowerCase().includes(term) ||
+        (m.nombre_generico ?? '').toLowerCase().includes(term) ||
+        (m.presentacion ?? '').toLowerCase().includes(term);
+      const matchCat = !filtroCategoria || String(m.id_categoria) === filtroCategoria;
+      return matchSearch && matchCat;
+    });
+    // Si vino con highlight, ese item va arriba sin importar filtros.
+    if (!highlightId) return list;
+    const idx = list.findIndex(m => Number(m.id_medicamento) === highlightId);
+    if (idx < 0) {
+      // Filtros ocultan el destacado — lo inyectamos arriba si existe.
+      const m = medicamentos.find(x => Number(x.id_medicamento) === highlightId);
+      return m ? [m, ...list] : list;
+    }
+    return [list[idx], ...list.slice(0, idx), ...list.slice(idx + 1)];
+  }, [medicamentos, searchTerm, filtroCategoria, highlightId]);
+
+  const stockBajo = medicamentos.filter(m => m.stock <= 10).length;
 
   const nombreCategoria = (m) => m.categoria_medicamento?.nombre ?? '—';
 
@@ -72,11 +110,10 @@ export default function Inventario() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatsCard title="Total medicamentos" value={medicamentos.length}        icon={Package}       color="blue" />
-        <StatsCard title="Stock bajo (≤10)"   value={stockBajo}                  icon={AlertTriangle} color="red"  highlight={stockBajo > 0} />
-        <StatsCard title="Valor del inventario" value={`$${(valorTotal / 1000).toFixed(0)}K`} icon={TrendingUp} color="green" />
-        <StatsCard title="Categorías"          value={categorias.length}         icon={Filter}        color="purple" />
+      <div className="grid grid-cols-3 gap-4">
+        <StatsCard title="Total medicamentos" value={medicamentos.length} icon={Package}       color="blue" />
+        <StatsCard title="Stock bajo (≤10)"   value={stockBajo}           icon={AlertTriangle} color="red"  highlight={stockBajo > 0} />
+        <StatsCard title="Categorías"         value={categorias.length}   icon={Filter}        color="purple" />
       </div>
 
       {/* Filtros + acciones */}
@@ -156,8 +193,18 @@ export default function Inventario() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filtered.map((m, idx) => (
-                  <tr key={m.id_medicamento} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                {filtered.map((m, idx) => {
+                  const destacado = highlightId && Number(m.id_medicamento) === highlightId;
+                  return (
+                  <tr
+                    key={m.id_medicamento}
+                    ref={destacado ? highlightRef : null}
+                    className={`transition ${
+                      destacado
+                        ? 'bg-amber-50 ring-2 ring-amber-400 ring-inset animate-pulse'
+                        : `hover:bg-blue-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`
+                    }`}
+                  >
                     <td className="px-6 py-4">
                       <p className="font-semibold text-gray-900">{m.nombre}</p>
                       {m.nombre_generico && <p className="text-xs text-gray-500">{m.nombre_generico}</p>}
@@ -203,7 +250,8 @@ export default function Inventario() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -211,8 +259,16 @@ export default function Inventario() {
       ) : (
         /* Vista cuadrícula */
         <div className="grid grid-cols-3 gap-4">
-          {filtered.map(m => (
-            <div key={m.id_medicamento} className="bg-white rounded-xl shadow-md border border-gray-100 p-5 hover:shadow-lg transition">
+          {filtered.map(m => {
+            const destacado = highlightId && Number(m.id_medicamento) === highlightId;
+            return (
+            <div
+              key={m.id_medicamento}
+              ref={destacado ? highlightRef : null}
+              className={`bg-white rounded-xl shadow-md border p-5 hover:shadow-lg transition ${
+                destacado ? 'border-amber-400 ring-2 ring-amber-300 animate-pulse' : 'border-gray-100'
+              }`}
+            >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-gray-900 truncate">{m.nombre}</p>
@@ -257,7 +313,8 @@ export default function Inventario() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Receipt, Search, Edit, Eye, Trash2, AlertCircle, Loader2,
   Filter, RefreshCw, FileText, CheckCircle, XCircle, DollarSign,
-  Send, Ban, Percent,
+  Send, Ban, Percent, Download,
   PlusCircle, MinusCircle,
 } from 'lucide-react';
-import { facturaService } from '../../../services';
+import { facturaService, tipoConsultaService } from '../../../services';
 import { useAuth, useFacturas } from '../../../hooks';
 import {
   Modal, PageHeader, KPI, Campo, CampoReadOnly, ErrorBox, ErrorBanner,
   SuccessBanner, SearchBar, LoadingRow, EmptyRow, EstadoBadge,
 } from '../../../shared/components/ui';
+import { generarPdfFactura } from '../../../shared/utils/generarPdfFactura';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 const ESTADOS = [
@@ -24,7 +25,7 @@ const ESTADOS = [
 
 const METODOS_PAGO = [
   'Efectivo', 'Tarjeta débito', 'Tarjeta crédito',
-  'Transferencia', 'PSE', 'Nequi', 'Daviplata', 'Otro',
+  'Transferencia', 'PSE', 'Nequi', 'Daviplata', 'EPS', 'Otro',
 ];
 
 const estadoStyle = (e) => ESTADOS.find(x => x.v === e) ?? ESTADOS[0];
@@ -46,6 +47,7 @@ export default function Facturacion() {
   const [anulando, setAnulando]       = useState(null);
   const [eliminando, setEliminando]   = useState(null);
   const [okMsg, setOkMsg]             = useState('');
+  const [descargandoId, setDescargandoId] = useState(null);
 
   const {
     facturas, loading, error, setError,
@@ -75,6 +77,24 @@ export default function Facturacion() {
         && f.fecha_pago?.startsWith(new Date().toISOString().slice(0, 7)))
       .reduce((s, f) => s + Number(f.total ?? 0), 0),
   }), [facturas]);
+
+  const descargarPdf = useCallback(async (f) => {
+    // No se imprimen borradores: aún no tienen número DIAN.
+    if (f.estado === 'borrador') {
+      setError('No se puede imprimir un borrador. Emite la factura primero.');
+      return;
+    }
+    setDescargandoId(f.id_factura);
+    setError('');
+    try {
+      const items = await facturaService.getItems(f.id_factura);
+      generarPdfFactura(f, items ?? []);
+    } catch (err) {
+      setError(`No se pudo generar el PDF: ${err.message ?? err}`);
+    } finally {
+      setDescargandoId(null);
+    }
+  }, [setError]);
 
   const handleEliminarConfirmado = async (f) => {
     try {
@@ -218,6 +238,18 @@ export default function Facturacion() {
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition">
                           <Eye size={16} />
                         </button>
+                        {f.estado !== 'borrador' && (
+                          <button
+                            onClick={() => descargarPdf(f)}
+                            disabled={descargandoId === f.id_factura}
+                            title="Descargar PDF"
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition disabled:opacity-50"
+                          >
+                            {descargandoId === f.id_factura
+                              ? <Loader2 size={16} className="animate-spin" />
+                              : <Download size={16} />}
+                          </button>
+                        )}
                         {f.estado === 'borrador' && (
                           <button onClick={() => setEditando(f)} title="Editar borrador"
                             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
@@ -250,7 +282,14 @@ export default function Facturacion() {
         </div>
       </div>
 
-      {detalle  && <ModalDetalle  factura={detalle}  onClose={() => setDetalle(null)} />}
+      {detalle  && (
+        <ModalDetalle
+          factura={detalle}
+          onClose={() => setDetalle(null)}
+          onDescargar={() => descargarPdf(detalle)}
+          descargando={descargandoId === detalle.id_factura}
+        />
+      )}
       {editando && <ModalEditarBorrador factura={editando} onClose={() => { setEditando(null); cargar({ silencioso: true }); }} />}
       {pagando  && <ModalPagar  factura={pagando}  onClose={() => { setPagando(null); cargar({ silencioso: true }); }} />}
       {anulando && <ModalAnular factura={anulando} onClose={() => { setAnulando(null); cargar({ silencioso: true }); }} />}
@@ -266,7 +305,7 @@ export default function Facturacion() {
 // =====================================================================
 // MODAL: VER DETALLE
 // =====================================================================
-function ModalDetalle({ factura, onClose }) {
+function ModalDetalle({ factura, onClose, onDescargar, descargando }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -342,6 +381,21 @@ function ModalDetalle({ factura, onClose }) {
 
         {/* Totales */}
         <Totales factura={factura} />
+
+        {/* Botones */}
+        <div className="flex gap-3 pt-3 border-t border-gray-200">
+          <button onClick={onClose}
+            className="flex-1 px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold">
+            Cerrar
+          </button>
+          {factura.estado !== 'borrador' && onDescargar && (
+            <button onClick={onDescargar} disabled={descargando}
+              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+              {descargando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {descargando ? 'Generando...' : 'Descargar PDF'}
+            </button>
+          )}
+        </div>
       </div>
     </Modal>
   );
@@ -353,6 +407,7 @@ function ModalDetalle({ factura, onClose }) {
 function ModalEditarBorrador({ factura: facturaInit, onClose }) {
   const [factura, setFactura] = useState(facturaInit);
   const [items, setItems]     = useState([]);
+  const [catalogo, setCatalogo] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState('');
@@ -368,7 +423,10 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
   }, [factura.id_factura]);
 
   useEffect(() => {
-    cargarItems().finally(() => setLoading(false));
+    Promise.all([
+      cargarItems(),
+      tipoConsultaService.getCatalogo().then(setCatalogo).catch(() => setCatalogo([])),
+    ]).finally(() => setLoading(false));
   }, [cargarItems]);
 
   // Editar campos de la cabecera (descuento, tasa_impuesto, observaciones)
@@ -387,8 +445,9 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
     setError('');
     const nuevoOrden = items.length > 0 ? Math.max(...items.map(i => i.orden)) + 1 : 1;
     try {
+      // Sin descripción ni precio por defecto — el datalist guía la elección.
       await facturaService.agregarItem(factura.id_factura, {
-        descripcion: 'Nuevo concepto', cantidad: 1, precio_unitario: 0, orden: nuevoOrden,
+        descripcion: '', cantidad: 1, precio_unitario: 0, orden: nuevoOrden,
       });
       await cargarItems();
       await refrescarFactura();
@@ -401,6 +460,19 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
     setError('');
     try {
       await facturaService.actualizarItem(id_item, campo, valor);
+      await cargarItems();
+      await refrescarFactura();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Update multi-campo en una sola query — usado al aplicar una plantilla
+  // del catálogo (descripcion + precio + id_tipo_consulta de golpe).
+  const actualizarItemCampos = async (id_item, updates) => {
+    setError('');
+    try {
+      await facturaService.actualizarItemCampos(id_item, updates);
       await cargarItems();
       await refrescarFactura();
     } catch (err) {
@@ -489,11 +561,18 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
               <tbody className="divide-y divide-gray-100">
                 {items.map(it => (
                   <ItemRow key={it.id_item} item={it}
+                    catalogo={catalogo}
                     onUpdate={(campo, valor) => actualizarItem(it.id_item, campo, valor)}
+                    onUpdateMulti={(updates) => actualizarItemCampos(it.id_item, updates)}
                     onDelete={() => eliminarItem(it.id_item)} />
                 ))}
               </tbody>
             </table>
+          )}
+          {catalogo.length > 0 && (
+            <p className="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-t border-gray-200">
+              Tip: en la descripción escribe o elige una plantilla del catálogo — el precio se autocompleta.
+            </p>
           )}
         </div>
 
@@ -552,22 +631,114 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
 }
 
 // ─── Fila de item editable (descripción/cantidad/precio inline) ───────────────
-function ItemRow({ item, onUpdate, onDelete }) {
+// La descripción usa <datalist> contra el catálogo de tipo_consulta. Si el
+// texto coincide exactamente con una plantilla, se autocompleta precio +
+// id_tipo_consulta (un solo round-trip vía onUpdateMulti). Texto libre = el
+// admin puede escribir lo que quiera.
+function ItemRow({ item, catalogo = [], onUpdate, onUpdateMulti, onDelete }) {
+  // listId único por fila evita conflicto si hay varias filas a la vez.
+  const listId = `cat-servicios-${item.id_item}`;
+
+  // defaultValue solo se aplica al montar; cuando el padre re-renderiza con
+  // un item nuevo (ej: tras aplicar una plantilla del catálogo) el DOM del
+  // input mantiene el valor viejo. Sincronizamos vía ref, pero solo si el
+  // input no tiene foco — así no pisamos lo que el usuario está escribiendo.
+  const descRef   = useRef(null);
+  const cantRef   = useRef(null);
+  const precioRef = useRef(null);
+
+  useEffect(() => {
+    if (descRef.current && document.activeElement !== descRef.current) {
+      descRef.current.value = item.descripcion ?? '';
+    }
+  }, [item.descripcion]);
+
+  useEffect(() => {
+    if (cantRef.current && document.activeElement !== cantRef.current) {
+      cantRef.current.value = item.cantidad ?? 1;
+    }
+  }, [item.cantidad]);
+
+  useEffect(() => {
+    if (precioRef.current && document.activeElement !== precioRef.current) {
+      precioRef.current.value = item.precio_unitario ?? 0;
+    }
+  }, [item.precio_unitario]);
+
+  // Match exacto, case-insensitive y trim — para que pequeñas variaciones
+  // del usuario igual disparen la plantilla.
+  const matchPlantilla = (texto) => {
+    const t = (texto ?? '').trim().toLowerCase();
+    if (!t) return null;
+    return catalogo.find(c => c.nombre.toLowerCase() === t) ?? null;
+  };
+
+  const handleDescripcionBlur = (e) => {
+    const nuevoTexto = e.target.value;
+    if (nuevoTexto === item.descripcion) return;
+
+    const plantilla = matchPlantilla(nuevoTexto);
+    if (plantilla) {
+      // Aplica la plantilla en bloque (descripcion + precio + FK).
+      onUpdateMulti({
+        descripcion:      plantilla.nombre,
+        precio_unitario:  Number(plantilla.costo) || 0,
+        id_tipo_consulta: plantilla.id_tipo_consulta,
+      });
+    } else {
+      // Texto libre: solo actualiza descripcion. Si antes era una plantilla,
+      // limpia el FK para que no quede inconsistente.
+      const updates = { descripcion: nuevoTexto };
+      if (item.id_tipo_consulta) updates.id_tipo_consulta = null;
+      if (Object.keys(updates).length === 1) {
+        onUpdate('descripcion', nuevoTexto);
+      } else {
+        onUpdateMulti(updates);
+      }
+    }
+  };
+
+  // Etiqueta visual sutil cuando el ítem está vinculado a una plantilla
+  // del catálogo — ayuda al admin a saber que el precio vino de allí.
+  const plantillaActiva = item.id_tipo_consulta
+    ? catalogo.find(c => c.id_tipo_consulta === item.id_tipo_consulta)
+    : null;
+
   return (
     <tr>
       <td className="px-3 py-2">
-        <input type="text" defaultValue={item.descripcion}
-          onBlur={e => { if (e.target.value !== item.descripcion) onUpdate('descripcion', e.target.value); }}
-          className="w-full px-2 py-1 border border-transparent hover:border-gray-300 focus:border-emerald-500 focus:bg-white rounded text-sm" />
+        <input
+          ref={descRef}
+          type="text"
+          list={catalogo.length > 0 ? listId : undefined}
+          defaultValue={item.descripcion}
+          placeholder="Elige una plantilla o escribe libre…"
+          onBlur={handleDescripcionBlur}
+          className="w-full px-2 py-1 border border-transparent hover:border-gray-300 focus:border-emerald-500 focus:bg-white rounded text-sm"
+        />
+        {catalogo.length > 0 && (
+          <datalist id={listId}>
+            {catalogo.map(c => (
+              <option key={c.id_tipo_consulta} value={c.nombre}>
+                {fmtMoney(c.costo)}{c.descripcion ? ` · ${c.descripcion}` : ''}
+              </option>
+            ))}
+          </datalist>
+        )}
+        {plantillaActiva && (
+          <p className="text-[10px] text-emerald-700 ml-2 mt-0.5">
+            Plantilla: {plantillaActiva.nombre}
+          </p>
+        )}
         {item.notas && <p className="text-xs text-gray-500 italic ml-2">{item.notas}</p>}
       </td>
       <td className="px-3 py-2">
-        <input type="number" min="0.01" step="0.5" defaultValue={item.cantidad}
+        <input ref={cantRef} type="number" min="0.01" step="0.5" defaultValue={item.cantidad}
           onBlur={e => { const v = Number(e.target.value); if (v !== Number(item.cantidad) && v > 0) onUpdate('cantidad', v); }}
           className="w-20 px-2 py-1 border border-gray-200 focus:border-emerald-500 focus:bg-white rounded text-sm text-right font-mono" />
       </td>
       <td className="px-3 py-2">
-        <input type="number" min="0" step="100" defaultValue={item.precio_unitario}
+        <input ref={precioRef} type="number" min="0" step="100" defaultValue={item.precio_unitario}
           onBlur={e => { const v = Number(e.target.value); if (v !== Number(item.precio_unitario) && v >= 0) onUpdate('precio_unitario', v); }}
           className="w-28 px-2 py-1 border border-gray-200 focus:border-emerald-500 focus:bg-white rounded text-sm text-right font-mono" />
       </td>
@@ -618,7 +789,15 @@ function ModalPagar({ factura, onClose }) {
           <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
             <p className="text-xs text-gray-500">Paciente</p>
             <p className="font-bold text-gray-900">{factura.paciente_nombre}</p>
-            <p className="text-2xl font-bold text-green-700 mt-2 text-right font-mono">{fmtMoney(factura.total)}</p>
+            {metodo === 'EPS' ? (
+              <div className="mt-2 text-right">
+                <p className="text-xs text-gray-500 line-through font-mono">{fmtMoney(factura.total)}</p>
+                <p className="text-2xl font-bold text-emerald-700 font-mono">{fmtMoney(0)}</p>
+                <p className="text-[10px] text-emerald-700">Cubierto 100% por EPS</p>
+              </div>
+            ) : (
+              <p className="text-2xl font-bold text-green-700 mt-2 text-right font-mono">{fmtMoney(factura.total)}</p>
+            )}
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 mb-2 block">Método de pago *</label>
@@ -626,6 +805,11 @@ function ModalPagar({ factura, onClose }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
               {METODOS_PAGO.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
+            {metodo === 'EPS' && (
+              <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                La EPS cubre el 100% de esta factura. Se aplicará un descuento equivalente al subtotal y el paciente no paga nada.
+              </p>
+            )}
           </div>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">{error}</div>

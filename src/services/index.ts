@@ -25,6 +25,7 @@ export { default as inventarioService,  type MedicamentoInventario, type Categor
 export { default as auditoriaService,   type AuditLog, type OperacionAudit } from './auditoriaService';
 export { default as papeleraService,    type ItemPapelera, type TablaPapelera } from './papeleraService';
 export { default as dashboardService,   type EstadisticasAdmin } from './dashboardService';
+export { default as alertaService,      type Alerta, type SeveridadAlerta, type EstadoAlerta } from './alertaService';
 
 // Adjuntos clínicos + PDFs
 export { default as adjuntoService, type Adjunto, TIPOS_PERMITIDOS, TAMANIO_MAX_BYTES } from './adjuntoService';

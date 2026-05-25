@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Settings, User, Bell, Lock, Database,
+  Settings, User, Lock, Database,
   Save, Eye, EyeOff, AlertCircle, CheckCircle,
   Loader2, Shield, Mail, Phone, IdCard, Calendar
 } from 'lucide-react';
@@ -20,7 +20,6 @@ export default function Configuracion() {
   const tabs = [
     { id: 'perfil',          name: 'Mi perfil',       icon: User },
     { id: 'seguridad',       name: 'Seguridad',        icon: Lock },
-    { id: 'notificaciones',  name: 'Notificaciones',   icon: Bell },
     { id: 'sistema',         name: 'Sistema',          icon: Database },
   ];
 
@@ -70,7 +69,6 @@ export default function Configuracion() {
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             {activeTab === 'perfil'         && <TabPerfil />}
             {activeTab === 'seguridad'      && <TabSeguridad />}
-            {activeTab === 'notificaciones' && <TabNotificaciones />}
             {activeTab === 'sistema'        && <TabSistema />}
           </div>
         </div>
@@ -359,70 +357,6 @@ function TabSeguridad() {
           {saving ? 'Actualizando...' : 'Cambiar contraseña'}
         </button>
       </form>
-    </div>
-  );
-}
-
-// ─── Tab: Notificaciones ───────────────────────────────────────────────────────
-function TabNotificaciones() {
-  const [notif, setNotif] = useState({
-    email: true, push: true,
-    citas: true, inventario: true, reportes: false,
-  });
-  const [saved, setSaved] = useState(false);
-
-  const guardar = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
-
-  const Toggle = ({ name, label, desc }) => (
-    <label className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition">
-      <div>
-        <p className="font-medium text-gray-900">{label}</p>
-        {desc && <p className="text-sm text-gray-500">{desc}</p>}
-      </div>
-      <div className="relative inline-flex">
-        <input type="checkbox" className="sr-only" checked={notif[name]}
-          onChange={e => setNotif(p => ({ ...p, [name]: e.target.checked }))} />
-        <div className={`w-11 h-6 rounded-full transition-colors ${notif[name] ? 'bg-blue-600' : 'bg-gray-300'}`}>
-          <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${notif[name] ? 'translate-x-5' : ''}`} />
-        </div>
-      </div>
-    </label>
-  );
-
-  return (
-    <div className="p-8 space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">Notificaciones</h2>
-
-      <div>
-        <p className="text-xs font-bold text-gray-500 uppercase mb-3">Canales</p>
-        <div className="space-y-1 border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
-          <Toggle name="email" label="Email"        desc="Recibe notificaciones por correo" />
-          <Toggle name="push"  label="Notificaciones push" desc="En el navegador" />
-        </div>
-      </div>
-
-      <div>
-        <p className="text-xs font-bold text-gray-500 uppercase mb-3">Tipos de alerta</p>
-        <div className="space-y-1 border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
-          <Toggle name="citas"      label="Citas"       desc="Nuevas citas y recordatorios" />
-          <Toggle name="inventario" label="Inventario"  desc="Alertas de stock bajo" />
-          <Toggle name="reportes"   label="Reportes"    desc="Cuando se generan reportes" />
-        </div>
-      </div>
-
-      {saved && (
-        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm">
-          <CheckCircle size={16} /> Preferencias guardadas
-        </div>
-      )}
-
-      <button onClick={guardar}
-        className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg flex items-center justify-center gap-2">
-        <Save size={20} /> Guardar preferencias
-      </button>
     </div>
   );
 }

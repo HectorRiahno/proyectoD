@@ -157,11 +157,43 @@ export const usuarioService = {
         throw new ServiceError(e3.message, e3.code);
       }
 
-      // Auto-provisioning de filas hijas
+      // Soft-delete de la fila hija del rol ANTERIOR.
+      // Las tablas paciente/medico tienen `id_persona UNIQUE`, así que sin esto
+      // el usuario seguiría apareciendo en el listado del rol viejo.
+      // Usamos deleted_at (migration-soft-delete.sql) para preservar FKs hacia
+      // cita/consulta/factura. Si vuelve al rol anterior, lo restauramos abajo.
+      if (u.id_persona && u.rol_nombre && u.rol_nombre !== payload.rol) {
+        if (u.rol_nombre === 'cliente' || u.rol_nombre === 'paciente') {
+          await supabase
+            .from('paciente')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id_persona', u.id_persona)
+            .is('deleted_at', null);
+        } else if (u.rol_nombre === 'medico') {
+          await supabase
+            .from('medico')
+            .update({ deleted_at: new Date().toISOString(), activo: false })
+            .eq('id_persona', u.id_persona)
+            .is('deleted_at', null);
+        }
+      }
+
+      // Auto-provisioning de filas hijas (restaura soft-deleted si existe).
       if (payload.rol === 'cliente' && u.id_persona) {
         const { data: existe } = await supabase
-          .from('paciente').select('id_paciente').eq('id_persona', u.id_persona).maybeSingle();
-        if (!existe) {
+          .from('paciente')
+          .select('id_paciente, deleted_at')
+          .eq('id_persona', u.id_persona)
+          .maybeSingle();
+        if (existe?.id_paciente) {
+          if (existe.deleted_at) {
+            const { error: eRest } = await supabase
+              .from('paciente')
+              .update({ deleted_at: null, deleted_by: null })
+              .eq('id_paciente', existe.id_paciente);
+            if (eRest) throw new ServiceError(`Rol asignado, pero falló restaurar el paciente: ${eRest.message}`, eRest.code);
+          }
+        } else {
           const { error: ePac } = await supabase.from('paciente').insert({
             id_persona:      u.id_persona,
             numero_historia: `HC-${u.id_persona}-${Date.now().toString(36)}`,
@@ -174,8 +206,19 @@ export const usuarioService = {
 
       if (payload.rol === 'medico' && u.id_persona) {
         const { data: existe } = await supabase
-          .from('medico').select('id_medico').eq('id_persona', u.id_persona).maybeSingle();
-        if (!existe) {
+          .from('medico')
+          .select('id_medico, deleted_at')
+          .eq('id_persona', u.id_persona)
+          .maybeSingle();
+        if (existe?.id_medico) {
+          if (existe.deleted_at) {
+            const { error: eRest } = await supabase
+              .from('medico')
+              .update({ deleted_at: null, deleted_by: null, activo: true })
+              .eq('id_medico', existe.id_medico);
+            if (eRest) throw new ServiceError(`Rol asignado, pero falló restaurar el médico: ${eRest.message}`, eRest.code);
+          }
+        } else {
           const { error: eMed } = await supabase.from('medico').insert({
             id_persona:      u.id_persona,
             numero_licencia: `LIC-${Date.now().toString(36)}`,

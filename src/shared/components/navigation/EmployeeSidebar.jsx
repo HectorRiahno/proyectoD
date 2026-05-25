@@ -2,90 +2,64 @@ import { Link, useLocation } from "react-router-dom";
 import * as Icons from "lucide-react";
 import { useAuth } from "../../../hooks/useAuth";
 
-// Sidebar para EMPLEADOS - con acceso CRUD completo
-const employeeSidebarItems = [
+// Sidebar para EMPLEADOS - agrupado por dominio funcional.
+// Cada grupo tiene un color que se aplica al título y al estado activo/hover
+// de sus items, para que el admin ubique secciones de un vistazo.
+const sidebarGroups = [
   {
-    id: 0,
-    title: "Dashboard",
-    icon: "LayoutDashboard",
-    path: "/dashboard"
+    label: "Atención al paciente",
+    color: "blue",
+    items: [
+      { id: 1,  title: "Gestión de Citas", icon: "Calendar", path: "/dashboard/citas",       badge: "CRUD" },
+      { id: 2,  title: "Pacientes",        icon: "Users",    path: "/dashboard/pacientes",  badge: "CRUD" },
+      { id: 9,  title: "Facturación",      icon: "Receipt",  path: "/dashboard/facturacion", badge: "CRUD" },
+    ],
   },
   {
-    id: 1,
-    title: "Gestión de Citas",
-    icon: "Calendar",
-    path: "/dashboard/citas",
-    badge: "CRUD"
+    label: "Operación clínica",
+    color: "emerald",
+    items: [
+      { id: 35, title: "Médicos",     icon: "Stethoscope", path: "/dashboard/medicos",     badge: "CRUD"  },
+      { id: 36, title: "Horarios",    icon: "Clock",       path: "/dashboard/horarios",    badge: "ADMIN" },
+      { id: 4,  title: "Inventario",  icon: "Package",     path: "/dashboard/inventario",  badge: "CRUD"  },
+    ],
   },
   {
-    id: 2,
-    title: "Pacientes",
-    icon: "Users",
-    path: "/dashboard/pacientes",
-    badge: "CRUD"
+    label: "Administración",
+    color: "slate",
+    items: [
+      { id: 0, title: "Dashboard",     icon: "LayoutDashboard", path: "/dashboard" },
+      { id: 3, title: "Usuarios",      icon: "UserPlus",        path: "/dashboard/usuarios",     badge: "ADMIN" },
+      { id: 5, title: "Reportes",      icon: "BarChart3",       path: "/dashboard/reportes" },
+      { id: 7, title: "Auditoría",     icon: "ShieldCheck",     path: "/dashboard/auditoria",    badge: "ADMIN" },
+      { id: 8, title: "Papelera",      icon: "Trash2",          path: "/dashboard/papelera",     badge: "ADMIN" },
+      { id: 6, title: "Configuración", icon: "Settings",        path: "/dashboard/configuracion" },
+    ],
   },
-  {
-    id: 3,
-    title: "Usuarios",
-    icon: "UserPlus",
-    path: "/dashboard/usuarios",
-    badge: "ADMIN"
-  },
-  {
-    id: 35,
-    title: "Médicos",
-    icon: "Stethoscope",
-    path: "/dashboard/medicos",
-    badge: "CRUD"
-  },
-  {
-    id: 36,
-    title: "Horarios",
-    icon: "Clock",
-    path: "/dashboard/horarios",
-    badge: "ADMIN"
-  },
-  {
-    id: 4,
-    title: "Inventario",
-    icon: "Package",
-    path: "/dashboard/inventario",
-    badge: "CRUD"
-  },
-  {
-    id: 9,
-    title: "Facturación",
-    icon: "Receipt",
-    path: "/dashboard/facturacion",
-    badge: "CRUD"
-  },
-  {
-    id: 5,
-    title: "Reportes",
-    icon: "BarChart3",
-    path: "/dashboard/reportes"
-  },
-  {
-    id: 7,
-    title: "Auditoría",
-    icon: "ShieldCheck",
-    path: "/dashboard/auditoria",
-    badge: "ADMIN"
-  },
-  {
-    id: 8,
-    title: "Papelera",
-    icon: "Trash2",
-    path: "/dashboard/papelera",
-    badge: "ADMIN"
-  },
-  {
-    id: 6,
-    title: "Configuración",
-    icon: "Settings",
-    path: "/dashboard/configuracion"
-  }
 ];
+
+// Mapa estático de estilos por color (Tailwind purga clases dinámicas,
+// por eso debe ser literal).
+const COLOR_STYLES = {
+  blue: {
+    header:    "text-blue-700",
+    headerDot: "bg-blue-500",
+    active:    "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-200",
+    hover:     "hover:bg-blue-50 hover:text-blue-700",
+  },
+  emerald: {
+    header:    "text-emerald-700",
+    headerDot: "bg-emerald-500",
+    active:    "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-200",
+    hover:     "hover:bg-emerald-50 hover:text-emerald-700",
+  },
+  slate: {
+    header:    "text-slate-600",
+    headerDot: "bg-slate-400",
+    active:    "bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-md",
+    hover:     "hover:bg-slate-100 hover:text-slate-900",
+  },
+};
 
 function EmployeeSidebar() {
   const location = useLocation();
@@ -110,38 +84,47 @@ function EmployeeSidebar() {
         </div>
       </div>
 
-      <nav className="p-4 space-y-1.5">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3">
-          Panel de Gestión
-        </div>
-        {employeeSidebarItems.map(({ id, title, icon, path, badge }) => {
-          const Icon = Icons[icon];
-          const isActive = location.pathname === path;
-          
+      <nav className="p-4 space-y-5">
+        {sidebarGroups.map(({ label, color, items }) => {
+          const styles = COLOR_STYLES[color];
           return (
-            <Link
-              key={id}
-              to={path}
-              className={`flex items-center justify-between p-3 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-200"
-                  : "text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-600"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon size={20} className={isActive ? "" : "group-hover:scale-110 transition-transform"} />
-                <span className="font-medium text-sm">{title}</span>
+            <div key={label}>
+              {/* Header del grupo con punto de color */}
+              <div className={`flex items-center gap-2 px-3 mb-2 text-[11px] font-bold uppercase tracking-wider ${styles.header}`}>
+                <span className={`w-2 h-2 rounded-full ${styles.headerDot}`} />
+                {label}
               </div>
-              {badge && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                  isActive 
-                    ? "bg-white/30 text-white" 
-                    : "bg-green-100 text-green-700 group-hover:bg-green-200"
-                }`}>
-                  {badge}
-                </span>
-              )}
-            </Link>
+
+              <div className="space-y-1">
+                {items.map(({ id, title, icon, path, badge }) => {
+                  const Icon = Icons[icon];
+                  const isActive = location.pathname === path;
+                  return (
+                    <Link
+                      key={id}
+                      to={path}
+                      className={`flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 group ${
+                        isActive ? styles.active : `text-gray-700 ${styles.hover}`
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={19} className={isActive ? "" : "group-hover:scale-110 transition-transform"} />
+                        <span className="font-medium text-sm">{title}</span>
+                      </div>
+                      {badge && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                          isActive
+                            ? "bg-white/30 text-white"
+                            : "bg-green-100 text-green-700 group-hover:bg-green-200"
+                        }`}>
+                          {badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>

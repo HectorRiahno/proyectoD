@@ -93,6 +93,25 @@ export const tipoConsultaService = {
     if (error) throw new ServiceError(error.message, error.code);
     return data ?? [];
   },
+
+  /**
+   * Catálogo completo con costo — usado por el modal de facturación para
+   * autocompletar descripción + precio de las líneas.
+   */
+  async getCatalogo() {
+    const { data, error } = await supabase
+      .from('tipo_consulta')
+      .select('id_tipo_consulta, nombre, descripcion, costo, duracion_min')
+      .order('nombre');
+    if (error) throw new ServiceError(error.message, error.code);
+    return (data ?? []) as Array<{
+      id_tipo_consulta: number;
+      nombre: string;
+      descripcion: string | null;
+      costo: number;
+      duracion_min: number | null;
+    }>;
+  },
 };
 
 export default horarioService;
