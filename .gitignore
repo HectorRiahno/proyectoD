@@ -1,4 +1,11 @@
-# Logs
+# =====================================================================
+# .gitignore — Proyecto HIS
+# Solo se trackea lo necesario para correr el proyecto en local y
+# desplegarlo en Vercel/Netlify. Builds, secretos, cachés y configs de
+# herramientas locales quedan fuera.
+# =====================================================================
+
+# ─── Logs ────────────────────────────────────────────────────────────
 logs
 *.log
 npm-debug.log*
@@ -7,7 +14,52 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# ─── Secretos y variables de entorno ─────────────────────────────────
+# Nunca subir .env — usar .env.example como plantilla para nuevos devs
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+*.pem
+*.key
+
+# ─── Dependencias y artefactos de build ──────────────────────────────
+node_modules
+dist
+dist-ssr
+build
+out
+*.local
+
+# ─── Cachés de bundler / framework ───────────────────────────────────
+.vite/
+.parcel-cache/
+.next/
+.cache/
+.turbo/
+.eslintcache
+
+# ─── Plataformas de despliegue ───────────────────────────────────────
+.vercel/
+.netlify/
+
+# ─── Tests / coverage ────────────────────────────────────────────────
+coverage/
+*.lcov
+.nyc_output/
+
+# ─── TypeScript ──────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── Supabase CLI local (cachés y branches no se versionan) ──────────
+supabase/.temp/
+supabase/.branches/
+
+# ─── Migraciones SQL históricas (versiones reemplazadas) ─────────────
+# Las migraciones VIGENTES quedan tracked. Estas son las viejas que ya
+# fueron sustituidas por migrations posteriores y mantenerlas confunde.
 .supabase/auth-trigger.sql
 supabase/migration-consulta.sql
 supabase/migration-factura-fk.sql
@@ -18,18 +70,32 @@ supabase/schema.sql
 supabase/seed.sql
 supabase/views.sql
 
-node_modules
-dist
-dist-ssr
-*.local
+# ─── Config de herramientas de IA / asistentes locales ───────────────
+.claude/
+.cursor/
+.aider*
+.codeium/
 
-# Editor directories and files
+# ─── Notas y borradores internos ─────────────────────────────────────
+context.md
+NOTES.md
+TODO.md
+*.draft.md
+
+# ─── IDE / editor ────────────────────────────────────────────────────
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+!.vscode/settings.json
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ─── Archivos de SO ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
