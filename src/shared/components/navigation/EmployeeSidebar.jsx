@@ -10,18 +10,18 @@ const sidebarGroups = [
     label: "Atención al paciente",
     color: "blue",
     items: [
-      { id: 1,  title: "Gestión de Citas", icon: "Calendar", path: "/dashboard/citas",       badge: "CRUD" },
-      { id: 2,  title: "Pacientes",        icon: "Users",    path: "/dashboard/pacientes",  badge: "CRUD" },
-      { id: 9,  title: "Facturación",      icon: "Receipt",  path: "/dashboard/facturacion", badge: "CRUD" },
+      { id: 1,  title: "Gestión de Citas", icon: "Calendar", path: "/dashboard/citas" },
+      { id: 2,  title: "Pacientes",        icon: "Users",    path: "/dashboard/pacientes" },
+      { id: 9,  title: "Facturación",      icon: "Receipt",  path: "/dashboard/facturacion" },
     ],
   },
   {
     label: "Operación clínica",
     color: "emerald",
     items: [
-      { id: 35, title: "Médicos",     icon: "Stethoscope", path: "/dashboard/medicos",     badge: "CRUD"  },
-      { id: 36, title: "Horarios",    icon: "Clock",       path: "/dashboard/horarios",    badge: "ADMIN" },
-      { id: 4,  title: "Inventario",  icon: "Package",     path: "/dashboard/inventario",  badge: "CRUD"  },
+      { id: 35, title: "Médicos",     icon: "Stethoscope", path: "/dashboard/medicos" },
+      { id: 36, title: "Horarios",    icon: "Clock",       path: "/dashboard/horarios" },
+      { id: 4,  title: "Inventario",  icon: "Package",     path: "/dashboard/inventario" },
     ],
   },
   {
@@ -29,10 +29,12 @@ const sidebarGroups = [
     color: "slate",
     items: [
       { id: 0, title: "Dashboard",     icon: "LayoutDashboard", path: "/dashboard" },
-      { id: 3, title: "Usuarios",      icon: "UserPlus",        path: "/dashboard/usuarios",     badge: "ADMIN" },
+      { id: 3, title: "Usuarios",      icon: "UserPlus",        path: "/dashboard/usuarios" },
       { id: 5, title: "Reportes",      icon: "BarChart3",       path: "/dashboard/reportes" },
-      { id: 7, title: "Auditoría",     icon: "ShieldCheck",     path: "/dashboard/auditoria",    badge: "ADMIN" },
-      { id: 8, title: "Papelera",      icon: "Trash2",          path: "/dashboard/papelera",     badge: "ADMIN" },
+      { id: 7, title: "Auditoría",     icon: "ShieldCheck",     path: "/dashboard/auditoria" },
+      // Override de color: papelera mantiene ámbar para coincidir con el
+      // header amber de la página (semántica de "zona de cuidado").
+      { id: 8, title: "Papelera",      icon: "Trash2",          path: "/dashboard/papelera", color: "amber" },
       { id: 6, title: "Configuración", icon: "Settings",        path: "/dashboard/configuracion" },
     ],
   },
@@ -58,6 +60,12 @@ const COLOR_STYLES = {
     headerDot: "bg-slate-400",
     active:    "bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-md",
     hover:     "hover:bg-slate-100 hover:text-slate-900",
+  },
+  amber: {
+    header:    "text-amber-700",
+    headerDot: "bg-amber-500",
+    active:    "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-200",
+    hover:     "hover:bg-amber-50 hover:text-amber-700",
   },
 };
 
@@ -96,30 +104,22 @@ function EmployeeSidebar() {
               </div>
 
               <div className="space-y-1">
-                {items.map(({ id, title, icon, path, badge }) => {
+                {items.map(({ id, title, icon, path, color: itemColor }) => {
                   const Icon = Icons[icon];
                   const isActive = location.pathname === path;
+                  // Si el item define su propio color, sobrescribe el del grupo
+                  // (ej: Papelera = ámbar dentro de Administración = slate).
+                  const itemStyles = itemColor ? COLOR_STYLES[itemColor] : styles;
                   return (
                     <Link
                       key={id}
                       to={path}
-                      className={`flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 group ${
-                        isActive ? styles.active : `text-gray-700 ${styles.hover}`
+                      className={`flex items-center gap-3 p-2.5 rounded-xl transition-all duration-200 group ${
+                        isActive ? itemStyles.active : `text-gray-700 ${itemStyles.hover}`
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <Icon size={19} className={isActive ? "" : "group-hover:scale-110 transition-transform"} />
-                        <span className="font-medium text-sm">{title}</span>
-                      </div>
-                      {badge && (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                          isActive
-                            ? "bg-white/30 text-white"
-                            : "bg-green-100 text-green-700 group-hover:bg-green-200"
-                        }`}>
-                          {badge}
-                        </span>
-                      )}
+                      <Icon size={19} className={isActive ? "" : "group-hover:scale-110 transition-transform"} />
+                      <span className="font-medium text-sm">{title}</span>
                     </Link>
                   );
                 })}

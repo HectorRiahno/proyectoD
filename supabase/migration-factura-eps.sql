@@ -51,12 +51,16 @@ BEGIN
     END IF;
 
     -- Una vez emitida (no-borrador), bloquear edición de campos críticos.
-    -- EXCEPCIÓN: pendiente→pagada con metodo='EPS' puede ajustar descuento
-    -- para reflejar cobertura 100%.
+    -- EXCEPCIÓN: metodo='EPS' y estado='pagada' puede ajustar descuento/
+    -- impuesto/total. La condición NO exige la transición pendiente→pagada
+    -- porque el trigger se dispara DOS veces seguidas:
+    --   1. UPDATE del usuario (cambia estado/metodo_pago/descuento)
+    --   2. UPDATE del recalc automático (cambia impuesto/total)
+    -- En la segunda llamada OLD.estado ya es 'pagada', así que pedir
+    -- 'pendiente' en OLD bloqueaba el recálculo.
     IF TG_OP = 'UPDATE' AND OLD.estado != 'borrador' AND OLD.estado != 'vencida' THEN
-        v_es_pago_eps := (OLD.estado = 'pendiente'
-                       AND NEW.estado = 'pagada'
-                       AND UPPER(COALESCE(NEW.metodo_pago, '')) = 'EPS');
+        v_es_pago_eps := UPPER(COALESCE(NEW.metodo_pago, '')) = 'EPS'
+                      AND NEW.estado = 'pagada';
 
         IF NEW.id_paciente    IS DISTINCT FROM OLD.id_paciente    OR
            NEW.id_consulta    IS DISTINCT FROM OLD.id_consulta    OR

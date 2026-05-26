@@ -118,7 +118,7 @@ export default function Facturacion() {
         titulo="Facturación"
         descripcion="Gestión de facturas y cobros"
         icon={<Receipt size={32} />}
-        variant="emeraldDark"
+        variant="blue"
       >
         <KPI label="Total"       value={loading ? '···' : kpis.total} />
         <KPI label="Pendientes"  value={loading ? '···' : kpis.pendientes} color="text-amber-300" />
@@ -141,17 +141,17 @@ export default function Facturacion() {
             value={search}
             onChange={setSearch}
             placeholder="Buscar por número, paciente, documento o médico..."
-            focusColor="emerald"
+            focusColor="blue"
           />
           <div>
             <label className="text-xs text-gray-500 block mb-1">Desde</label>
             <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">Hasta</label>
             <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
           </div>
         </div>
 
@@ -164,8 +164,8 @@ export default function Facturacion() {
               <button key={e.v} onClick={() => setFiltroEstado(e.v)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
                   activo
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-emerald-300'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
                 }`}>
                 {e.l}
                 <span className={`ml-1 text-xs px-1.5 rounded-full ${activo ? 'bg-white/30' : 'bg-gray-100'}`}>
@@ -185,7 +185,7 @@ export default function Facturacion() {
       <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
+            <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Número</th>
                 <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Estado</th>
@@ -198,14 +198,14 @@ export default function Facturacion() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <LoadingRow colSpan={7} mensaje="Cargando facturas..." color="emerald" />
+                <LoadingRow colSpan={7} mensaje="Cargando facturas..." color="blue" />
               ) : filtered.length === 0 ? (
                 <EmptyRow colSpan={7} icon={Receipt} mensaje="No hay facturas que coincidan" />
               ) : filtered.map(f => {
                 const st = estadoStyle(f.estado);
                 const StIcon = st.icon;
                 return (
-                  <tr key={f.id_factura} className="hover:bg-emerald-50 transition">
+                  <tr key={f.id_factura} className="hover:bg-blue-50 transition">
                     <td className="px-5 py-3">
                       {f.numero_factura ? (
                         <span className="font-mono font-semibold text-gray-900">{f.numero_factura}</span>
@@ -243,7 +243,7 @@ export default function Facturacion() {
                             onClick={() => descargarPdf(f)}
                             disabled={descargandoId === f.id_factura}
                             title="Descargar PDF"
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition disabled:opacity-50"
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
                           >
                             {descargandoId === f.id_factura
                               ? <Loader2 size={16} className="animate-spin" />
@@ -320,7 +320,7 @@ function ModalDetalle({ factura, onClose, onDescargar, descargando }) {
   return (
     <Modal titulo={`Factura ${factura.numero_factura ?? '(borrador)'}`}
       subtitulo={`${factura.paciente_nombre} · ${factura.fecha_emision?.slice(0, 10) ?? 'sin emitir'}`}
-      onClose={onClose} variant="emeraldDark" size="xl">
+      onClose={onClose} variant="blue" size="xl">
       <div className="space-y-4">
         {/* Estado destacado */}
         <div className={`p-3 rounded-xl border ${st.bg} text-center font-bold`}>
@@ -390,7 +390,7 @@ function ModalDetalle({ factura, onClose, onDescargar, descargando }) {
           </button>
           {factura.estado !== 'borrador' && onDescargar && (
             <button onClick={onDescargar} disabled={descargando}
-              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
               {descargando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               {descargando ? 'Generando...' : 'Descargar PDF'}
             </button>
@@ -513,7 +513,7 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
   return (
     <Modal titulo="Editar borrador de factura"
       subtitulo={`${factura.paciente_nombre} · ${factura.id_consulta ? `Consulta #${factura.id_consulta}` : 'sin consulta'}`}
-      onClose={onClose} variant="emeraldDark" size="xl">
+      onClose={onClose} variant="blue" size="xl">
       <div className="space-y-4">
         {/* Aviso */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-800">
@@ -537,12 +537,12 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
           <div className="bg-gray-50 px-4 py-2 flex items-center justify-between border-b border-gray-200">
             <h3 className="text-sm font-bold text-gray-700">Líneas ({items.length})</h3>
             <button onClick={agregarItem}
-              className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-800 font-medium">
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
               <PlusCircle size={16} /> Agregar línea
             </button>
           </div>
           {loading ? (
-            <div className="p-6 text-center"><Loader2 size={20} className="animate-spin mx-auto text-emerald-600" /></div>
+            <div className="p-6 text-center"><Loader2 size={20} className="animate-spin mx-auto text-blue-600" /></div>
           ) : items.length === 0 ? (
             <p className="p-4 text-sm text-gray-400 italic text-center">
               Sin líneas. Agrega una para empezar.
@@ -584,7 +584,7 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
             </label>
             <input type="number" min="0" step="100" defaultValue={factura.descuento ?? 0}
               onBlur={e => guardarCampoFactura('descuento', Number(e.target.value) || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 flex items-center gap-1">
@@ -592,7 +592,7 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
             </label>
             <input type="number" min="0" max="1" step="0.01" defaultValue={factura.tasa_impuesto ?? 0}
               onBlur={e => guardarCampoFactura('tasa_impuesto', Number(e.target.value) || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono" />
           </div>
         </div>
 
@@ -602,7 +602,7 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
           <textarea rows={2} defaultValue={factura.observaciones ?? ''}
             onBlur={e => guardarCampoFactura('observaciones', e.target.value || null)}
             placeholder="Notas internas o para mostrar al paciente..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
         </div>
 
         {/* Totales */}
@@ -621,7 +621,7 @@ function ModalEditarBorrador({ factura: facturaInit, onClose }) {
             Cerrar (los cambios ya se guardaron)
           </button>
           <button onClick={emitir} disabled={saving || items.length === 0}
-            className="flex-1 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+            className="flex-1 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
             <Send size={16} /> {saving ? 'Emitiendo...' : 'Emitir factura'}
           </button>
         </div>
@@ -714,7 +714,7 @@ function ItemRow({ item, catalogo = [], onUpdate, onUpdateMulti, onDelete }) {
           defaultValue={item.descripcion}
           placeholder="Elige una plantilla o escribe libre…"
           onBlur={handleDescripcionBlur}
-          className="w-full px-2 py-1 border border-transparent hover:border-gray-300 focus:border-emerald-500 focus:bg-white rounded text-sm"
+          className="w-full px-2 py-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white rounded text-sm"
         />
         {catalogo.length > 0 && (
           <datalist id={listId}>
@@ -726,7 +726,7 @@ function ItemRow({ item, catalogo = [], onUpdate, onUpdateMulti, onDelete }) {
           </datalist>
         )}
         {plantillaActiva && (
-          <p className="text-[10px] text-emerald-700 ml-2 mt-0.5">
+          <p className="text-[10px] text-blue-700 ml-2 mt-0.5">
             Plantilla: {plantillaActiva.nombre}
           </p>
         )}
@@ -735,12 +735,12 @@ function ItemRow({ item, catalogo = [], onUpdate, onUpdateMulti, onDelete }) {
       <td className="px-3 py-2">
         <input ref={cantRef} type="number" min="0.01" step="0.5" defaultValue={item.cantidad}
           onBlur={e => { const v = Number(e.target.value); if (v !== Number(item.cantidad) && v > 0) onUpdate('cantidad', v); }}
-          className="w-20 px-2 py-1 border border-gray-200 focus:border-emerald-500 focus:bg-white rounded text-sm text-right font-mono" />
+          className="w-20 px-2 py-1 border border-gray-200 focus:border-blue-500 focus:bg-white rounded text-sm text-right font-mono" />
       </td>
       <td className="px-3 py-2">
         <input ref={precioRef} type="number" min="0" step="100" defaultValue={item.precio_unitario}
           onBlur={e => { const v = Number(e.target.value); if (v !== Number(item.precio_unitario) && v >= 0) onUpdate('precio_unitario', v); }}
-          className="w-28 px-2 py-1 border border-gray-200 focus:border-emerald-500 focus:bg-white rounded text-sm text-right font-mono" />
+          className="w-28 px-2 py-1 border border-gray-200 focus:border-blue-500 focus:bg-white rounded text-sm text-right font-mono" />
       </td>
       <td className="px-3 py-2 text-right font-mono font-semibold text-gray-900">
         {fmtMoney(item.subtotal)}
@@ -778,7 +778,7 @@ function ModalPagar({ factura, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-4 flex items-center gap-3">
+        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 flex items-center gap-3">
           <DollarSign size={24} />
           <div>
             <h2 className="text-lg font-bold">Registrar pago</h2>
@@ -792,8 +792,8 @@ function ModalPagar({ factura, onClose }) {
             {metodo === 'EPS' ? (
               <div className="mt-2 text-right">
                 <p className="text-xs text-gray-500 line-through font-mono">{fmtMoney(factura.total)}</p>
-                <p className="text-2xl font-bold text-emerald-700 font-mono">{fmtMoney(0)}</p>
-                <p className="text-[10px] text-emerald-700">Cubierto 100% por EPS</p>
+                <p className="text-2xl font-bold text-green-700 font-mono">{fmtMoney(0)}</p>
+                <p className="text-[10px] text-green-700">Cubierto 100% por EPS</p>
               </div>
             ) : (
               <p className="text-2xl font-bold text-green-700 mt-2 text-right font-mono">{fmtMoney(factura.total)}</p>
@@ -806,7 +806,7 @@ function ModalPagar({ factura, onClose }) {
               {METODOS_PAGO.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
             {metodo === 'EPS' && (
-              <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+              <p className="text-xs text-green-700 mt-2 bg-green-50 border border-green-200 rounded-lg p-2">
                 La EPS cubre el 100% de esta factura. Se aplicará un descuento equivalente al subtotal y el paciente no paga nada.
               </p>
             )}
@@ -933,7 +933,7 @@ function ModalEliminar({ factura, onConfirm, onClose }) {
 
 function Totales({ factura }) {
   return (
-    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-1.5 text-sm">
+    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-1.5 text-sm">
       <div className="flex justify-between text-gray-700">
         <span>Subtotal:</span>
         <span className="font-mono">{fmtMoney(factura.subtotal)}</span>
@@ -950,7 +950,7 @@ function Totales({ factura }) {
           <span className="font-mono">{fmtMoney(factura.impuesto)}</span>
         </div>
       )}
-      <div className="flex justify-between pt-2 border-t border-emerald-300 text-emerald-900 text-lg font-bold">
+      <div className="flex justify-between pt-2 border-t border-blue-300 text-blue-900 text-lg font-bold">
         <span>Total:</span>
         <span className="font-mono">{fmtMoney(factura.total)}</span>
       </div>

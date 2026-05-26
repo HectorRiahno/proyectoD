@@ -90,14 +90,14 @@ export default function Inventario() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg p-8 text-white">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Inventario de medicamentos</h1>
-            <p className="text-blue-100">Catálogo de medicamentos del sistema</p>
+            <p className="text-emerald-100">Catálogo de medicamentos del sistema</p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-blue-100 mb-1">Total</p>
+            <p className="text-sm text-emerald-100 mb-1">Total</p>
             <p className="text-4xl font-bold">{loading ? '···' : medicamentos.length}</p>
           </div>
         </div>
@@ -126,14 +126,14 @@ export default function Inventario() {
               placeholder="Buscar por nombre, genérico o presentación..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
 
           <select
             value={filtroCategoria}
             onChange={e => setFiltroCategoria(e.target.value)}
-            className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
           >
             <option value="">Todas las categorías</option>
             {categorias.map(c => (
@@ -144,13 +144,13 @@ export default function Inventario() {
           <div className="flex gap-1 border border-gray-300 rounded-xl p-1">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${viewMode === 'list' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${viewMode === 'list' ? 'bg-emerald-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               Lista
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${viewMode === 'grid' ? 'bg-emerald-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               Cuadrícula
             </button>
@@ -158,7 +158,7 @@ export default function Inventario() {
 
           <button
             onClick={() => { setSelected(null); setModalOpen(true); }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-md"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-md"
           >
             <Plus size={18} /> Agregar
           </button>
@@ -168,7 +168,7 @@ export default function Inventario() {
       {/* Contenido */}
       {loading ? (
         <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-blue-600" />
+          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-emerald-600" />
           <p className="text-gray-500">Cargando inventario...</p>
         </div>
       ) : filtered.length === 0 ? (
@@ -180,7 +180,7 @@ export default function Inventario() {
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+              <thead className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Medicamento</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Categoría</th>
@@ -202,7 +202,7 @@ export default function Inventario() {
                     className={`transition ${
                       destacado
                         ? 'bg-amber-50 ring-2 ring-amber-400 ring-inset animate-pulse'
-                        : `hover:bg-blue-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`
+                        : `hover:bg-emerald-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`
                     }`}
                   >
                     <td className="px-6 py-4">
@@ -210,7 +210,7 @@ export default function Inventario() {
                       {m.nombre_generico && <p className="text-xs text-gray-500">{m.nombre_generico}</p>}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-medium">
+                      <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full font-medium">
                         {nombreCategoria(m)}
                       </span>
                     </td>
@@ -240,7 +240,7 @@ export default function Inventario() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
                         <button onClick={() => { setSelected(m); setModalOpen(true); }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
                           <Edit size={16} />
                         </button>
                         <button onClick={() => handleEliminar(m.id_medicamento)}
@@ -281,7 +281,7 @@ export default function Inventario() {
                 </span>
               </div>
 
-              <p className="text-xs text-blue-600 font-medium mb-3">{nombreCategoria(m)}</p>
+              <p className="text-xs text-emerald-600 font-medium mb-3">{nombreCategoria(m)}</p>
 
               <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
                 <div className="bg-gray-50 rounded-lg p-2">
@@ -304,7 +304,7 @@ export default function Inventario() {
 
               <div className="flex gap-2 pt-3 border-t border-gray-100">
                 <button onClick={() => { setSelected(m); setModalOpen(true); }}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition">
+                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-emerald-600 border border-emerald-300 rounded-lg hover:bg-emerald-50 transition">
                   <Edit size={14} /> Editar
                 </button>
                 <button onClick={() => handleEliminar(m.id_medicamento)}

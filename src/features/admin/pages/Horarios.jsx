@@ -99,7 +99,7 @@ export default function Horarios() {
       <PageHeader
         titulo="Horarios Médicos"
         descripcion="Asigna y gestiona las franjas horarias del personal médico"
-        variant="blueDeep"
+        variant="emerald"
       >
         <KPI label="Total médicos"       value={loading ? '···' : medicos.length} />
         <KPI label="Con horario"         value={loading ? '···' : medicosConHorario} />
@@ -120,13 +120,13 @@ export default function Horarios() {
                 placeholder="Buscar médico..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               />
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 px-4 py-3">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-4 py-3">
               <p className="text-xs font-bold text-gray-700 uppercase">
                 Médicos ({medicosFiltered.length})
               </p>
@@ -135,7 +135,7 @@ export default function Horarios() {
             <div className="divide-y divide-gray-100 max-h-[calc(100vh-24rem)] overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-10">
-                  <Loader2 size={24} className="animate-spin text-blue-600" />
+                  <Loader2 size={24} className="animate-spin text-emerald-600" />
                 </div>
               ) : medicosFiltered.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
@@ -152,14 +152,14 @@ export default function Horarios() {
                       onClick={() => setMedicoSelId(m.id_medico)}
                       className={`w-full text-left px-4 py-3 transition flex items-center gap-3 ${
                         activo
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
-                          : 'hover:bg-blue-50'
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white'
+                          : 'hover:bg-emerald-50'
                       }`}
                     >
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm ${
                         activo
                           ? 'bg-white/20 text-white'
-                          : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
+                          : 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white'
                       }`}>
                         {initials(m.nombre_completo)}
                       </div>
@@ -167,7 +167,7 @@ export default function Horarios() {
                         <p className={`text-sm font-semibold truncate ${activo ? 'text-white' : 'text-gray-900'}`}>
                           {m.nombre_completo}
                         </p>
-                        <p className={`text-xs truncate ${activo ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <p className={`text-xs truncate ${activo ? 'text-emerald-100' : 'text-gray-500'}`}>
                           {m.especialidad ?? 'Sin especialidad'}
                         </p>
                       </div>
@@ -202,7 +202,7 @@ export default function Horarios() {
               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-md flex-shrink-0">
+                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-md flex-shrink-0">
                       {initials(medicoSel.nombre_completo)}
                     </div>
                     <div>
@@ -216,7 +216,7 @@ export default function Horarios() {
                   </div>
                   <button
                     onClick={() => setCreando(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg text-sm"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg text-sm"
                   >
                     <Plus size={18} /> Agregar franja
                   </button>
@@ -259,7 +259,7 @@ export default function Horarios() {
                             {slots.map((h, idx) => {
                               const dur = calcDuracion(h.hora_inicio, h.hora_fin);
                               return (
-                                <tr key={h.id_horario} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                <tr key={h.id_horario} className={`hover:bg-emerald-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                                   <td className="px-5 py-3">
                                     <span className="font-mono font-semibold text-gray-900">{fmtTime(h.hora_inicio)}</span>
                                   </td>
@@ -385,8 +385,8 @@ function ModalHorario({ horario, idMedico, onClose }) {
                 onClick={() => setForm(p => ({ ...p, dia_semana: dia }))}
                 className={`py-2 px-2 rounded-xl text-sm font-medium transition border ${
                   form.dia_semana === dia
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-transparent shadow-md'
-                    : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-600'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-transparent shadow-md'
+                    : 'border-gray-300 text-gray-700 hover:border-emerald-400 hover:text-emerald-600'
                 }`}
               >
                 {dia.slice(0, 3)}
@@ -394,7 +394,7 @@ function ModalHorario({ horario, idMedico, onClose }) {
             ))}
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            Seleccionado: <strong className="text-blue-600">{form.dia_semana}</strong>
+            Seleccionado: <strong className="text-emerald-600">{form.dia_semana}</strong>
           </p>
         </div>
 
@@ -408,7 +408,7 @@ function ModalHorario({ horario, idMedico, onClose }) {
               value={form.hora_inicio}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
             />
           </div>
           <div>
@@ -419,7 +419,7 @@ function ModalHorario({ horario, idMedico, onClose }) {
               value={form.hora_fin}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
             />
           </div>
         </div>
@@ -432,7 +432,7 @@ function ModalHorario({ horario, idMedico, onClose }) {
             id="chk-disponible"
             checked={form.disponible}
             onChange={handleChange}
-            className="w-5 h-5 rounded text-blue-600"
+            className="w-5 h-5 rounded text-emerald-600"
           />
           <label htmlFor="chk-disponible" className="text-sm font-medium text-gray-700">
             Franja disponible para citas
@@ -441,7 +441,7 @@ function ModalHorario({ horario, idMedico, onClose }) {
 
         {/* Vista previa */}
         {durPreview !== null && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
             <p className="font-semibold flex items-center gap-2">
               <Clock size={14} />
               {form.dia_semana}: {form.hora_inicio} – {form.hora_fin} · {durPreview} minutos

@@ -67,7 +67,7 @@ export default function Medicos() {
       <PageHeader
         titulo="Gestión de Médicos"
         descripcion="Administra el personal médico del centro"
-        variant="blueDeep"
+        variant="emerald"
       >
         <KPI label="Total"        value={loading ? '···' : medicos.length} />
         <KPI label="Activos"      value={loading ? '···' : medicos.filter(m => m.activo).length} />
@@ -89,7 +89,7 @@ export default function Medicos() {
           <select
             value={filtroEsp}
             onChange={e => setFiltroEsp(e.target.value)}
-            className="px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
           >
             <option value="">Todas las especialidades</option>
             {especialidades.map(e => <option key={e} value={e}>{e}</option>)}
@@ -98,7 +98,7 @@ export default function Medicos() {
           <div className="flex gap-1 border border-gray-300 rounded-xl p-1">
             {[['todos', 'Todos'], ['activo', 'Activos'], ['inactivo', 'Inactivos']].map(([v, l]) => (
               <button key={v} onClick={() => setFiltroEstado(v)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${filtroEstado === v ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${filtroEstado === v ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
                 {l}
               </button>
             ))}
@@ -106,7 +106,7 @@ export default function Medicos() {
 
           <button
             onClick={() => setCreando(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg"
           >
             <Plus size={20} /> Nuevo médico
           </button>
@@ -117,7 +117,7 @@ export default function Medicos() {
       <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+            <thead className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Médico</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Especialidad</th>
@@ -134,10 +134,10 @@ export default function Medicos() {
               ) : filtered.length === 0 ? (
                 <EmptyRow colSpan={7} icon={Stethoscope} mensaje="No se encontraron médicos" />
               ) : filtered.map((m, idx) => (
-                <tr key={m.id_medico} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                <tr key={m.id_medico} className={`hover:bg-emerald-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${m.activo ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gray-400'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${m.activo ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gray-400'}`}>
                         {initials(m.nombre_completo)}
                       </div>
                       <div>
@@ -203,7 +203,7 @@ function ModalDetalle({ medico: m, onClose }) {
   return (
     <Modal titulo="Detalles del médico" onClose={onClose}>
       <div className="flex items-center gap-4 pb-5 border-b mb-5">
-        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg flex-shrink-0">
+        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg flex-shrink-0">
           {initials(m.nombre_completo)}
         </div>
         <div>
@@ -282,7 +282,7 @@ function ModalEditar({ medico, onClose }) {
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">Especialidad</label>
               <select name="especialidad" value={form.especialidad} onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
                 <option value="">Sin especialidad</option>
                 {ESPECIALIDADES.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
@@ -337,7 +337,7 @@ function ModalCrear({ onClose }) {
     <Modal titulo="Registrar médico" subtitulo="Se crea el perfil médico en la base de datos" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Aviso */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-800">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-2 text-sm text-emerald-800">
           <Info size={16} className="flex-shrink-0 mt-0.5" />
           <p>Se registra el perfil del médico. Para darle acceso al sistema, crea la cuenta en la sección <strong>Usuarios</strong>.</p>
         </div>
@@ -365,7 +365,7 @@ function ModalCrear({ onClose }) {
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">Especialidad *</label>
               <select name="especialidad" value={form.especialidad} onChange={handleChange} required
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
                 <option value="">Seleccionar</option>
                 {ESPECIALIDADES.map(e => <option key={e} value={e}>{e}</option>)}
               </select>

@@ -41,14 +41,14 @@ function Home() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-8 text-white">
+      <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-xl shadow-lg p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Panel de Administración</h1>
-            <p className="text-blue-100 text-lg">
+            <p className="text-slate-200 text-lg">
               Bienvenido, {usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Administrador'}
             </p>
-            <p className="text-sm text-blue-100 mt-2">
+            <p className="text-sm text-slate-200 mt-2">
               {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>

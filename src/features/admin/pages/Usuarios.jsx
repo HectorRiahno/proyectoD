@@ -85,7 +85,7 @@ export default function Usuarios() {
       <PageHeader
         titulo="Gestión de Usuarios"
         descripcion="Cuentas de acceso al sistema"
-        variant="blueDeep"
+        variant="slate"
       >
         <KPI label="Total"      value={loading ? '···' : usuarios.length} />
         <KPI label="Activos"    value={loading ? '···' : usuarios.filter(u => u.activo).length} />
@@ -102,8 +102,8 @@ export default function Usuarios() {
             onClick={() => setFilterRol(r.value)}
             className={`p-4 rounded-xl border transition text-left ${
               filterRol === r.value
-                ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                : 'bg-white border-gray-100 text-gray-700 hover:border-blue-300'
+                ? 'bg-slate-700 text-white border-slate-700 shadow-lg'
+                : 'bg-white border-gray-100 text-gray-700 hover:border-slate-300'
             }`}
           >
             <p className="text-xs opacity-80 mb-1">{r.label}</p>
@@ -122,7 +122,7 @@ export default function Usuarios() {
           />
           <button
             onClick={() => setCreando(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-xl hover:from-slate-800 hover:to-slate-900 transition font-semibold shadow-lg"
           >
             <UserPlus size={20} /> Invitar usuario
           </button>
@@ -133,7 +133,7 @@ export default function Usuarios() {
       <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+            <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Usuario</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Email</th>
@@ -150,11 +150,11 @@ export default function Usuarios() {
               ) : filtered.length === 0 ? (
                 <EmptyRow colSpan={7} icon={Users} mensaje="No se encontraron usuarios" />
               ) : filtered.map((u, idx) => (
-                <tr key={u.id_usuario} className={`hover:bg-blue-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                <tr key={u.id_usuario} className={`hover:bg-slate-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                   {/* Usuario */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${u.activo ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gray-400'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${u.activo ? 'bg-gradient-to-br from-slate-600 to-slate-800' : 'bg-gray-400'}`}>
                         {(u.nombre_completo ?? '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div>
@@ -253,7 +253,7 @@ function ModalCrear({ onClose }) {
     <Modal titulo="Invitar nuevo usuario" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Aviso */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-800">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-start gap-2 text-sm text-slate-800">
           <Info size={16} className="flex-shrink-0 mt-0.5" />
           <p>
             Se enviará un correo de invitación al usuario con un enlace para que
@@ -270,7 +270,7 @@ function ModalCrear({ onClose }) {
             <ShieldCheck size={16} /> Rol *
           </label>
           <select name="rol" value={form.rol} onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white">
             {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
@@ -295,7 +295,7 @@ function ModalCrear({ onClose }) {
             Cancelar
           </button>
           <button type="submit" disabled={submitting}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-xl hover:from-slate-800 hover:to-slate-900 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
             <Send size={16} />
             {submitting ? 'Enviando...' : 'Enviar invitación'}
           </button>
@@ -406,7 +406,7 @@ function ModalEditar({ usuario: u, onClose }) {
           </label>
           <select name="rol" value={form.rol} onChange={handleChange}
             disabled={editandoMiCuenta && rolInicial === 'admin'}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed">
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed">
             {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
           {editandoMiCuenta && rolInicial === 'admin' && (
@@ -425,7 +425,7 @@ function ModalEditar({ usuario: u, onClose }) {
         <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
           <input type="checkbox" name="activo" id="chk-activo-edit" checked={form.activo} onChange={handleChange}
             disabled={editandoMiCuenta}
-            className="w-5 h-5 rounded text-blue-600 disabled:opacity-50" />
+            className="w-5 h-5 rounded text-slate-700 disabled:opacity-50" />
           <label htmlFor="chk-activo-edit" className="text-sm font-medium text-gray-700">
             Cuenta activa (el usuario puede iniciar sesión)
             {editandoMiCuenta && <span className="text-xs text-gray-500 ml-2">— no puedes desactivar tu propia cuenta</span>}

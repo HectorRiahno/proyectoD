@@ -5,12 +5,18 @@ import {
   AlertCircle, Loader2, User, Calendar, X,
   Stethoscope, Activity, Pill, PlusCircle, MinusCircle,
   CheckCircle, FileText, Heart, ChevronDown, ChevronUp,
-  BookOpen, FlaskConical, Brain, Star
+  BookOpen, FlaskConical, Brain, Star, Paperclip,
 } from 'lucide-react';
 import {
   consultaService, citaService, pacienteService,
 } from '../../../services';
-import { useAuth, useConsultas } from '../../../hooks';
+import { useAuth, useConsultas, useAdjuntos } from '../../../hooks';
+import { FileUpload, AdjuntoList, AdjuntoViewer } from '../../../shared/components/ui';
+
+// Una consulta es "de exámenes" si el tipo asociado (vía cita) menciona
+// la palabra "examen". Cubre 'Toma de exámenes', 'Revisión de exámenes',
+// y cualquier futuro tipo que el admin agregue con esa palabra clave.
+const esConsultaExamenes = (c) => /examen/i.test(c?.tipo_consulta_nombre ?? '');
 
 // ─── Constantes médicas ────────────────────────────────────────────────────────
 const SISTEMAS = [
@@ -44,6 +50,7 @@ export default function Consultas() {
   const [detalle, setDetalle]     = useState(null);
   const [editando, setEditando]   = useState(null);
   const [eliminando, setEliminando] = useState(null);
+  const [adjuntando, setAdjuntando] = useState(null);
   const [creando, setCreando]     = useState(false);
   const [citaInicial, setCitaInicial] = useState(null);
 
@@ -150,7 +157,18 @@ export default function Consultas() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="font-bold text-gray-900">{c.paciente_nombre ?? '—'}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-gray-900">{c.paciente_nombre ?? '—'}</p>
+                        {c.tipo_consulta_nombre && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            esConsultaExamenes(c)
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {c.tipo_consulta_nombre}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 font-mono">
                         {c.paciente_documento} · HC {c.numero_historia}
                       </p>
@@ -174,6 +192,16 @@ export default function Consultas() {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => setDetalle(c)}     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver"><Eye size={17} /></button>
                   <button onClick={() => setEditando(c)}    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Editar"><Edit size={17} /></button>
+                  {/* Solo en consultas de tipo "examen": botón para adjuntar radiografías / resultados */}
+                  {esConsultaExamenes(c) && (
+                    <button
+                      onClick={() => setAdjuntando(c)}
+                      className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                      title="Adjuntar radiografías / resultados"
+                    >
+                      <Paperclip size={17} />
+                    </button>
+                  )}
                   <button onClick={() => setEliminando(c)}  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="Eliminar"><Trash2 size={17} /></button>
                 </div>
               </div>
@@ -184,6 +212,7 @@ export default function Consultas() {
 
       {detalle    && <ModalDetalle   consulta={detalle}   onClose={() => setDetalle(null)} />}
       {editando   && <ModalEditar    consulta={editando}  onClose={() => { setEditando(null); cargar(); }} />}
+      {adjuntando && <ModalAdjuntos  consulta={adjuntando} onClose={() => setAdjuntando(null)} />}
       {creando    && <ModalCrear     citaInicial={citaInicial} onClose={() => { setCreando(false); setCitaInicial(null); cargar(); }} />}
       {eliminando && <ModalEliminar  consulta={eliminando} onConfirm={async () => {
         const ok = await eliminarConfirmado(eliminando);
@@ -193,7 +222,7 @@ export default function Consultas() {
   );
 }
 
-// ─── Modal: Ver detalles ───────────────────────────────────────────────────────
+// ─── Modal: Ver detalles (información completa de la consulta) ─────────────────
 function ModalDetalle({ consulta: c, onClose }) {
   const [paciente, setPaciente]         = useState(null);
   const [diagnosticos, setDiagnosticos] = useState([]);
@@ -355,6 +384,101 @@ function ModalDetalle({ consulta: c, onClose }) {
           </Seccion>
         )}
       </div>
+    </Modal>
+  );
+}
+
+// ─── Modal: Adjuntos (radiografías / resultados) ──────────────────────────────
+// Solo se monta para consultas de tipo "examen". El médico puede subir
+// imágenes (JPG/PNG/WebP/GIF) o PDFs hasta 10 MB cada uno (límites en
+// adjuntoService.TIPOS_PERMITIDOS / TAMANIO_MAX_BYTES).
+function ModalAdjuntos({ consulta: c, onClose }) {
+  const { adjuntos, loading, error, subir, eliminar, setError } = useAdjuntos(c.id_consulta);
+  const [visor, setVisor] = useState(null);
+  const [subiendo, setSubiendo] = useState(false);
+
+  const handleSubir = async (file, descripcion) => {
+    setSubiendo(true);
+    try {
+      await subir(file, descripcion);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const handleEliminar = async (a) => {
+    if (!window.confirm(`¿Eliminar "${a.nombre_archivo}"? No se podrá recuperar.`)) return;
+    try {
+      await eliminar(a);
+    } catch (err) {
+      // El service ya formatea el error; setError viene de useAsyncResource
+      setError?.(err.message);
+    }
+  };
+
+  return (
+    <Modal
+      titulo="Adjuntos de la consulta"
+      subtitulo={`${c.paciente_nombre} · ${c.tipo_consulta_nombre ?? 'Exámenes'} · ${c.fecha_consulta?.slice(0, 10)}`}
+      onClose={onClose}
+      wide
+    >
+      <div className="space-y-4">
+        {/* Aviso contextual */}
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-start gap-2">
+          <FlaskConical size={16} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Consulta de exámenes</p>
+            <p className="text-xs mt-0.5">
+              Sube las radiografías, ecografías, resultados de laboratorio o
+              cualquier documento clínico relacionado. Formatos permitidos:
+              JPG, PNG, WebP, GIF y PDF. Máximo 10 MB por archivo.
+            </p>
+          </div>
+        </div>
+
+        {/* Drop-zone + upload */}
+        <FileUpload
+          onUpload={handleSubir}
+          disabled={subiendo}
+          placeholder="Arrastra radiografías o PDFs aquí, o haz clic para seleccionar"
+        />
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-start gap-2">
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError?.('')}><X size={14} /></button>
+          </div>
+        )}
+
+        {/* Listado de los ya subidos */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+              Archivos adjuntos {adjuntos.length > 0 && <span className="text-gray-400 font-normal normal-case">({adjuntos.length})</span>}
+            </h3>
+          </div>
+          <AdjuntoList
+            adjuntos={adjuntos}
+            loading={loading}
+            onPreview={setVisor}
+            onDelete={handleEliminar}
+            emptyMessage="Aún no hay archivos. Sube el primero arriba."
+          />
+        </div>
+
+        {/* Cerrar */}
+        <div className="flex justify-end pt-3 border-t border-gray-200">
+          <button onClick={onClose}
+            className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-semibold shadow-sm">
+            Listo
+          </button>
+        </div>
+      </div>
+
+      {/* Visor full-screen para ver imagen/PDF */}
+      {visor && <AdjuntoViewer adjunto={visor} onClose={() => setVisor(null)} />}
     </Modal>
   );
 }
@@ -945,6 +1069,11 @@ function ModalCrear({ citaInicial = null, onClose }) {
 }
 
 // ─── Modal: Editar consulta ────────────────────────────────────────────────────
+// Misma estructura que ModalCrear (Atender cita): 4 tabs completas con
+// antecedentes del paciente, revisión por sistemas en grid, diagnósticos
+// con CIE-10 + categoría, plan completo. El paciente está fijo (no se
+// puede cambiar al editar) — se muestra como banner read-only en lugar
+// del selector.
 function ModalEditar({ consulta, onClose }) {
   const [tab, setTab]   = useState(0);
   const [form, setForm] = useState({
@@ -963,19 +1092,30 @@ function ModalEditar({ consulta, onClose }) {
     presion_sistolica: '', presion_diastolica: '', frecuencia_cardiaca: '',
     frecuencia_respiratoria: '', temperatura: '', saturacion_oxigeno: '', peso: '', talla: '',
   });
-  const [diagnosticos, setDiag] = useState([]);
-  const [tiposDx, setTiposDx]   = useState([]);
-  const [loadingData, setLoadingData] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+  const [diagnosticos, setDiag]           = useState([]);
+  const [tiposDx, setTiposDx]             = useState([]);
+  const [antecedentes, setAntecedentes]   = useState(null);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [historial, setHistorial]         = useState([]);
+  const [loadingHist, setLoadingHist]     = useState(false);
+  const [loadingData, setLoadingData]     = useState(true);
+  const [saving, setSaving]               = useState(false);
+  const [error, setError]                 = useState('');
+  const [visorAdjunto, setVisorAdjunto]   = useState(null);
 
-  // Cargar signos y diagnósticos existentes
+  // Adjuntos (uploads inmediatos — la consulta ya existe).
+  const {
+    adjuntos, loading: loadingAdj, subir: subirAdj, eliminar: eliminarAdj,
+  } = useAdjuntos(consulta.id_consulta);
+
+  // Carga inicial: signos, diagnósticos, tipos dx y antecedentes del paciente
   useEffect(() => {
     Promise.all([
       consultaService.getUltimoSignoConsulta(consulta.id_consulta),
       consultaService.getDiagnosticosConsultaSimple(consulta.id_consulta),
       consultaService.getTiposDiagnostico(),
-    ]).then(([sv, d, t]) => {
+      pacienteService.getAntecedentes(consulta.id_paciente).catch(() => null),
+    ]).then(([sv, d, t, ant]) => {
       if (sv) {
         setSignos({
           id_signos:               sv.id_signos,
@@ -999,19 +1139,35 @@ function ModalEditar({ consulta, onClose }) {
         es_principal:        !!x.es_principal,
       })));
       setTiposDx(t ?? []);
+      setAntecedentes(ant);
       setLoadingData(false);
     });
-  }, [consulta.id_consulta]);
+  }, [consulta.id_consulta, consulta.id_paciente]);
 
-  const handleChange  = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleSignos  = e => setSignos(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleDx      = (idx, field, val) =>
+  const handleForm   = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleSignos = e => setSignos(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleDx     = (idx, field, val) =>
     setDiag(p => p.map((d, i) => i === idx ? { ...d, [field]: val } : d));
   const addDx    = () => setDiag(p => [...p, {
     id_diagnostico: null, codigo_cie10: '', descripcion: '',
-    tipo_dx: 'impresion', prioridad: p.length + 1, id_tipo_diagnostico: '', es_principal: p.length === 0,
+    tipo_dx: 'impresion', prioridad: p.length + 1, id_tipo_diagnostico: '',
+    es_principal: p.length === 0,
   }]);
   const removeDx = (idx) => setDiag(p => p.filter((_, i) => i !== idx));
+
+  const toggleHistorial = async () => {
+    if (!historialOpen && historial.length === 0) {
+      setLoadingHist(true);
+      try {
+        const data = await consultaService.getConsultasPacienteResumen(consulta.id_paciente, 5);
+        // Excluir la consulta actual del historial (solo mostrar las anteriores)
+        setHistorial((data ?? []).filter(h => h.id_consulta !== consulta.id_consulta));
+      } finally {
+        setLoadingHist(false);
+      }
+    }
+    setHistorialOpen(p => !p);
+  };
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -1032,11 +1188,12 @@ function ModalEditar({ consulta, onClose }) {
     }
   };
 
-  const TABS_E = [
-    { id: 0, label: 'Anamnesis' },
-    { id: 1, label: 'Examen + Signos' },
-    { id: 2, label: 'Diagnóstico' },
-    { id: 3, label: 'Plan' },
+  const TABS = [
+    { id: 0, label: 'Anamnesis',   icon: <BookOpen size={15} /> },
+    { id: 1, label: 'Examen',      icon: <Stethoscope size={15} /> },
+    { id: 2, label: 'Diagnóstico', icon: <ClipboardList size={15} /> },
+    { id: 3, label: 'Plan',        icon: <Brain size={15} /> },
+    { id: 4, label: 'Adjuntos',    icon: <Paperclip size={15} /> },
   ];
 
   if (loadingData) {
@@ -1051,36 +1208,142 @@ function ModalEditar({ consulta, onClose }) {
   }
 
   return (
-    <Modal titulo="Editar consulta" subtitulo={`${consulta.paciente_nombre} · ${consulta.fecha_consulta?.slice(0,10)}`} onClose={onClose} wide>
+    <Modal
+      titulo="Editar consulta"
+      subtitulo="Actualiza la información de la atención registrada"
+      onClose={onClose}
+      wide
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Info sólo lectura */}
-        <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded-xl">
-          <CampoReadOnly label="Paciente" value={consulta.paciente_nombre} />
-          <CampoReadOnly label="Historia" value={consulta.numero_historia} />
-          <CampoReadOnly label="Fecha"    value={consulta.fecha_consulta?.slice(0, 10)} />
+
+        {/* Banner paciente (read-only — no se puede cambiar al editar) */}
+        <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-300 flex items-center gap-3">
+          <div className="bg-emerald-600 rounded-lg p-2">
+            <User size={18} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs font-bold text-emerald-700 uppercase">Paciente</p>
+            <p className="text-sm font-semibold text-gray-900">{consulta.paciente_nombre}</p>
+            <p className="text-xs text-emerald-700 mt-0.5">
+              {consulta.paciente_documento} · HC {consulta.numero_historia} · Consulta #{consulta.id_consulta} · {consulta.fecha_consulta?.slice(0, 10)}
+            </p>
+          </div>
+          <CheckCircle size={20} className="text-emerald-600 flex-shrink-0" />
         </div>
 
-        {/* Tabs de edición */}
+        {/* Tabs de navegación */}
         <div className="flex border-b border-gray-200">
-          {TABS_E.map(t => (
-            <button key={t.id} type="button" onClick={() => setTab(t.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
-                tab === t.id ? 'border-emerald-600 text-emerald-700 bg-emerald-50' : 'border-transparent text-gray-600 hover:text-emerald-600'
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px ${
+                tab === t.id
+                  ? 'border-emerald-600 text-emerald-700 bg-emerald-50'
+                  : 'border-transparent text-gray-600 hover:text-emerald-600 hover:border-emerald-300'
               }`}
-            >{t.label}</button>
+            >
+              {t.icon} {t.label}
+            </button>
           ))}
         </div>
 
+        {/* ── TAB 0: ANAMNESIS ──────────────────────────────────────────────── */}
         {tab === 0 && (
-          <div className="space-y-3">
-            <Textarea label="Motivo de consulta *" name="motivo_consulta" value={form.motivo_consulta} onChange={handleChange} rows={2} required />
-            <Textarea label="Enfermedad actual"     name="enfermedad_actual"  value={form.enfermedad_actual}  onChange={handleChange} rows={4} placeholder="Evolución y características de la enfermedad..." />
-            <Textarea label="Revisión por sistemas" name="revision_sistemas"  value={form.revision_sistemas}  onChange={handleChange} rows={4} placeholder="Sistema: hallazgo (ej: Respiratorio: tos seca 3 días)" />
+          <div className="space-y-4">
+            {/* Antecedentes del paciente */}
+            {antecedentes && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                <p className="text-xs font-bold text-amber-700 uppercase">Antecedentes de {antecedentes.nombre_completo}</p>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <span className="text-gray-700"><strong className="text-red-600">Sangre:</strong> {antecedentes.tipo_sangre || '—'}</span>
+                  <span className="text-gray-700"><strong>Edad:</strong> {antecedentes.edad ?? '—'} años</span>
+                  <span className="text-gray-700"><strong>Estado civil:</strong> {antecedentes.estado_civil || '—'}</span>
+                </div>
+                {antecedentes.alergias && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+                    <strong>⚠ Alergias:</strong> {antecedentes.alergias}
+                  </p>
+                )}
+                {antecedentes.enfermedades_cronicas && (
+                  <p className="text-sm text-gray-700">
+                    <strong>Enfermedades crónicas:</strong> {antecedentes.enfermedades_cronicas}
+                  </p>
+                )}
+                <button type="button" onClick={toggleHistorial}
+                  className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 font-medium mt-1">
+                  <BookOpen size={13} />
+                  {historialOpen ? 'Ocultar historial' : 'Ver historial de consultas anteriores'}
+                  {historialOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+                {historialOpen && (
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                    {loadingHist ? (
+                      <p className="text-xs text-gray-400">Cargando...</p>
+                    ) : historial.length === 0 ? (
+                      <p className="text-xs text-gray-400">Sin consultas anteriores registradas.</p>
+                    ) : historial.map(h => (
+                      <div key={h.id_consulta} className="bg-white rounded-lg p-2 border border-gray-100 text-xs">
+                        <p className="font-semibold text-gray-700">{h.fecha_consulta?.slice(0,10)} — {h.motivo_consulta}</p>
+                        {h.impresion_diagnostica && <p className="text-emerald-700">Dx: {h.impresion_diagnostica}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Motivo y enfermedad actual */}
+            <Seccion titulo="Motivo y enfermedad actual" color="emerald">
+              <div className="space-y-3">
+                <Textarea label="Motivo de consulta *" name="motivo_consulta" value={form.motivo_consulta} onChange={handleForm}
+                  placeholder="¿Por qué consulta el paciente hoy?" rows={2} required />
+                <Textarea label="Enfermedad actual" name="enfermedad_actual" value={form.enfermedad_actual} onChange={handleForm}
+                  placeholder="Describe la evolución de la enfermedad: inicio, duración, características, factores agravantes / atenuantes, tratamientos previos..." rows={4} />
+              </div>
+            </Seccion>
+
+            {/* Revisión por sistemas */}
+            <Seccion titulo="Revisión por sistemas" color="orange">
+              <p className="text-xs text-gray-500 mb-3">Síntomas adicionales que el paciente refiere, no relacionados directamente con la enfermedad actual.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {SISTEMAS.map(sistema => (
+                  <div key={sistema} className="flex items-start gap-2 p-2 bg-white border border-gray-200 rounded-lg">
+                    <span className="text-xs font-semibold text-gray-500 w-32 flex-shrink-0 pt-1">{sistema}</span>
+                    <input
+                      type="text"
+                      placeholder="Síntomas o 'Negativo'"
+                      onChange={e => {
+                        const sistemas = form.revision_sistemas ? form.revision_sistemas.split('\n') : [];
+                        const idx = sistemas.findIndex(l => l.startsWith(sistema + ':'));
+                        const nuevaLinea = e.target.value.trim() ? `${sistema}: ${e.target.value}` : '';
+                        if (idx >= 0) {
+                          if (nuevaLinea) sistemas[idx] = nuevaLinea; else sistemas.splice(idx, 1);
+                        } else if (nuevaLinea) {
+                          sistemas.push(nuevaLinea);
+                        }
+                        setForm(p => ({ ...p, revision_sistemas: sistemas.filter(Boolean).join('\n') }));
+                      }}
+                      defaultValue={form.revision_sistemas?.split('\n').find(l => l.startsWith(sistema + ':'))?.replace(sistema + ': ', '') ?? ''}
+                      className="flex-1 text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                  </div>
+                ))}
+              </div>
+              {form.revision_sistemas && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Vista previa: {form.revision_sistemas.split('\n').filter(Boolean).length} sistema(s) con hallazgos
+                </p>
+              )}
+            </Seccion>
           </div>
         )}
+
+        {/* ── TAB 1: EXAMEN ─────────────────────────────────────────────────── */}
         {tab === 1 && (
-          <div className="space-y-3">
-            {/* Signos vitales editables */}
+          <div className="space-y-4">
+            {/* Signos vitales */}
             <Seccion titulo="Signos vitales" color="red">
               <div className="grid grid-cols-4 gap-3">
                 {[
@@ -1104,23 +1367,41 @@ function ModalEditar({ consulta, onClose }) {
                 ))}
               </div>
             </Seccion>
-            <Textarea label="Examen físico"                name="examen_fisico"            value={form.examen_fisico}            onChange={handleChange} rows={4} />
-            <Textarea label="Exámenes complementarios"     name="examenes_complementarios" value={form.examenes_complementarios} onChange={handleChange} rows={4} placeholder="Resultados de laboratorio, imágenes, otros..." />
-            <Textarea label="Impresión diagnóstica"        name="impresion_diagnostica"    value={form.impresion_diagnostica}    onChange={handleChange} rows={2} highlight />
+
+            {/* Examen físico */}
+            <Seccion titulo="Examen físico" color="emerald">
+              <Textarea name="examen_fisico" value={form.examen_fisico} onChange={handleForm}
+                placeholder="Descripción del examen físico por sistemas: cardiopulmonar, abdomen, extremidades, neurológico, etc." rows={5} />
+            </Seccion>
+
+            {/* Exámenes complementarios */}
+            <Seccion titulo="Exámenes complementarios" color="blue">
+              <p className="text-xs text-gray-500 mb-2">
+                Describe los exámenes solicitados o resultados de laboratorio / imágenes.
+              </p>
+              <Textarea name="examenes_complementarios" value={form.examenes_complementarios} onChange={handleForm}
+                placeholder="Ej:&#10;- Hemograma: dentro de rangos normales&#10;- Glicemia: 180 mg/dL (elevada)&#10;- Rx tórax: sin consolidaciones&#10;- ECG: ritmo sinusal, sin alteraciones" rows={6} />
+            </Seccion>
           </div>
         )}
+
+        {/* ── TAB 2: DIAGNÓSTICO ────────────────────────────────────────────── */}
         {tab === 2 && (
-          <div className="space-y-3">
-            <Seccion titulo={`Diagnósticos (${diagnosticos.length})`} color="purple">
+          <div className="space-y-4">
+            <Seccion titulo="Diagnósticos" color="purple">
+              <p className="text-xs text-gray-500 mb-3">
+                Define prioridad (1 = principal), tipo y código CIE-10 de cada diagnóstico.
+              </p>
               <div className="space-y-3">
                 {diagnosticos.length === 0 && (
-                  <p className="text-sm text-gray-400">No hay diagnósticos. Agrega uno abajo.</p>
+                  <p className="text-sm text-gray-400 italic">Sin diagnósticos. Agrega uno abajo.</p>
                 )}
                 {diagnosticos.map((d, idx) => (
-                  <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                  <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+                    {/* Cabecera del diagnóstico */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">
+                        <span className="w-7 h-7 rounded-full bg-purple-600 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">
                           {idx + 1}
                         </span>
                         {idx === 0 && (
@@ -1133,30 +1414,49 @@ function ModalEditar({ consulta, onClose }) {
                         <MinusCircle size={18} />
                       </button>
                     </div>
-                    <input value={d.descripcion} onChange={e => handleDx(idx, 'descripcion', e.target.value)}
-                      placeholder="Descripción diagnóstica *"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                    <div className="grid grid-cols-3 gap-2">
-                      <input value={d.codigo_cie10} onChange={e => handleDx(idx, 'codigo_cie10', e.target.value)}
-                        placeholder="CIE-10"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono" />
-                      <select value={d.tipo_dx} onChange={e => handleDx(idx, 'tipo_dx', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                        <option value="impresion">Impresión</option>
-                        <option value="confirmado_nuevo">Confirmado nuevo</option>
-                        <option value="confirmado_repetido">Confirmado repetido</option>
-                      </select>
-                      <select value={d.prioridad} onChange={e => handleDx(idx, 'prioridad', Number(e.target.value))}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                        {[1,2,3,4,5].map(n => <option key={n} value={n}>Prioridad {n}</option>)}
-                      </select>
+
+                    {/* Descripción */}
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">Descripción diagnóstica *</label>
+                      <input value={d.descripcion} onChange={e => handleDx(idx, 'descripcion', e.target.value)}
+                        placeholder="Ej: Diabetes mellitus tipo 2 sin complicaciones"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400" />
                     </div>
+
+                    {/* Fila: CIE-10 + Tipo + Prioridad */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Código CIE-10</label>
+                        <input value={d.codigo_cie10} onChange={e => handleDx(idx, 'codigo_cie10', e.target.value)}
+                          placeholder="E11.9"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Tipo de diagnóstico</label>
+                        <select value={d.tipo_dx} onChange={e => handleDx(idx, 'tipo_dx', e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          {TIPOS_DX.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Prioridad</label>
+                        <select value={d.prioridad} onChange={e => handleDx(idx, 'prioridad', Number(e.target.value))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          {PRIORIDADES.map(p => <option key={p.v} value={p.v}>{p.l}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Tipo categórico (tabla tipo_diagnostico) */}
                     {tiposDx.length > 0 && (
-                      <select value={d.id_tipo_diagnostico} onChange={e => handleDx(idx, 'id_tipo_diagnostico', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                        <option value="">Categoría (opcional)</option>
-                        {tiposDx.map(t => <option key={t.id_tipo_diagnostico} value={t.id_tipo_diagnostico}>{t.nombre}</option>)}
-                      </select>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Categoría (tabla tipo_diagnostico)</label>
+                        <select value={d.id_tipo_diagnostico} onChange={e => handleDx(idx, 'id_tipo_diagnostico', e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          <option value="">Sin categoría</option>
+                          {tiposDx.map(t => <option key={t.id_tipo_diagnostico} value={t.id_tipo_diagnostico}>{t.nombre}</option>)}
+                        </select>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1166,19 +1466,99 @@ function ModalEditar({ consulta, onClose }) {
                 </button>
               </div>
             </Seccion>
+
+            {/* Impresión diagnóstica libre */}
+            <Seccion titulo="Impresión diagnóstica (texto libre)" color="emerald">
+              <Textarea name="impresion_diagnostica" value={form.impresion_diagnostica} onChange={handleForm}
+                placeholder="Resumen diagnóstico en texto libre..." rows={3} highlight />
+            </Seccion>
           </div>
         )}
+
+        {/* ── TAB 3: PLAN Y ANÁLISIS ────────────────────────────────────────── */}
         {tab === 3 && (
-          <div className="space-y-3">
-            <Textarea label="Análisis clínico del médico" name="analisis_clinico"  value={form.analisis_clinico}  onChange={handleChange} rows={4} placeholder="Razonamiento clínico y justificación del plan..." />
-            <Textarea label="Plan de tratamiento"         name="plan_tratamiento"  value={form.plan_tratamiento}  onChange={handleChange} rows={4} />
-            <Textarea label="Observaciones"               name="observaciones"     value={form.observaciones}     onChange={handleChange} rows={2} />
+          <div className="space-y-4">
+            <Seccion titulo="Análisis clínico del médico" color="blue">
+              <p className="text-xs text-gray-500 mb-2">
+                Razonamiento clínico: correlación entre síntomas, examen, diagnóstico y plan.
+                "¿Por qué este diagnóstico? ¿Por qué este tratamiento?"
+              </p>
+              <Textarea name="analisis_clinico" value={form.analisis_clinico} onChange={handleForm}
+                placeholder="Análisis y razonamiento clínico del médico tratante. Explica el proceso diagnóstico y la justificación del plan de manejo..." rows={5} />
+            </Seccion>
+
+            <Seccion titulo="Plan de tratamiento" color="emerald">
+              <Textarea name="plan_tratamiento" value={form.plan_tratamiento} onChange={handleForm}
+                placeholder="Medicamentos, dosis, duración&#10;Procedimientos indicados&#10;Interconsultas&#10;Recomendaciones no farmacológicas&#10;Actividad física / Dieta&#10;Próxima cita..." rows={6} />
+            </Seccion>
+
+            <Seccion titulo="Observaciones finales" color="orange">
+              <Textarea name="observaciones" value={form.observaciones} onChange={handleForm}
+                placeholder="Notas adicionales, incapacidad médica, advertencias especiales..." rows={3} />
+            </Seccion>
           </div>
         )}
+
+        {/* ── TAB 4: ADJUNTOS (uploads inmediatos sobre la consulta existente) */}
+        {tab === 4 && (
+          <div className="space-y-4">
+            <Seccion titulo="Resultados, radiografías y otros archivos" color="purple">
+              <p className="text-xs text-gray-500 mb-3">
+                Sube PDFs (resultados de laboratorio) o imágenes (radiografías,
+                ecografías, fotografías clínicas). Los archivos se guardan
+                inmediatamente — no necesitas hacer clic en "Guardar cambios".
+              </p>
+
+              <FileUpload
+                onUpload={(file, descripcion) => subirAdj(file, descripcion)}
+                placeholder="Arrastra archivos aquí o haz clic para seleccionar (PDF, imágenes)"
+              />
+
+              <div className="mt-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Archivos adjuntos {adjuntos.length > 0 && (
+                    <span className="text-gray-400 font-normal normal-case">({adjuntos.length})</span>
+                  )}
+                </p>
+                <AdjuntoList
+                  adjuntos={adjuntos}
+                  loading={loadingAdj}
+                  onPreview={setVisorAdjunto}
+                  onDelete={async (a) => {
+                    if (!window.confirm(`¿Eliminar "${a.nombre_archivo}"? No se podrá recuperar.`)) return;
+                    try { await eliminarAdj(a); }
+                    catch (err) { setError(err.message); }
+                  }}
+                  emptyMessage="Aún no hay archivos adjuntos en esta consulta."
+                />
+              </div>
+            </Seccion>
+          </div>
+        )}
+
+        {/* Navegación entre tabs */}
+        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+          <button type="button" onClick={() => setTab(t => Math.max(0, t - 1))} disabled={tab === 0}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30 transition">
+            ← Anterior
+          </button>
+          <span className="text-xs text-gray-400">{tab + 1} / {TABS.length}</span>
+          {tab < TABS.length - 1 ? (
+            <button type="button" onClick={() => setTab(t => t + 1)}
+              className="px-4 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-800 transition">
+              Siguiente →
+            </button>
+          ) : (
+            <div />
+          )}
+        </div>
 
         {error && <ErrorBox msg={error} />}
         <BotonesForm onCancel={onClose} saving={saving} labelSave="Guardar cambios" color="emerald" />
       </form>
+
+      {/* Visor full-screen para previsualizar adjuntos */}
+      {visorAdjunto && <AdjuntoViewer adjunto={visorAdjunto} onClose={() => setVisorAdjunto(null)} />}
     </Modal>
   );
 }
