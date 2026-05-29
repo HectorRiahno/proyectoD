@@ -1,1 +1,65 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
+/* =====================================================================
+   Sistema de diseño — Hospitalis Pro
+   Tokens base (color, tipografía, sombras, motion). Tailwind v4 los
+   expone como utilidades: bg-brand-600, text-ink-900, font-display, etc.
+   ===================================================================== */
+@theme {
+  --font-sans:    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Instrument Serif", "Inter", ui-serif, serif;
+  --font-mono:    ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* Marca — azul médico refinado, ni clínico-pálido ni saturado react-blue */
+  --color-brand-50:  #EEF3FF;
+  --color-brand-100: #DDE7FE;
+  --color-brand-200: #BACFFD;
+  --color-brand-300: #8AAEFB;
+  --color-brand-400: #5685F4;
+  --color-brand-500: #2E5FE6;
+  --color-brand-600: #1E4FD8;
+  --color-brand-700: #1A41B5;
+  --color-brand-800: #1A398F;
+  --color-brand-900: #11225A;
+
+  /* Tinta — grises con leve tono frío (premium, no apaga la marca) */
+  --color-ink-900: #0B1220;
+  --color-ink-800: #161E33;
+  --color-ink-700: #313B52;
+  --color-ink-500: #5B6478;
+  --color-ink-300: #9099AC;
+  --color-ink-100: #C8CEDB;
+
+  /* Superficies */
+  --color-surface: #F7F8FB;
+  --color-line:    #E4E8EF;
+
+  /* Acento sutil para detalles médicos (verde-teal apagado) */
+  --color-accent-300: #6EE7D7;
+  --color-accent-500: #06B6A4;
+}
+
+@layer base {
+  html, body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+}
+
+/* Motion sutil — usado por el Login y por componentes futuros */
+@keyframes hp-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hp-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-24px, 28px) scale(1.06); }
+}
+@keyframes hp-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

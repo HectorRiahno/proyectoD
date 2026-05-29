@@ -175,15 +175,21 @@ GROUP BY m.id_medico, p.id_persona;
 
 -- ---------------------------------------------------------------------
 -- vw_admin_pacientes: lista de pacientes con persona y métricas
+--
+-- NOTA: tipo_sangre / alergias / enfermedades_cronicas viven ahora en
+-- historial_clinico (ver migration-historial-clinico.sql). Esta vista
+-- las trae con LEFT JOIN para preservar el contrato del frontend.
 -- ---------------------------------------------------------------------
 DROP VIEW IF EXISTS vw_admin_pacientes CASCADE;
 CREATE VIEW vw_admin_pacientes AS
 SELECT
     pa.id_paciente,
     pa.numero_historia,
-    pa.tipo_sangre,
-    pa.alergias,
+    h.tipo_sangre,
+    h.alergias,
+    h.enfermedades_cronicas,
     pa.contacto_emergencia,
+    pa.telefono_emergencia,
     pa.ocupacion,
     pa.estado_civil,
     pe.id_persona,
@@ -202,8 +208,10 @@ SELECT
     MAX(c.fecha_cita) FILTER (WHERE c.estado = 'completada')             AS ultima_visita
 FROM paciente pa
 JOIN persona pe ON pe.id_persona = pa.id_persona
-LEFT JOIN cita c ON c.id_paciente = pa.id_paciente
-GROUP BY pa.id_paciente, pe.id_persona;
+LEFT JOIN historial_clinico h ON h.id_paciente = pa.id_paciente
+LEFT JOIN cita c ON c.id_paciente = pa.id_paciente AND c.deleted_at IS NULL
+WHERE pa.deleted_at IS NULL
+GROUP BY pa.id_paciente, pe.id_persona, h.tipo_sangre, h.alergias, h.enfermedades_cronicas;
 
 -- ---------------------------------------------------------------------
 -- vw_admin_citas: todas las citas con datos de paciente y médico
@@ -312,8 +320,8 @@ CREATE VIEW vw_medico_mis_pacientes AS
 SELECT DISTINCT
     pa.id_paciente,
     pa.numero_historia,
-    pa.tipo_sangre,
-    pa.alergias,
+    h.tipo_sangre,
+    h.alergias,
     pa.contacto_emergencia,
     pa.ocupacion,
     pa.estado_civil,
@@ -329,11 +337,14 @@ SELECT DISTINCT
        FROM cita c2
        WHERE c2.id_paciente = pa.id_paciente
          AND c2.id_medico   = mi_id_medico()
+         AND c2.deleted_at IS NULL
     ) AS ultima_cita_conmigo
 FROM paciente pa
 JOIN persona pp ON pp.id_persona = pa.id_persona
-JOIN cita    c  ON c.id_paciente = pa.id_paciente
-WHERE c.id_medico = mi_id_medico();
+LEFT JOIN historial_clinico h ON h.id_paciente = pa.id_paciente
+JOIN cita    c  ON c.id_paciente = pa.id_paciente AND c.deleted_at IS NULL
+WHERE c.id_medico = mi_id_medico()
+  AND pa.deleted_at IS NULL;
 
 -- ---------------------------------------------------------------------
 -- vw_medico_consultas: consultas médicas realizadas por el médico actual
@@ -504,8 +515,9 @@ CREATE VIEW vw_paciente_mi_perfil AS
 SELECT
     pa.id_paciente,
     pa.numero_historia,
-    pa.tipo_sangre,
-    pa.alergias,
+    h.tipo_sangre,
+    h.alergias,
+    h.enfermedades_cronicas,
     pa.contacto_emergencia,
     pa.ocupacion,
     pa.estado_civil,
@@ -522,6 +534,7 @@ SELECT
     pp.direccion
 FROM paciente pa
 JOIN persona pp ON pp.id_persona = pa.id_persona
+LEFT JOIN historial_clinico h ON h.id_paciente = pa.id_paciente
 WHERE pa.id_paciente = mi_id_paciente();
 
 -- ---------------------------------------------------------------------
@@ -550,13 +563,17 @@ WHERE c.id_paciente = mi_id_paciente()
 ORDER BY c.fecha_cita DESC;
 
 -- ---------------------------------------------------------------------
--- vw_paciente_proximas_citas: solo las próximas
+-- vw_paciente_proximas_citas: solo las próximas (abiertas + de hoy en adelante)
+-- Una cita ya completada/cancelada/no_asistio NO es próxima aunque su
+-- fecha sea futura — son históricas. Filtramos por estado abierto para
+-- que no se cuele en el dashboard del paciente.
 -- ---------------------------------------------------------------------
 DROP VIEW IF EXISTS vw_paciente_proximas_citas CASCADE;
 CREATE VIEW vw_paciente_proximas_citas AS
 SELECT *
 FROM vw_paciente_mis_citas
 WHERE fecha >= CURRENT_DATE
+  AND estado IN ('programada', 'confirmada', 'en_curso')
 ORDER BY fecha ASC, hora ASC;
 
 -- ---------------------------------------------------------------------

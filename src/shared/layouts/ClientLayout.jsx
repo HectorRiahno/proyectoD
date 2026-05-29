@@ -11,7 +11,7 @@ export default function ClientLayout({ user }) {
       </div>
 
       <div className="pt-16">
-        <div className="fixed left-0 top-16 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-y-auto z-40">
+        <div className="fixed left-0 top-16 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-y-auto overflow-x-hidden z-40">
           <ClientSidebar />
         </div>
 

@@ -8,8 +8,10 @@ import { useAuth, useUsuarios } from '../../../hooks';
 import { inviteUser, usuarioService } from '../../../services';
 import { normalizeRoleName } from '../../../config/roles';
 import {
-  Modal, PageHeader, KPI, Input, ErrorBox, ErrorBanner,
+  Modal, PageHeader, KPI, Input, ErrorBox, ErrorBanner, SuccessBanner,
   BotonesForm, SearchBar, LoadingRow, EmptyRow,
+  Toolbar, AccentButton, TableShell, Thead, Tbody, Tr,
+  IconButton, ActionGroup, Avatar,
 } from '../../../shared/components/ui';
 
 // Documento sintético generado por el trigger provision_user_from_auth.
@@ -25,12 +27,19 @@ const ROLES = [
   { value: 'cliente',   label: 'Cliente / Paciente' },
 ];
 
-const rolColor = (rol) => ({
-  admin:     'bg-red-100 text-red-700',
-  medico:    'bg-blue-100 text-blue-700',
-  asistente: 'bg-purple-100 text-purple-700',
-  cliente:   'bg-green-100 text-green-700',
-}[rol] ?? 'bg-gray-100 text-gray-700');
+const rolBadge = (rol) => ({
+  admin:     { cls: 'bg-red-50 text-red-700 border-red-100',         dot: 'bg-red-500' },
+  medico:    { cls: 'bg-violet-50 text-violet-700 border-violet-100', dot: 'bg-violet-500' },
+  asistente: { cls: 'bg-indigo-50 text-indigo-700 border-indigo-100', dot: 'bg-indigo-500' },
+  cliente:   { cls: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500' },
+}[rol] ?? { cls: 'bg-surface text-ink-700 border-line', dot: 'bg-ink-300' });
+
+const rolAvatarTone = (rol) => ({
+  admin:     'rose',
+  medico:    'violet',
+  asistente: 'indigo',
+  cliente:   'emerald',
+}[rol] ?? 'ink');
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Usuarios() {
@@ -85,128 +94,116 @@ export default function Usuarios() {
       <PageHeader
         titulo="Gestión de Usuarios"
         descripcion="Cuentas de acceso al sistema"
-        variant="slate"
+        eyebrow="Usuarios"
+        icon={<ShieldCheck size={11} strokeWidth={2.25} />}
+        variant="fuchsia"
       >
         <KPI label="Total"      value={loading ? '···' : usuarios.length} />
-        <KPI label="Activos"    value={loading ? '···' : usuarios.filter(u => u.activo).length} />
-        <KPI label="Inactivos"  value={loading ? '···' : usuarios.filter(u => !u.activo).length} />
+        <KPI label="Activos"    value={loading ? '···' : usuarios.filter(u => u.activo).length} color="text-emerald-700" />
+        <KPI label="Inactivos"  value={loading ? '···' : usuarios.filter(u => !u.activo).length} color="text-ink-500" />
       </PageHeader>
 
       <ErrorBanner msg={error} onDismiss={() => setError('')} />
 
-      {/* Resumen por rol */}
-      <div className="grid grid-cols-5 gap-3">
-        {[{ value: 'todos', label: 'Todos' }, ...ROLES].map(r => (
-          <button
-            key={r.value}
-            onClick={() => setFilterRol(r.value)}
-            className={`p-4 rounded-xl border transition text-left ${
-              filterRol === r.value
-                ? 'bg-slate-700 text-white border-slate-700 shadow-lg'
-                : 'bg-white border-gray-100 text-gray-700 hover:border-slate-300'
-            }`}
-          >
-            <p className="text-xs opacity-80 mb-1">{r.label}</p>
-            <p className="text-2xl font-bold">{totalPorRol[r.value] ?? 0}</p>
-          </button>
-        ))}
+      {/* Resumen por rol — segmented colorido */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[{ value: 'todos', label: 'Todos', tone: 'ink' }, ...ROLES.map(r => ({ ...r, tone: rolAvatarTone(r.value) }))].map(r => {
+          const active = filterRol === r.value;
+          const toneAccent = {
+            ink:     active ? 'bg-ink-900 text-white border-ink-900'                 : 'border-line hover:border-ink-300',
+            rose:    active ? 'bg-rose-600 text-white border-rose-600'               : 'border-line hover:border-rose-300',
+            violet:  active ? 'bg-violet-600 text-white border-violet-600'           : 'border-line hover:border-violet-300',
+            indigo:  active ? 'bg-indigo-600 text-white border-indigo-600'           : 'border-line hover:border-indigo-300',
+            emerald: active ? 'bg-emerald-600 text-white border-emerald-600'         : 'border-line hover:border-emerald-300',
+          }[r.tone] ?? 'border-line';
+
+          return (
+            <button
+              key={r.value}
+              onClick={() => setFilterRol(r.value)}
+              className={`group relative overflow-hidden p-4 rounded-2xl border bg-white text-left transition-all duration-150 shadow-[0_1px_2px_rgba(11,18,32,0.04)] ${toneAccent} ${active ? 'shadow-[0_8px_24px_-12px_rgba(11,18,32,0.30)]' : ''}`}
+            >
+              <p className={`text-[10.5px] uppercase tracking-[0.10em] font-medium ${active ? 'text-white/75' : 'text-ink-500'}`}>
+                {r.label}
+              </p>
+              <p className={`mt-1 text-[24px] font-semibold tracking-tight tabular-nums leading-none ${active ? 'text-white' : 'text-ink-900'}`}>
+                {totalPorRol[r.value] ?? 0}
+              </p>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Filtros + acción */}
-      <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-        <div className="flex items-center gap-4">
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por nombre, email, usuario o documento..."
-          />
-          <button
-            onClick={() => setCreando(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-xl hover:from-slate-800 hover:to-slate-900 transition font-semibold shadow-lg"
-          >
-            <UserPlus size={20} /> Invitar usuario
-          </button>
-        </div>
-      </div>
+      <Toolbar>
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, email, usuario o documento…"
+        />
+        <AccentButton variant="fuchsia" icon={UserPlus} onClick={() => setCreando(true)}>
+          Invitar usuario
+        </AccentButton>
+      </Toolbar>
 
-      {/* Tabla */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Usuario</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Email</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Documento</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Rol</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Estado</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Último acceso</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <LoadingRow colSpan={7} mensaje="Cargando usuarios..." />
-              ) : filtered.length === 0 ? (
-                <EmptyRow colSpan={7} icon={Users} mensaje="No se encontraron usuarios" />
-              ) : filtered.map((u, idx) => (
-                <tr key={u.id_usuario} className={`hover:bg-slate-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                  {/* Usuario */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${u.activo ? 'bg-gradient-to-br from-slate-600 to-slate-800' : 'bg-gray-400'}`}>
-                        {(u.nombre_completo ?? '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">{u.nombre_completo || '—'}</p>
-                        <p className="text-xs text-gray-500">@{u.username}</p>
-                      </div>
+      <TableShell>
+        <Thead columnas={[
+          'Usuario', 'Email', 'Documento',
+          { label: 'Rol',           align: 'center' },
+          { label: 'Estado',        align: 'center' },
+          'Último acceso',
+          { label: 'Acciones',      align: 'center' },
+        ]} />
+        <Tbody>
+          {loading ? (
+            <LoadingRow colSpan={7} mensaje="Cargando usuarios…" />
+          ) : filtered.length === 0 ? (
+            <EmptyRow colSpan={7} icon={Users} mensaje="No se encontraron usuarios" />
+          ) : filtered.map((u) => {
+            const rol = normalizeRoleName(u.rol_nombre);
+            const badge = rolBadge(rol);
+            return (
+              <Tr key={u.id_usuario}>
+                <td className="px-5 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={u.nombre_completo} tone={u.activo ? rolAvatarTone(rol) : 'muted'} />
+                    <div className="min-w-0">
+                      <p className="text-[13.5px] font-medium text-ink-900">{u.nombre_completo || '—'}</p>
+                      <p className="text-[11.5px] text-ink-500">@{u.username}</p>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{u.email || '—'}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-gray-700">{u.documento || '—'}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`text-xs px-3 py-1 rounded-full font-medium ${rolColor(normalizeRoleName(u.rol_nombre))}`}>
-                      {normalizeRoleName(u.rol_nombre) || 'sin rol'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <button onClick={() => toggleActivo(u)} title={u.activo ? 'Desactivar' : 'Activar'}>
-                      {u.activo
-                        ? <ToggleRight size={28} className="text-green-500 mx-auto" />
-                        : <ToggleLeft  size={28} className="text-gray-400 mx-auto" />}
-                    </button>
-                    <p className="text-xs text-gray-500 mt-0.5">{u.activo ? 'Activo' : 'Inactivo'}</p>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-gray-600">
-                    {u.ultimo_acceso
-                      ? new Date(u.ultimo_acceso).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
-                      : 'Nunca'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-1">
-                      <button
-                        onClick={() => setEditando(u)}
-                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                        title="Editar"
-                      >
-                        <Edit size={17} />
-                      </button>
-                      <button
-                        onClick={() => eliminar(u)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Eliminar"
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  </div>
+                </td>
+                <td className="px-5 py-3.5 text-[13px] text-ink-700">{u.email || '—'}</td>
+                <td className="px-5 py-3.5 text-[13px] font-mono text-ink-700">{u.documento || '—'}</td>
+                <td className="px-5 py-3.5 text-center">
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md font-medium border ${badge.cls}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                    {rol || 'sin rol'}
+                  </span>
+                </td>
+                <td className="px-5 py-3.5 text-center">
+                  <button onClick={() => toggleActivo(u)} title={u.activo ? 'Desactivar' : 'Activar'} className="mx-auto block">
+                    {u.activo
+                      ? <ToggleRight size={24} className="text-emerald-500" strokeWidth={1.75} />
+                      : <ToggleLeft  size={24} className="text-ink-300" strokeWidth={1.75} />}
+                  </button>
+                  <p className="text-[11px] text-ink-500 mt-0.5">{u.activo ? 'Activo' : 'Inactivo'}</p>
+                </td>
+                <td className="px-5 py-3.5 text-[12px] text-ink-500">
+                  {u.ultimo_acceso
+                    ? new Date(u.ultimo_acceso).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
+                    : 'Nunca'}
+                </td>
+                <td className="px-5 py-3.5">
+                  <ActionGroup>
+                    <IconButton icon={Edit}   tone="indigo" title="Editar"   onClick={() => setEditando(u)} />
+                    <IconButton icon={Trash2} tone="red"    title="Eliminar" onClick={() => eliminar(u)}    />
+                  </ActionGroup>
+                </td>
+              </Tr>
+            );
+          })}
+        </Tbody>
+      </TableShell>
 
       {creando  && <ModalCrear    onClose={() => { setCreando(false);  cargar(); }} />}
       {editando && <ModalEditar   usuario={editando} onClose={() => { setEditando(null); cargar(); }} />}
@@ -250,27 +247,27 @@ function ModalCrear({ onClose }) {
   };
 
   return (
-    <Modal titulo="Invitar nuevo usuario" onClose={onClose}>
+    <Modal titulo="Invitar nuevo usuario" variant="fuchsia" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Aviso */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-start gap-2 text-sm text-slate-800">
-          <Info size={16} className="flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2.5 text-[13px] text-fuchsia-800 bg-fuchsia-50/70 border-l-2 border-fuchsia-500 pl-3 pr-3 py-2.5 rounded-r-md">
+          <Info size={15} className="flex-shrink-0 mt-0.5" strokeWidth={2} />
           <p>
-            Se enviará un correo de invitación al usuario con un enlace para que
-            <strong> defina su propia contraseña</strong>. El admin nunca conoce la clave.
+            Se enviará un correo al usuario con un enlace para que
+            <strong className="font-medium"> defina su propia contraseña</strong>. El admin nunca conoce la clave.
           </p>
         </div>
 
-        <Input label="Nombre completo *" name="nombre" value={form.nombre} onChange={handleChange} required placeholder="Ej: María Gómez Pérez" icon={<User size={16} />} />
-        <Input label="Correo electrónico *" name="email" type="email" value={form.email} onChange={handleChange} required placeholder="usuario@correo.com" icon={<Mail size={16} />} />
+        <Input label="Nombre completo *" name="nombre" value={form.nombre} onChange={handleChange} required placeholder="Ej: María Gómez Pérez" icon={<User size={14} />} />
+        <Input label="Correo electrónico *" name="email" type="email" value={form.email} onChange={handleChange} required placeholder="usuario@correo.com" icon={<Mail size={14} />} />
 
         {/* Rol */}
         <div>
-          <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-            <ShieldCheck size={16} /> Rol *
+          <label className="text-[13px] font-medium text-ink-700 mb-1.5 flex items-center gap-1.5">
+            <ShieldCheck size={14} className="text-ink-500" /> Rol *
           </label>
           <select name="rol" value={form.rol} onChange={handleChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white">
+            className="w-full px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all">
             {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
@@ -284,20 +281,18 @@ function ModalCrear({ onClose }) {
         )}
 
         {error && <ErrorBox msg={error} />}
-        {ok && (
-          <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-xl text-sm flex items-start gap-2">
-            <CheckCircle size={16} className="flex-shrink-0 mt-0.5" /> {ok}
-          </div>
-        )}
-        <div className="flex gap-3 pt-4 border-t border-gray-200">
+        {ok && <SuccessBanner msg={ok} />}
+
+        <div className="flex gap-3 pt-5 border-t border-line">
           <button type="button" onClick={onClose}
-            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold">
+            className="flex-1 px-5 py-2.5 bg-white border border-line text-ink-800 rounded-xl hover:bg-surface hover:border-ink-100 active:scale-[0.99] transition-all duration-150 text-[13.5px] font-medium">
             Cancelar
           </button>
           <button type="submit" disabled={submitting}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-xl hover:from-slate-800 hover:to-slate-900 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
-            <Send size={16} />
-            {submitting ? 'Enviando...' : 'Enviar invitación'}
+            className="group flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-[13.5px] font-medium shadow-[0_1px_2px_rgba(11,18,32,0.10),0_10px_24px_-14px_rgba(11,18,32,0.40)] active:scale-[0.99] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed">
+            {submitting
+              ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando…</>
+              : <><Send size={14} strokeWidth={2} /> Enviar invitación</>}
           </button>
         </div>
       </form>
@@ -361,22 +356,22 @@ function ModalEditar({ usuario: u, onClose }) {
   const usernameDisplay = u.username && u.username !== u.email ? u.username : null;
 
   return (
-    <Modal titulo="Editar usuario" subtitulo={u.nombre_completo ?? u.email} onClose={onClose}>
+    <Modal titulo="Editar usuario" subtitulo={u.nombre_completo ?? u.email} variant="fuchsia" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Info sólo lectura */}
-        <div className={`grid ${usernameDisplay ? 'grid-cols-2' : 'grid-cols-1'} gap-3 p-4 bg-gray-50 rounded-xl text-sm`}>
-          <div>
-            <p className="text-xs text-gray-500">Email</p>
-            <p className="font-semibold text-gray-900 truncate">{u.email || '—'}</p>
+        <div className={`grid ${usernameDisplay ? 'grid-cols-2' : 'grid-cols-1'} gap-2.5`}>
+          <div className="rounded-lg border border-line bg-surface/60 px-3 py-2">
+            <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">Email</p>
+            <p className="mt-0.5 text-[13.5px] font-medium text-ink-900 truncate">{u.email || '—'}</p>
           </div>
           {usernameDisplay && (
-            <div>
-              <p className="text-xs text-gray-500">Username</p>
-              <p className="font-semibold text-gray-900">@{usernameDisplay}</p>
+            <div className="rounded-lg border border-line bg-surface/60 px-3 py-2">
+              <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">Username</p>
+              <p className="mt-0.5 text-[13.5px] font-medium text-ink-900">@{usernameDisplay}</p>
             </div>
           )}
         </div>
-        <p className="text-xs text-gray-400">* El email no se puede modificar desde aquí (se gestiona en Supabase Auth).</p>
+        <p className="text-[11.5px] text-ink-500">* El email no se puede modificar desde aquí (se gestiona en Supabase Auth).</p>
 
         {/* Datos personales */}
         <div className="grid grid-cols-2 gap-4">
@@ -401,36 +396,36 @@ function ModalEditar({ usuario: u, onClose }) {
 
         {/* Rol */}
         <div>
-          <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-            <ShieldCheck size={16} /> Rol
+          <label className="text-[13px] font-medium text-ink-700 mb-1.5 flex items-center gap-1.5">
+            <ShieldCheck size={14} className="text-ink-500" /> Rol
           </label>
           <select name="rol" value={form.rol} onChange={handleChange}
             disabled={editandoMiCuenta && rolInicial === 'admin'}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed">
+            className="w-full px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all disabled:bg-surface disabled:cursor-not-allowed disabled:text-ink-500">
             {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
           {editandoMiCuenta && rolInicial === 'admin' && (
-            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-              <Info size={12} /> No puedes cambiar tu propio rol de admin (te quedarías sin acceso).
+            <p className="text-[11.5px] text-ink-500 mt-1.5 flex items-center gap-1">
+              <Info size={11} /> No puedes cambiar tu propio rol de admin (te quedarías sin acceso).
             </p>
           )}
           {form.rol !== rolInicial && (
-            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-              <Info size={12} /> Cambio de rol: <strong>{rolInicial}</strong> → <strong>{form.rol}</strong>
+            <p className="text-[11.5px] text-amber-700 mt-1.5 flex items-center gap-1">
+              <Info size={11} /> Cambio de rol: <strong className="font-medium">{rolInicial}</strong> → <strong className="font-medium">{form.rol}</strong>
             </p>
           )}
         </div>
 
         {/* Activo */}
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+        <label htmlFor="chk-activo-edit" className={`flex items-center gap-3 p-3 bg-surface border border-line rounded-xl ${editandoMiCuenta ? 'opacity-70' : 'cursor-pointer hover:border-ink-100'} transition-colors`}>
           <input type="checkbox" name="activo" id="chk-activo-edit" checked={form.activo} onChange={handleChange}
             disabled={editandoMiCuenta}
-            className="w-5 h-5 rounded text-slate-700 disabled:opacity-50" />
-          <label htmlFor="chk-activo-edit" className="text-sm font-medium text-gray-700">
+            className="w-4 h-4 rounded text-brand-600 accent-brand-600 disabled:opacity-50" />
+          <span className="text-[13.5px] font-medium text-ink-800">
             Cuenta activa (el usuario puede iniciar sesión)
-            {editandoMiCuenta && <span className="text-xs text-gray-500 ml-2">— no puedes desactivar tu propia cuenta</span>}
-          </label>
-        </div>
+            {editandoMiCuenta && <span className="text-[11.5px] text-ink-500 ml-2">— no puedes desactivar tu propia cuenta</span>}
+          </span>
+        </label>
 
         {error && <ErrorBox msg={error} />}
         <BotonesForm onCancel={onClose} saving={saving} labelSave="Guardar cambios" />

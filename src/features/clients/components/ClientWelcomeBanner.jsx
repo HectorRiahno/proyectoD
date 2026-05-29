@@ -1,37 +1,45 @@
 import React from 'react';
-import { User, Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone } from 'lucide-react';
+import { PageHeader, KPI, Avatar } from '../../../shared/components/ui';
 
 export default function ClientWelcomeBanner({ user }) {
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? 'Buenos días' : currentHour < 18 ? 'Buenas tardes' : 'Buenas noches';
+  const primer = user?.nombre?.split(' ')[0] ?? '';
 
   return (
-    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
-      <div className="flex items-center justify-between">
+    <PageHeader
+      titulo={
+        <span>
+          {greeting}, <span className="text-ink-700 font-normal">{primer || 'paciente'}.</span>
+        </span>
+      }
+      descripcion={
+        <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+          {user?.email && (
+            <span className="inline-flex items-center gap-1.5">
+              <Mail size={11} strokeWidth={1.75} className="text-brand-600" />
+              {user.email}
+            </span>
+          )}
+          {user?.telefono && (
+            <span className="inline-flex items-center gap-1.5">
+              <Phone size={11} strokeWidth={1.75} className="text-brand-600" />
+              {user.telefono}
+            </span>
+          )}
+        </span>
+      }
+      eyebrow="Mi salud"
+      variant="blue"
+    >
+      <div className="flex items-center gap-3 rounded-xl border border-line bg-surface/60 px-3 py-2">
+        <Avatar name={user?.nombre} tone="brand" size="md" />
         <div>
-          <h1 className="text-3xl font-bold mb-2">{greeting}, {user?.nombre?.split(' ')[0]}</h1>
-          <p className="text-blue-100 mb-4">Bienvenido a tu portal de salud</p>
-          
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div className="flex items-center gap-2">
-              <Mail size={16} className="text-blue-200" />
-              <span className="text-sm text-blue-100">{user?.email || 'No disponible'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone size={16} className="text-blue-200" />
-              <span className="text-sm text-blue-100">{user?.telefono || 'No disponible'}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-xl p-6 text-center">
-          <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-3 mx-auto">
-            <User size={40} className="text-blue-600" />
-          </div>
-          <p className="text-sm font-medium">Paciente</p>
-          <p className="text-xs text-blue-200">ID: {user?.documento}</p>
+          <p className="text-[10.5px] uppercase tracking-[0.10em] text-ink-500 leading-none">Paciente</p>
+          <p className="text-[12.5px] font-mono text-ink-900 mt-0.5">ID: {user?.documento ?? '—'}</p>
         </div>
       </div>
-    </div>
+    </PageHeader>
   );
 }

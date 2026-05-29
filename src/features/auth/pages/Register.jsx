@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { User, Lock, Mail, FileText } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { User, Mail, ArrowRight } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
+import {
+  AuthShell, PageTitle, Field, PasswordField,
+  PrimaryButton, ErrorBanner, PasswordStrength,
+} from '../components/authUI';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -10,15 +14,12 @@ export default function Register() {
     nombre: '',
     email: '',
     contrasena: '',
-    confirmarContrasena: ''
+    confirmarContrasena: '',
   });
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
@@ -26,17 +27,15 @@ export default function Register() {
     setError('');
 
     if (!formData.nombre || !formData.email || !formData.contrasena || !formData.confirmarContrasena) {
-      setError('Por favor completa todos los campos');
+      setError('Por favor completa todos los campos.');
       return;
     }
-
     if (formData.contrasena !== formData.confirmarContrasena) {
-      setError('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden.');
       return;
     }
-
     if (formData.contrasena.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+      setError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
@@ -45,117 +44,84 @@ export default function Register() {
       alert('Registro exitoso. Por favor verifica tu correo electrónico para confirmar tu cuenta.');
       navigate('/login');
     } catch (err) {
-      setError(err.message || 'Error al registrar usuario');
+      setError(err.message || 'Error al registrar usuario.');
       console.error('Error de registro:', err);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white mb-4 shadow-lg">
-            <FileText className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800">Crear Cuenta</h2>
-          <p className="text-sm text-gray-500 mt-1">Regístrate para comenzar</p>
+    <AuthShell>
+      <PageTitle
+        title="Crea tu cuenta."
+        subtitle="Regístrate como paciente para acceder a tu portal de salud."
+      />
+
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <Field
+          id="reg-nombre"
+          name="nombre"
+          label="Nombre completo"
+          icon={User}
+          value={formData.nombre}
+          onChange={handleChange}
+          placeholder="Hector Riahno"
+          autoComplete="name"
+          autoFocus
+          required
+        />
+
+        <Field
+          id="reg-email"
+          name="email"
+          type="email"
+          label="Correo electrónico"
+          icon={Mail}
+          value={formData.email}
+          onChange={handleChange}
+          placeholder="tu@correo.com"
+          autoComplete="email"
+          required
+        />
+
+        <div>
+          <PasswordField
+            id="reg-password"
+            label="Contraseña"
+            value={formData.contrasena}
+            onChange={(e) => handleChange({ target: { name: 'contrasena', value: e.target.value } })}
+            autoComplete="new-password"
+            placeholder="Mínimo 6 caracteres"
+          />
+          <PasswordStrength value={formData.contrasena} />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">Nombre Completo</label>
-            <div className="relative">
-              <input
-                name="nombre"
-                value={formData.nombre}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 pl-11 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="Tu nombre completo"
-              />
-              <User className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-            </div>
-          </div>
+        <PasswordField
+          id="reg-confirm"
+          label="Confirmar contraseña"
+          value={formData.confirmarContrasena}
+          onChange={(e) => handleChange({ target: { name: 'confirmarContrasena', value: e.target.value } })}
+          autoComplete="new-password"
+          placeholder="Repite la contraseña"
+          error={
+            formData.confirmarContrasena && formData.contrasena !== formData.confirmarContrasena
+              ? 'Las contraseñas no coinciden.'
+              : null
+          }
+        />
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">Email</label>
-            <div className="relative">
-              <input
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 pl-11 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="correo@ejemplo.com"
-              />
-              <Mail className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-            </div>
-          </div>
+        <ErrorBanner message={error || authError} />
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">Contraseña</label>
-            <div className="relative">
-              <input
-                name="contrasena"
-                type="password"
-                value={formData.contrasena}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 pl-11 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="Mínimo 6 caracteres"
-              />
-              <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-            </div>
-          </div>
+        <PrimaryButton loading={loading} loadingText="Registrando…" icon={ArrowRight}>
+          Crear cuenta
+        </PrimaryButton>
+      </form>
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">Confirmar Contraseña</label>
-            <div className="relative">
-              <input
-                name="confirmarContrasena"
-                type="password"
-                value={formData.confirmarContrasena}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 pl-11 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="Confirma tu contraseña"
-              />
-              <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          {authError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {authError}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed mt-6"
-          >
-            {loading ? 'Registrando...' : 'Registrarse'}
-          </button>
-
-          <div className="text-center pt-2">
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="text-sm text-gray-600 hover:text-blue-600 transition"
-            >
-              ¿Ya tienes cuenta? <span className="font-semibold text-blue-600">Inicia sesión</span>
-            </button>
-          </div>
-        </form>
+      <div className="mt-9 pt-6 border-t border-line/80 text-[12.5px] text-ink-500">
+        ¿Ya tienes cuenta?{' '}
+        <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700 transition-colors">
+          Inicia sesión
+        </Link>
       </div>
-    </div>
+    </AuthShell>
   );
 }

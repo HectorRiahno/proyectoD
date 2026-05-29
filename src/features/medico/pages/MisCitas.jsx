@@ -1,21 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Calendar, Clock, Search, User, AlertCircle, Loader2,
-  Stethoscope, CheckCircle2, ClipboardList, Hourglass,
+  Calendar, Clock, Stethoscope, CheckCircle2, ClipboardList, Hourglass, Search,
 } from 'lucide-react';
 import { useCitas } from '../../../hooks';
-
-// Las "programadas" son las que crea el admin tal cual.
-// Las "confirmadas" son las que el admin marca cuando el paciente llegó al
-// consultorio a tiempo — son las que el médico puede tomar. Las que ya
-// están en_curso (médico abrió el modal pero no guardó) se muestran en el
-// mismo cuadro de confirmadas para que pueda retomarlas.
-const ESTADO_STYLES = {
-  programada: 'bg-blue-100 text-blue-700 border-blue-200',
-  confirmada: 'bg-green-100 text-green-700 border-green-200',
-  en_curso:   'bg-yellow-100 text-yellow-700 border-yellow-200',
-};
+import {
+  PageHeader, KPI, ErrorBanner, SearchBar, EstadoBadge,
+  EmptyState, LoadingState, Avatar,
+} from '../../../shared/components/ui';
 
 export default function MisCitas() {
   const navigate = useNavigate();
@@ -23,10 +15,11 @@ export default function MisCitas() {
     citas, loading, error, setError, marcarEnCurso,
   } = useCitas({ role: 'medico', realtime: true });
   const [search, setSearch] = useState('');
+  // Filtro adicional solo para la columna de confirmadas. Permite al médico
+  // localizar rápido un paciente entre los que ya están confirmados, sin
+  // afectar la lista de programadas.
+  const [searchConfirmadas, setSearchConfirmadas] = useState('');
 
-  // Inicia la atención: marca la cita como 'en_curso' (para que el admin la
-  // vea en proceso) y luego navega a consultas. Al guardar la consulta,
-  // Consultas.jsx → ModalCrear pasa el estado a 'completada'.
   const tomarCita = async (cita) => {
     setError('');
     if (cita.estado !== 'en_curso') {
@@ -45,78 +38,96 @@ export default function MisCitas() {
     );
   };
 
-  const programadas = citas.filter(c => c.estado === 'programada' && matchSearch(c));
-  const confirmadas = citas.filter(c => ['confirmada', 'en_curso'].includes(c.estado) && matchSearch(c));
+  // "Primero en llegar" = ordenar ascendente por fecha + hora (la cita con
+  // datetime más temprano queda arriba). Comparamos como strings ISO
+  // (YYYY-MM-DD HH:MM:SS) — funciona correctamente sin parsear a Date.
+  const sortByLlegada = (a, b) => {
+    const va = `${a.fecha ?? ''} ${a.hora ?? '00:00:00'}`;
+    const vb = `${b.fecha ?? ''} ${b.hora ?? '00:00:00'}`;
+    return va.localeCompare(vb);
+  };
+
+  const programadas = citas
+    .filter(c => c.estado === 'programada' && matchSearch(c))
+    .sort(sortByLlegada);
+
+  const confirmadas = citas
+    .filter(c => ['confirmada', 'en_curso'].includes(c.estado) && matchSearch(c))
+    .filter(c => {
+      if (!searchConfirmadas.trim()) return true;
+      return (c.paciente_nombre ?? '').toLowerCase().includes(searchConfirmadas.toLowerCase());
+    })
+    .sort(sortByLlegada);
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Mis citas</h1>
-            <p className="text-emerald-100">Citas pendientes asignadas a ti</p>
-          </div>
-          <div className="flex gap-6 text-center">
-            <KPI label="Programadas" value={loading ? '···' : programadas.length} />
-            <KPI label="Confirmadas" value={loading ? '···' : confirmadas.length} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Mis citas"
+        descripcion="Citas pendientes asignadas a ti"
+        eyebrow="Citas"
+        icon={<Calendar size={11} strokeWidth={2.25} />}
+        variant="emerald"
+      >
+        <KPI label="Programadas" value={loading ? '···' : programadas.length} color="text-brand-700" />
+        <KPI label="Confirmadas" value={loading ? '···' : confirmadas.length} color="text-emerald-700" />
+      </PageHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBanner msg={error} />
 
-      {/* Buscador (aplica a ambos cuadros) */}
-      <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar por paciente, documento o motivo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-          />
-        </div>
-      </div>
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por paciente, documento o motivo…"
+      />
 
-      {/* Dos cuadros lado a lado */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ── Cuadro 1: Programadas ────────────────────────────────────────── */}
         <CuadroCitas
           titulo="Programadas"
-          subtitulo="Citas asignadas por el administrador, aún sin confirmar"
-          icono={<ClipboardList size={22} className="text-blue-600" />}
-          color="blue"
+          subtitulo="Asignadas por el administrador, aún sin confirmar"
+          icono={ClipboardList}
+          tono="brand"
           loading={loading}
           citas={programadas}
           vacioMsg="No hay citas programadas"
           renderAccion={() => (
-            <span className="inline-flex items-center gap-1 text-xs text-gray-500 italic">
-              <Hourglass size={12} /> Esperando confirmación
+            <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-500 italic">
+              <Hourglass size={11} strokeWidth={1.75} /> Esperando confirmación
             </span>
           )}
         />
 
-        {/* ── Cuadro 2: Confirmadas ────────────────────────────────────────── */}
         <CuadroCitas
           titulo="Confirmadas"
-          subtitulo="El paciente ya llegó al consultorio — listas para atender"
-          icono={<CheckCircle2 size={22} className="text-green-600" />}
-          color="green"
+          subtitulo="El paciente ya llegó — ordenadas por primero en llegar"
+          icono={CheckCircle2}
+          tono="emerald"
           loading={loading}
           citas={confirmadas}
-          vacioMsg="No hay citas confirmadas"
+          vacioMsg={searchConfirmadas ? 'Ningún paciente coincide con la búsqueda' : 'No hay citas confirmadas'}
+          toolbar={(
+            <div className="px-4 py-2.5 border-b border-line/70 bg-surface/30">
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-ink-300 pointer-events-none"
+                  strokeWidth={1.75}
+                />
+                <input
+                  type="text"
+                  value={searchConfirmadas}
+                  onChange={(e) => setSearchConfirmadas(e.target.value)}
+                  placeholder="Buscar paciente por nombre en confirmadas…"
+                  className="w-full pl-9 pr-3 py-2 text-[12.5px] bg-white border border-line rounded-lg text-ink-900 placeholder:text-ink-300 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                />
+              </div>
+            </div>
+          )}
           renderAccion={(c) => (
             <button
               onClick={() => tomarCita(c)}
               title="Iniciar consulta médica para esta cita"
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition text-xs font-semibold shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[12px] font-medium shadow-[0_4px_14px_-6px_rgba(11,18,32,0.45)] active:scale-[0.99] transition-all duration-150"
             >
-              <Stethoscope size={14} />
+              <Stethoscope size={13} strokeWidth={1.75} />
               {c.estado === 'en_curso' ? 'Continuar' : 'Tomar cita'}
             </button>
           )}
@@ -126,74 +137,67 @@ export default function MisCitas() {
   );
 }
 
-// ─── Cuadro de lista de citas ──────────────────────────────────────────────────
-function CuadroCitas({ titulo, subtitulo, icono, color, loading, citas, vacioMsg, renderAccion }) {
-  const headerBg = {
-    blue:  'from-blue-50 to-indigo-50 border-blue-200',
-    green: 'from-green-50 to-emerald-50 border-green-200',
-  }[color] ?? 'from-gray-50 to-gray-100 border-gray-200';
+// ─── Cuadro de lista ──────────────────────────────────────────────────────────
+function CuadroCitas({ titulo, subtitulo, icono: Icono, tono, loading, citas, vacioMsg, renderAccion, toolbar }) {
+  const TONES = {
+    brand:   { tint: 'bg-brand-50',   border: 'border-brand-100',   icon: 'text-brand-700' },
+    emerald: { tint: 'bg-emerald-50', border: 'border-emerald-100', icon: 'text-emerald-700' },
+  };
+  const t = TONES[tono] ?? TONES.brand;
 
   return (
-    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-      <div className={`px-5 py-4 bg-gradient-to-r ${headerBg} border-b-2`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {icono}
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">{titulo}</h2>
-              <p className="text-xs text-gray-600">{subtitulo}</p>
-            </div>
-          </div>
-          <span className="text-2xl font-bold text-gray-900">
-            {loading ? '···' : citas.length}
+    <section className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden flex flex-col">
+      <header className="px-5 py-4 border-b border-line flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={`inline-flex w-9 h-9 items-center justify-center rounded-lg border ${t.tint} ${t.border} ${t.icon}`}>
+            {Icono && <Icono size={16} strokeWidth={1.75} />}
           </span>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold tracking-tight text-ink-900">{titulo}</h2>
+            <p className="text-[11.5px] text-ink-500">{subtitulo}</p>
+          </div>
         </div>
-      </div>
+        <span className="text-[22px] font-semibold tabular-nums text-ink-900 leading-none">
+          {loading ? '···' : citas.length}
+        </span>
+      </header>
 
-      <div className="divide-y divide-gray-100 flex-1">
+      {toolbar}
+
+      <div className="divide-y divide-line/70 flex-1">
         {loading ? (
-          <div className="text-center py-12">
-            <Loader2 size={28} className="mx-auto mb-2 animate-spin text-emerald-600" />
-            <p className="text-gray-500 text-sm">Cargando...</p>
-          </div>
+          <LoadingState mensaje="Cargando…" />
         ) : citas.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar size={40} className="mx-auto mb-3 text-gray-200" />
-            <p className="text-gray-400 text-sm">{vacioMsg}</p>
-          </div>
+          <EmptyState icon={Calendar} titulo={vacioMsg} />
         ) : (
           citas.map(c => (
-            <div key={c.id_cita} className="p-4 hover:bg-gray-50 transition">
+            <div key={c.id_cita} className="p-4 hover:bg-surface/70 transition-colors">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className="w-9 h-9 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <User size={15} className="text-emerald-600" />
-                  </div>
+                  <Avatar name={c.paciente_nombre} tone={tono} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{c.paciente_nombre ?? '—'}</p>
-                    <p className="text-xs text-gray-500 font-mono">{c.paciente_documento ?? ''}</p>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Calendar size={11} className="text-emerald-600" /> {c.fecha}
+                    <p className="text-[13.5px] font-medium text-ink-900 truncate">{c.paciente_nombre ?? '—'}</p>
+                    <p className="text-[11.5px] text-ink-500 font-mono">{c.paciente_documento ?? ''}</p>
+                    <div className="flex items-center gap-3 mt-1.5 text-[11.5px] text-ink-700">
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar size={10} className={t.icon} strokeWidth={1.75} /> {c.fecha}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Clock size={11} /> {c.hora?.slice(0, 5)}
+                      <span className="inline-flex items-center gap-1">
+                        <Clock size={10} strokeWidth={1.75} className="text-ink-500" /> {c.hora?.slice(0, 5)}
                       </span>
                       {c.tipo_consulta && (
-                        <span className="text-gray-500 truncate">· {c.tipo_consulta}</span>
+                        <span className="text-ink-500 truncate">· {c.tipo_consulta}</span>
                       )}
                     </div>
                     {c.motivo && (
-                      <p className="text-xs text-gray-600 mt-1 line-clamp-2" title={c.motivo}>
+                      <p className="text-[11.5px] text-ink-700 mt-1 line-clamp-2" title={c.motivo}>
                         <span className="font-medium">Motivo:</span> {c.motivo}
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${ESTADO_STYLES[c.estado] ?? 'bg-gray-100'}`}>
-                    {c.estado === 'en_curso' ? 'En curso' : c.estado}
-                  </span>
+                  <EstadoBadge type="cita" estado={c.estado} />
                   {renderAccion(c)}
                 </div>
               </div>
@@ -201,15 +205,6 @@ function CuadroCitas({ titulo, subtitulo, icono, color, loading, citas, vacioMsg
           ))
         )}
       </div>
-    </div>
-  );
-}
-
-function KPI({ label, value }) {
-  return (
-    <div>
-      <p className="text-sm text-emerald-100">{label}</p>
-      <p className="text-4xl font-bold">{value}</p>
-    </div>
+    </section>
   );
 }

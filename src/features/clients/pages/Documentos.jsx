@@ -1,107 +1,72 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, FileDown, AlertCircle, Loader2, Calendar, Pill, ClipboardList, Activity } from 'lucide-react';
+import { FileText, AlertCircle, ClipboardList, Activity, ArrowRight } from 'lucide-react';
 import { useDashboardCliente } from '../../../hooks';
+import {
+  PageHeader, ErrorBanner, LoadingState,
+} from '../../../shared/components/ui';
 
 export default function Documentos() {
   const navigate = useNavigate();
   const { counts: full, loading, error } = useDashboardCliente();
   const counts = {
     consultas:    full.consultas,
-    recetas:      full.medicamentos,
     diagnosticos: full.diagnosticos,
     signos:       full.signos,
   };
 
   const docs = [
-    {
-      title: 'Historia clínica',
-      description: 'Registro completo de todas tus consultas médicas',
-      icon: FileText,
-      color: 'sky',
-      count: counts.consultas,
-      path: '/cliente/historial',
-    },
-    {
-      title: 'Recetas médicas',
-      description: 'Medicamentos y tratamientos prescritos',
-      icon: Pill,
-      color: 'cyan',
-      count: counts.recetas,
-      path: '/cliente/medicamentos',
-    },
-    {
-      title: 'Diagnósticos',
-      description: 'Diagnósticos con códigos CIE-10',
-      icon: ClipboardList,
-      color: 'teal',
-      count: counts.diagnosticos,
-      path: '/cliente/resultados',
-    },
-    {
-      title: 'Signos vitales',
-      description: 'Registros de presión, temperatura, peso, etc.',
-      icon: Activity,
-      color: 'indigo',
-      count: counts.signos,
-      path: '/cliente/resultados',
-    },
+    { title: 'Historia clínica', description: 'Registro completo de todas tus consultas médicas',     icon: FileText,      tone: 'sky',     count: counts.consultas,    path: '/cliente/historial' },
+    { title: 'Diagnósticos',     description: 'Diagnósticos con códigos CIE-10',                      icon: ClipboardList, tone: 'emerald', count: counts.diagnosticos, path: '/cliente/resultados' },
+    { title: 'Signos vitales',   description: 'Registros de presión, temperatura, peso, etc.',        icon: Activity,      tone: 'indigo',  count: counts.signos,       path: '/cliente/resultados' },
   ];
 
-  const colors = {
-    sky:    'from-sky-500 to-cyan-600',
-    cyan:   'from-cyan-500 to-teal-600',
-    teal:   'from-teal-500 to-emerald-600',
-    indigo: 'from-indigo-500 to-purple-600',
+  const TONES = {
+    sky:     { tint: 'bg-sky-50',     border: 'border-sky-100',     text: 'text-sky-700',     link: 'text-sky-700' },
+    emerald: { tint: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', link: 'text-emerald-700' },
+    indigo:  { tint: 'bg-indigo-50',  border: 'border-indigo-100',  text: 'text-indigo-700',  link: 'text-indigo-700' },
   };
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-sky-600 to-cyan-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Mis documentos</h1>
-            <p className="text-sky-100">Accede a toda tu información médica</p>
-          </div>
-          <FileDown size={48} className="opacity-50" />
-        </div>
-      </div>
+      <PageHeader
+        titulo="Mis documentos"
+        descripcion="Accede a toda tu información médica"
+        eyebrow="Documentos"
+        icon={<FileText size={11} strokeWidth={2.25} />}
+        variant="sky"
+      />
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBanner msg={error} />
 
       {loading ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-sky-600" />
-          <p className="text-gray-500">Cargando documentos...</p>
-        </div>
+        <LoadingState mensaje="Cargando documentos…" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {docs.map((d, i) => {
             const Icon = d.icon;
+            const t = TONES[d.tone] ?? TONES.sky;
             return (
               <button
                 key={i}
                 onClick={() => navigate(d.path)}
-                className="text-left bg-white rounded-xl shadow-md hover:shadow-xl transition p-6 border border-gray-100 group"
+                className="group text-left rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(11,18,32,0.04)] hover:border-ink-100 hover:shadow-[0_8px_28px_-14px_rgba(11,18,32,0.18)] transition-all duration-200"
               >
                 <div className="flex items-start gap-4">
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colors[d.color]} flex items-center justify-center shadow-lg flex-shrink-0`}>
-                    <Icon className="text-white" size={28} />
-                  </div>
+                  <span className={`inline-flex w-11 h-11 items-center justify-center rounded-lg border ${t.tint} ${t.border} ${t.text} flex-shrink-0`}>
+                    <Icon size={18} strokeWidth={1.75} />
+                  </span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-bold text-gray-900">{d.title}</h3>
-                      <span className="text-xs font-bold bg-sky-100 text-sky-700 px-2 py-1 rounded-full">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h3 className="text-[14px] font-semibold tracking-tight text-ink-900">{d.title}</h3>
+                      <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-md font-medium border ${t.tint} ${t.border} ${t.text} tabular-nums`}>
                         {d.count}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600">{d.description}</p>
-                    <p className="text-xs text-sky-600 font-medium mt-3 group-hover:translate-x-1 transition">
-                      Ver documentos →
+                    <p className="text-[12.5px] text-ink-500">{d.description}</p>
+                    <p className={`inline-flex items-center gap-1 text-[12px] font-medium mt-3 ${t.link} transition-transform duration-200 group-hover:translate-x-0.5`}>
+                      Ver documentos
+                      <ArrowRight size={11} strokeWidth={2} />
                     </p>
                   </div>
                 </div>
@@ -111,12 +76,12 @@ export default function Documentos() {
         </div>
       )}
 
-      <div className="bg-sky-50 border border-sky-200 rounded-xl p-6 flex items-start gap-3">
-        <div className="bg-sky-100 rounded-lg p-2 flex-shrink-0">
-          <AlertCircle size={20} className="text-sky-600" />
-        </div>
-        <div className="text-sm text-sky-900">
-          <p className="font-semibold mb-1">Sobre tus documentos médicos</p>
+      <div className="flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-5">
+        <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700 flex-shrink-0">
+          <AlertCircle size={16} strokeWidth={1.75} />
+        </span>
+        <div className="text-[13px] text-sky-900">
+          <p className="font-medium mb-1">Sobre tus documentos médicos</p>
           <p>
             Toda tu información médica está protegida y solo es accesible para ti y el personal médico autorizado.
             Si necesitas una copia física de algún documento, contacta a la administración del centro.

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Search, Plus, Edit, Trash2, Eye, AlertCircle,
+  Search, Plus, Edit, Trash2, Eye,
   Stethoscope, Phone, Mail, ToggleLeft, ToggleRight,
   User, Info,
 } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useMedicos } from '../../../hooks';
 import {
   Modal, PageHeader, KPI, Input, Campo, ErrorBox, ErrorBanner,
   BotonesForm, SearchBar, LoadingRow, EmptyRow,
+  Toolbar, AccentButton, TableShell, Thead, Tbody, Tr,
+  IconButton, ActionGroup, Avatar,
 } from '../../../shared/components/ui';
 
 const ESPECIALIDADES = [
@@ -17,9 +19,6 @@ const ESPECIALIDADES = [
   'Neurología', 'Psiquiatría', 'Oncología', 'Endocrinología',
   'Gastroenterología', 'Urología', 'Otorrinolaringología',
 ];
-
-const initials = (n) =>
-  (n ?? '?').split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase();
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Medicos() {
@@ -67,129 +66,122 @@ export default function Medicos() {
       <PageHeader
         titulo="Gestión de Médicos"
         descripcion="Administra el personal médico del centro"
-        variant="emerald"
+        eyebrow="Médicos"
+        icon={<Stethoscope size={11} strokeWidth={2.25} />}
+        variant="violet"
       >
-        <KPI label="Total"        value={loading ? '···' : medicos.length} />
-        <KPI label="Activos"      value={loading ? '···' : medicos.filter(m => m.activo).length} />
-        <KPI label="Especialidades" value={loading ? '···' : especialidades.length} />
+        <KPI label="Total"          value={loading ? '···' : medicos.length} />
+        <KPI label="Activos"        value={loading ? '···' : medicos.filter(m => m.activo).length} color="text-emerald-700" />
+        <KPI label="Especialidades" value={loading ? '···' : especialidades.length} color="text-violet-700" />
       </PageHeader>
 
       <ErrorBanner msg={error} onDismiss={() => setError('')} />
 
-      {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-        <div className="flex flex-wrap gap-4 items-center">
-          <SearchBar
-            className="min-w-[220px]"
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por nombre, especialidad, email..."
-          />
+      <Toolbar>
+        <SearchBar
+          className="min-w-[220px]"
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, especialidad, email…"
+        />
 
-          <select
-            value={filtroEsp}
-            onChange={e => setFiltroEsp(e.target.value)}
-            className="px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-          >
-            <option value="">Todas las especialidades</option>
-            {especialidades.map(e => <option key={e} value={e}>{e}</option>)}
-          </select>
+        <select
+          value={filtroEsp}
+          onChange={e => setFiltroEsp(e.target.value)}
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
+        >
+          <option value="">Todas las especialidades</option>
+          {especialidades.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
 
-          <div className="flex gap-1 border border-gray-300 rounded-xl p-1">
-            {[['todos', 'Todos'], ['activo', 'Activos'], ['inactivo', 'Inactivos']].map(([v, l]) => (
-              <button key={v} onClick={() => setFiltroEstado(v)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${filtroEstado === v ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => setCreando(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg"
-          >
-            <Plus size={20} /> Nuevo médico
-          </button>
+        <div className="inline-flex p-1 border border-line rounded-xl bg-white">
+          {[['todos', 'Todos'], ['activo', 'Activos'], ['inactivo', 'Inactivos']].map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => setFiltroEstado(v)}
+              className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all ${
+                filtroEstado === v
+                  ? 'bg-violet-600 text-white shadow-[0_4px_14px_-6px_rgba(11,18,32,0.35)]'
+                  : 'text-ink-700 hover:bg-surface'
+              }`}
+            >
+              {l}
+            </button>
+          ))}
         </div>
-      </div>
 
-      {/* Tabla */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Médico</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Especialidad</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Contacto</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Consultorio</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Citas hoy</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Estado</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <LoadingRow colSpan={7} mensaje="Cargando médicos..." />
-              ) : filtered.length === 0 ? (
-                <EmptyRow colSpan={7} icon={Stethoscope} mensaje="No se encontraron médicos" />
-              ) : filtered.map((m, idx) => (
-                <tr key={m.id_medico} className={`hover:bg-emerald-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md text-sm ${m.activo ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gray-400'}`}>
-                        {initials(m.nombre_completo)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Dr(a). {m.nombre_completo}</p>
-                        <p className="text-xs text-gray-500 font-mono">{m.documento}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">
-                      {m.especialidad ?? '—'}
-                    </span>
-                    {m.anios_experiencia > 0 && (
-                      <p className="text-xs text-gray-500 mt-1">{m.anios_experiencia} años</p>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm space-y-1">
-                      {m.email    && <p className="flex items-center gap-1 text-gray-700"><Mail size={12} className="text-blue-500 flex-shrink-0" />{m.email}</p>}
-                      {m.telefono && <p className="flex items-center gap-1 text-gray-700"><Phone size={12} className="text-green-500 flex-shrink-0" />{m.telefono}</p>}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{m.consultorio ?? '—'}</td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="font-bold text-gray-900">{m.citas_hoy ?? 0}</p>
-                    <p className="text-xs text-gray-500">{m.citas_proximas ?? 0} próx.</p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <button
-                      onClick={() => toggleActivo(m)}
-                      title={m.activo ? 'Desactivar' : 'Activar'}
-                      className="mx-auto block"
-                    >
-                      {m.activo
-                        ? <ToggleRight size={28} className="text-green-500" />
-                        : <ToggleLeft  size={28} className="text-gray-400" />}
-                    </button>
-                    <p className="text-xs text-gray-500 mt-1">{m.activo ? 'Activo' : 'Inactivo'}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => setDetalle(m)}  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver"><Eye size={17} /></button>
-                      <button onClick={() => setEditando(m)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Editar"><Edit size={17} /></button>
-                      <button onClick={() => eliminar(m)}    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="Eliminar"><Trash2 size={17} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <div className="flex-1" />
+
+        <AccentButton variant="violet" icon={Plus} onClick={() => setCreando(true)}>
+          Nuevo médico
+        </AccentButton>
+      </Toolbar>
+
+      <TableShell>
+        <Thead columnas={[
+          'Médico', 'Especialidad', 'Contacto', 'Consultorio',
+          { label: 'Citas hoy', align: 'center' },
+          { label: 'Estado',    align: 'center' },
+          { label: 'Acciones',  align: 'center' },
+        ]} />
+        <Tbody>
+          {loading ? (
+            <LoadingRow colSpan={7} mensaje="Cargando médicos…" />
+          ) : filtered.length === 0 ? (
+            <EmptyRow colSpan={7} icon={Stethoscope} mensaje="No se encontraron médicos" />
+          ) : filtered.map((m) => (
+            <Tr key={m.id_medico}>
+              <td className="px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <Avatar name={m.nombre_completo} tone={m.activo ? 'violet' : 'muted'} />
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-medium text-ink-900">Dr(a). {m.nombre_completo}</p>
+                    <p className="text-[11.5px] text-ink-500 font-mono">{m.documento}</p>
+                  </div>
+                </div>
+              </td>
+              <td className="px-5 py-3.5">
+                <span className="inline-flex text-[11.5px] px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-100 rounded-md font-medium">
+                  {m.especialidad ?? '—'}
+                </span>
+                {m.anios_experiencia > 0 && (
+                  <p className="text-[11.5px] text-ink-500 mt-1">{m.anios_experiencia} años</p>
+                )}
+              </td>
+              <td className="px-5 py-3.5">
+                <div className="text-[12.5px] space-y-0.5">
+                  {m.email    && <p className="flex items-center gap-1.5 text-ink-700"><Mail size={11} className="text-brand-600 flex-shrink-0" strokeWidth={1.75} />{m.email}</p>}
+                  {m.telefono && <p className="flex items-center gap-1.5 text-ink-700"><Phone size={11} className="text-emerald-600 flex-shrink-0" strokeWidth={1.75} />{m.telefono}</p>}
+                </div>
+              </td>
+              <td className="px-5 py-3.5 text-[13px] text-ink-700">{m.consultorio ?? '—'}</td>
+              <td className="px-5 py-3.5 text-center">
+                <p className="text-[14px] font-semibold text-ink-900 tabular-nums">{m.citas_hoy ?? 0}</p>
+                <p className="text-[11.5px] text-ink-500">{m.citas_proximas ?? 0} próx.</p>
+              </td>
+              <td className="px-5 py-3.5 text-center">
+                <button
+                  onClick={() => toggleActivo(m)}
+                  title={m.activo ? 'Desactivar' : 'Activar'}
+                  className="mx-auto block"
+                >
+                  {m.activo
+                    ? <ToggleRight size={24} className="text-emerald-500" strokeWidth={1.75} />
+                    : <ToggleLeft  size={24} className="text-ink-300" strokeWidth={1.75} />}
+                </button>
+                <p className="text-[11px] text-ink-500 mt-0.5">{m.activo ? 'Activo' : 'Inactivo'}</p>
+              </td>
+              <td className="px-5 py-3.5">
+                <ActionGroup>
+                  <IconButton icon={Eye}    tone="brand"  title="Ver"      onClick={() => setDetalle(m)}  />
+                  <IconButton icon={Edit}   tone="indigo" title="Editar"   onClick={() => setEditando(m)} />
+                  <IconButton icon={Trash2} tone="red"    title="Eliminar" onClick={() => eliminar(m)}    />
+                </ActionGroup>
+              </td>
+            </Tr>
+          ))}
+        </Tbody>
+      </TableShell>
 
       {detalle  && <ModalDetalle  medico={detalle}  onClose={() => setDetalle(null)} />}
       {editando && <ModalEditar   medico={editando} onClose={() => { setEditando(null); cargar(); }} />}
@@ -201,15 +193,14 @@ export default function Medicos() {
 // ─── Modal: Ver detalles ───────────────────────────────────────────────────────
 function ModalDetalle({ medico: m, onClose }) {
   return (
-    <Modal titulo="Detalles del médico" onClose={onClose}>
-      <div className="flex items-center gap-4 pb-5 border-b mb-5">
-        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg flex-shrink-0">
-          {initials(m.nombre_completo)}
-        </div>
+    <Modal titulo="Detalles del médico" variant="violet" onClose={onClose}>
+      <div className="flex items-center gap-4 pb-5 border-b border-line mb-5">
+        <Avatar name={m.nombre_completo} tone="violet" size="xl" />
         <div>
-          <h3 className="text-xl font-bold text-gray-900">Dr(a). {m.nombre_completo}</h3>
-          <p className="text-purple-600 font-medium">{m.especialidad ?? 'Sin especialidad'}</p>
-          <span className={`text-xs px-3 py-1 rounded-full font-medium mt-1 inline-block ${m.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+          <h3 className="text-[18px] font-semibold tracking-tight text-ink-900">Dr(a). {m.nombre_completo}</h3>
+          <p className="text-[13px] font-medium text-violet-700 mt-0.5">{m.especialidad ?? 'Sin especialidad'}</p>
+          <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium mt-1.5 inline-flex items-center gap-1.5 border ${m.activo ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-surface text-ink-700 border-line'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${m.activo ? 'bg-emerald-500' : 'bg-ink-300'}`} />
             {m.activo ? 'Activo' : 'Inactivo'}
           </span>
         </div>
@@ -268,7 +259,7 @@ function ModalEditar({ medico, onClose }) {
   };
 
   return (
-    <Modal titulo="Editar médico" onClose={onClose}>
+    <Modal titulo="Editar médico" variant="violet" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Input label="Nombres *"   name="nombres"   value={form.nombres}   onChange={handleChange} required />
@@ -334,12 +325,12 @@ function ModalCrear({ onClose }) {
   };
 
   return (
-    <Modal titulo="Registrar médico" subtitulo="Se crea el perfil médico en la base de datos" onClose={onClose}>
+    <Modal titulo="Registrar médico" subtitulo="Se crea el perfil médico en la base de datos" variant="violet" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Aviso */}
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-2 text-sm text-emerald-800">
-          <Info size={16} className="flex-shrink-0 mt-0.5" />
-          <p>Se registra el perfil del médico. Para darle acceso al sistema, crea la cuenta en la sección <strong>Usuarios</strong>.</p>
+        <div className="flex items-start gap-2.5 text-[13px] text-violet-800 bg-violet-50/70 border-l-2 border-violet-500 pl-3 pr-3 py-2.5 rounded-r-md">
+          <Info size={15} className="flex-shrink-0 mt-0.5" strokeWidth={2} />
+          <p>Se registra el perfil del médico. Para darle acceso al sistema, crea la cuenta en la sección <strong className="font-medium">Usuarios</strong>.</p>
         </div>
 
         {/* Datos personales */}
