@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import {
-  FileText, Calendar, AlertCircle, Loader2, Stethoscope, ClipboardList,
-  Download, FileDown, Paperclip,
+  FileText, Calendar, Stethoscope, ClipboardList,
+  FileDown, Paperclip, Loader2, X,
 } from 'lucide-react';
 import historialService from '../../../services/historialService';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { useMisAdjuntos } from '../../../hooks';
-import { generarPdfHistorialCliente, adjuntoService } from '../../../services';
-import { AdjuntoList, AdjuntoViewer } from '../../../shared/components/ui';
+import { generarPdfHistorialCliente } from '../../../services';
+import {
+  AdjuntoList, AdjuntoViewer,
+  PageHeader, KPI, ErrorBanner, EmptyState, LoadingState,
+} from '../../../shared/components/ui';
 
 export default function MiHistorial() {
   const { data: consultas, loading, error } = useAsyncResource(
@@ -21,7 +24,6 @@ export default function MiHistorial() {
   const [downloading, setDownloading] = useState(false);
   const [pdfError, setPdfError]       = useState('');
 
-  // Adjuntos agrupados por id_consulta para mostrar dentro del detalle
   const adjuntosPorConsulta = adjuntosTodos.reduce((acc, a) => {
     (acc[a.id_consulta] ??= []).push(a);
     return acc;
@@ -41,53 +43,37 @@ export default function MiHistorial() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-sky-600 to-cyan-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Mi historia clínica</h1>
-            <p className="text-sky-100">Registro de todas tus consultas médicas</p>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <p className="text-sm text-sky-100 mb-1">Consultas</p>
-              <p className="text-4xl font-bold">{loading ? '···' : consultas.length}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-sky-100 mb-1">Adjuntos</p>
-              <p className="text-4xl font-bold">{adjuntosTodos.length}</p>
-            </div>
-            <button
-              onClick={descargarPdfCompleto}
-              disabled={downloading || loading}
-              className="flex items-center gap-2 px-5 py-3 bg-white text-sky-700 rounded-xl font-semibold shadow-lg hover:bg-sky-50 transition disabled:opacity-60"
-              title="Descarga un PDF con toda tu historia clínica"
-            >
-              {downloading
-                ? <><Loader2 size={18} className="animate-spin" /> Generando...</>
-                : <><FileDown size={18} /> Descargar PDF completo</>}
-            </button>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Mi historia clínica"
+        descripcion="Registro de todas tus consultas médicas"
+        eyebrow="Historial"
+        icon={<FileText size={11} strokeWidth={2.25} />}
+        variant="sky"
+      >
+        <KPI label="Consultas" value={loading ? '···' : consultas.length} color="text-sky-700" />
+        <KPI label="Adjuntos"  value={adjuntosTodos.length} color="text-violet-700" />
+        <button
+          onClick={descargarPdfCompleto}
+          disabled={downloading || loading}
+          className="ml-2 self-center inline-flex items-center gap-2 px-3.5 py-2 bg-ink-900 hover:bg-ink-800 text-white rounded-xl text-[12.5px] font-medium shadow-[0_4px_14px_-6px_rgba(11,18,32,0.45)] active:scale-[0.99] transition-all duration-150 disabled:opacity-60"
+          title="Descarga un PDF con toda tu historia clínica"
+        >
+          {downloading
+            ? <><Loader2 size={13} className="animate-spin" /> Generando…</>
+            : <><FileDown size={13} strokeWidth={1.75} /> Descargar PDF</>}
+        </button>
+      </PageHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
-      {pdfError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {pdfError}
-        </div>
-      )}
+      <ErrorBanner msg={error} />
+      <ErrorBanner msg={pdfError} onDismiss={() => setPdfError('')} />
 
-      {/* Panel resumen de adjuntos — accesible aún sin abrir consulta */}
+      {/* Panel resumen de adjuntos */}
       {!loading && adjuntosTodos.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-5">
+        <section className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Paperclip size={18} className="text-sky-600" />
-            <h2 className="font-bold text-gray-900">Mis documentos adjuntos</h2>
-            <span className="text-xs text-gray-500">
+            <Paperclip size={15} className="text-sky-600" strokeWidth={1.75} />
+            <h2 className="text-[14px] font-semibold tracking-tight text-ink-900">Mis documentos adjuntos</h2>
+            <span className="text-[11.5px] text-ink-500">
               ({adjuntosTodos.length}) — resultados de laboratorio, radiografías, etc.
             </span>
           </div>
@@ -96,71 +82,64 @@ export default function MiHistorial() {
             onPreview={setVisor}
             emptyMessage="Sin documentos adjuntos."
           />
-        </div>
+        </section>
       )}
 
       {loading ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-sky-600" />
-          <p className="text-gray-500">Cargando historial...</p>
-        </div>
+        <LoadingState mensaje="Cargando historial…" />
       ) : consultas.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-          <p className="text-gray-500">Aún no tienes consultas registradas</p>
-        </div>
+        <EmptyState icon={FileText} titulo="Aún no tienes consultas registradas" />
       ) : (
-        /* Timeline */
-        <div className="space-y-4">
+        <div className="space-y-3">
           {consultas.map((c, idx) => {
             const adjuntos = adjuntosPorConsulta[c.id_consulta] ?? [];
             return (
               <button
                 key={c.id_consulta}
                 onClick={() => setSelected(c)}
-                className="w-full text-left bg-white rounded-xl shadow-md hover:shadow-lg transition p-5 border border-gray-100 relative"
+                className="group w-full text-left rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(11,18,32,0.04)] hover:border-ink-100 hover:shadow-[0_8px_28px_-14px_rgba(11,18,32,0.18)] transition-all duration-200 relative"
               >
                 {idx < consultas.length - 1 && (
-                  <div className="absolute left-7 top-16 w-0.5 h-full bg-sky-100" aria-hidden="true" />
+                  <div className="absolute left-7 top-16 w-px h-full bg-line" aria-hidden="true" />
                 )}
                 <div className="flex items-start gap-4">
-                  <div className="bg-gradient-to-br from-sky-500 to-cyan-600 rounded-full p-3 shadow-md flex-shrink-0">
-                    <ClipboardList size={20} className="text-white" />
-                  </div>
+                  <span className="inline-flex w-11 h-11 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-sky-700 text-white shadow-[0_4px_14px_-6px_rgba(14,165,233,0.45)] flex-shrink-0">
+                    <ClipboardList size={17} strokeWidth={1.75} />
+                  </span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-bold text-gray-900">
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-semibold tracking-tight text-ink-900">
                           {c.medico_nombre ?? 'Consulta médica'}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-[11.5px] text-ink-500">
                           {c.medico_especialidad ?? 'Consulta general'}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         {adjuntos.length > 0 && (
                           <span
-                            className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium flex items-center gap-1"
+                            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100 font-medium"
                             title={`${adjuntos.length} archivo(s) adjunto(s)`}
                           >
-                            <Paperclip size={11} /> {adjuntos.length}
+                            <Paperclip size={10} strokeWidth={1.75} /> {adjuntos.length}
                           </span>
                         )}
-                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                          <Calendar size={12} />
+                        <p className="text-[11.5px] text-ink-500 flex items-center gap-1 tabular-nums">
+                          <Calendar size={11} strokeWidth={1.75} />
                           {c.fecha_consulta?.slice(0, 10)}
                         </p>
                       </div>
                     </div>
 
                     {c.motivo_consulta && (
-                      <p className="text-sm text-gray-700 line-clamp-2 mb-2">
-                        <span className="font-medium text-gray-900">Motivo: </span>
+                      <p className="text-[12.5px] text-ink-700 line-clamp-2 mb-1">
+                        <span className="font-medium text-ink-900">Motivo: </span>
                         {c.motivo_consulta}
                       </p>
                     )}
                     {c.impresion_diagnostica && (
-                      <p className="text-sm text-sky-700 line-clamp-1">
+                      <p className="text-[12.5px] text-sky-700 line-clamp-1">
                         <span className="font-medium">Diagnóstico: </span>
                         {c.impresion_diagnostica}
                       </p>
@@ -189,33 +168,35 @@ export default function MiHistorial() {
 
 function DetalleConsulta({ consulta, adjuntos, onPreviewAdjunto, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-sky-600 to-cyan-600 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl">
-          <div>
-            <h2 className="text-2xl font-bold">Consulta médica</h2>
-            <p className="text-sky-100 text-sm flex items-center gap-2">
-              <Stethoscope size={12} />
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex justify-between items-start gap-4 z-10">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-sky-500" />
+          <div className="ml-2">
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">Consulta médica</h2>
+            <p className="text-[12px] text-ink-500 mt-0.5 flex items-center gap-1.5">
+              <Stethoscope size={11} strokeWidth={1.75} className="text-sky-600" />
               {consulta.medico_nombre} · {consulta.fecha_consulta?.slice(0, 10)}
             </p>
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">✕</button>
+          <button onClick={onClose} className="flex-shrink-0 -mt-0.5 -mr-1 text-ink-300 hover:text-ink-900 hover:bg-surface p-1.5 rounded-lg transition-colors">
+            <X size={18} strokeWidth={1.75} />
+          </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          <Seccion titulo="Motivo de consulta" contenido={consulta.motivo_consulta} />
+        <div className="p-6 space-y-3 overflow-y-auto">
+          <Seccion titulo="Motivo de consulta"    contenido={consulta.motivo_consulta} />
           <Seccion titulo="Impresión diagnóstica" contenido={consulta.impresion_diagnostica} highlight />
-          <Seccion titulo="Plan de tratamiento" contenido={consulta.plan_tratamiento} />
-          <Seccion titulo="Observaciones" contenido={consulta.observaciones} />
+          <Seccion titulo="Plan de tratamiento"   contenido={consulta.plan_tratamiento} />
+          <Seccion titulo="Observaciones"         contenido={consulta.observaciones} />
 
           {!consulta.motivo_consulta && !consulta.impresion_diagnostica && !consulta.plan_tratamiento && !consulta.observaciones && (
-            <p className="text-center text-gray-500 py-8">No hay detalles adicionales de esta consulta.</p>
+            <p className="text-center text-[13px] text-ink-500 py-8">No hay detalles adicionales de esta consulta.</p>
           )}
 
-          {/* Adjuntos de esta consulta */}
-          <div className="pt-2 border-t border-gray-200">
-            <p className="text-xs font-bold uppercase text-gray-600 mb-3 flex items-center gap-1">
-              <Paperclip size={12} /> Archivos adjuntos ({adjuntos.length})
+          <div className="pt-3 border-t border-line">
+            <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-500 mb-3 flex items-center gap-1.5">
+              <Paperclip size={11} strokeWidth={1.75} /> Archivos adjuntos ({adjuntos.length})
             </p>
             <AdjuntoList
               adjuntos={adjuntos}
@@ -232,11 +213,11 @@ function DetalleConsulta({ consulta, adjuntos, onPreviewAdjunto, onClose }) {
 function Seccion({ titulo, contenido, highlight = false }) {
   if (!contenido) return null;
   return (
-    <div className={`rounded-lg p-4 ${highlight ? 'bg-sky-50 border border-sky-200' : 'bg-gray-50'}`}>
-      <p className={`text-xs font-bold uppercase mb-2 ${highlight ? 'text-sky-700' : 'text-gray-600'}`}>
+    <div className={`rounded-lg border p-3.5 ${highlight ? 'bg-sky-50/60 border-sky-100' : 'bg-surface/60 border-line'}`}>
+      <p className={`text-[10.5px] font-medium uppercase tracking-[0.12em] mb-1.5 ${highlight ? 'text-sky-700' : 'text-ink-500'}`}>
         {titulo}
       </p>
-      <p className="text-sm text-gray-800 whitespace-pre-wrap">{contenido}</p>
+      <p className="text-[13px] text-ink-800 whitespace-pre-wrap">{contenido}</p>
     </div>
   );
 }

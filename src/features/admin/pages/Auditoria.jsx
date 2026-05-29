@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import {
-  ShieldCheck, Search, AlertCircle, Loader2, RefreshCw, X,
-  Plus, Edit, Trash2, User, Calendar, ChevronDown, ChevronUp,
+  ShieldCheck, RefreshCw, X,
+  Plus, Edit, Trash2, User, ChevronDown, ChevronUp,
   FileText, Download, Filter,
 } from 'lucide-react';
 import { useAuth, useAuditoria } from '../../../hooks';
 import {
   PageHeader, KPI, ErrorBanner, SearchBar, LoadingRow, EmptyRow,
+  Toolbar, TableShell, Thead, Tbody, Tr, EmptyState,
 } from '../../../shared/components/ui';
 
 const TABLAS = [
@@ -24,10 +25,10 @@ const TABLAS = [
 ];
 
 const OPERACIONES = [
-  { v: 'todas',  l: 'Todas',     bg: 'bg-gray-100 text-gray-700 border-gray-200' },
-  { v: 'INSERT', l: 'Creación',  bg: 'bg-green-100 text-green-700 border-green-200', icon: Plus },
-  { v: 'UPDATE', l: 'Edición',   bg: 'bg-blue-100 text-blue-700 border-blue-200',   icon: Edit },
-  { v: 'DELETE', l: 'Borrado',   bg: 'bg-red-100 text-red-700 border-red-200',      icon: Trash2 },
+  { v: 'todas',  l: 'Todas',     bg: 'bg-surface text-ink-700 border-line' },
+  { v: 'INSERT', l: 'Creación',  bg: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: Plus },
+  { v: 'UPDATE', l: 'Edición',   bg: 'bg-brand-50 text-brand-700 border-brand-100',       icon: Edit },
+  { v: 'DELETE', l: 'Borrado',   bg: 'bg-red-50 text-red-700 border-red-100',             icon: Trash2 },
 ];
 
 const opStyle = (op) => OPERACIONES.find(o => o.v === op) ?? OPERACIONES[0];
@@ -69,13 +70,11 @@ export default function Auditoria() {
 
   if (!esAdmin) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-12 text-center space-y-3">
-        <ShieldCheck size={48} className="mx-auto text-red-500" />
-        <h2 className="text-xl font-bold text-gray-900">Acceso restringido</h2>
-        <p className="text-sm text-gray-500">
-          La auditoría es solo para administradores. Pide acceso si lo necesitas.
-        </p>
-      </div>
+      <EmptyState
+        icon={ShieldCheck}
+        titulo="Acceso restringido"
+        descripcion="La auditoría es solo para administradores. Pide acceso si lo necesitas."
+      />
     );
   }
 
@@ -84,137 +83,116 @@ export default function Auditoria() {
       <PageHeader
         titulo="Auditoría del sistema"
         descripcion="Registro inmutable de cambios en tablas clínicas"
-        icon={<ShieldCheck size={32} />}
+        eyebrow="Auditoría"
+        icon={<ShieldCheck size={11} strokeWidth={2.25} />}
         variant="slate"
       >
         <KPI label="Total"     value={loading ? '···' : counts.total}  />
-        <KPI label="Creados"   value={loading ? '···' : counts.insert} color="text-green-300" />
-        <KPI label="Editados"  value={loading ? '···' : counts.update} color="text-blue-300" />
-        <KPI label="Borrados"  value={loading ? '···' : counts.delete} color="text-red-300" />
+        <KPI label="Creados"   value={loading ? '···' : counts.insert} color="text-emerald-700" />
+        <KPI label="Editados"  value={loading ? '···' : counts.update} color="text-brand-700" />
+        <KPI label="Borrados"  value={loading ? '···' : counts.delete} color="text-red-700" />
       </PageHeader>
 
       <ErrorBanner msg={error} onRetry={cargar} />
 
-      {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-          <Filter size={16} /> Filtros
+      <Toolbar>
+        <div className="flex items-center gap-1.5 text-[12px] uppercase tracking-[0.10em] font-medium text-ink-500 mr-1">
+          <Filter size={12} strokeWidth={2} /> Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <SearchBar
-            className="md:col-span-2"
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por actor, ID o tabla..."
-            focusColor="slate"
-          />
-          <select value={filtroTabla} onChange={e => setFiltroTabla(e.target.value)}
-            className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white text-sm">
-            {TABLAS.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
-          </select>
-          <select value={filtroOp} onChange={e => setFiltroOp(e.target.value)}
-            className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white text-sm">
-            {OPERACIONES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-          </select>
-          <select value={limit} onChange={e => setLimit(Number(e.target.value))}
-            className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white text-sm">
-            <option value={50}>Últimos 50</option>
-            <option value={100}>Últimos 100</option>
-            <option value={500}>Últimos 500</option>
-            <option value={2000}>Últimos 2000</option>
-          </select>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Desde</label>
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Hasta</label>
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 text-sm" />
-          </div>
-          <div className="flex items-end gap-2">
-            <button onClick={() => { setSearch(''); setFiltroTabla('todas'); setFiltroOp('todas'); setFechaDesde(''); setFechaHasta(''); }}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-xl">
-              Limpiar filtros
-            </button>
-            <button onClick={cargar}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-xl hover:bg-slate-800 transition text-sm">
-              <RefreshCw size={14} /> Recargar
-            </button>
-          </div>
-        </div>
-      </div>
+        <SearchBar
+          className="min-w-[220px]"
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por actor, ID o tabla…"
+        />
+        <select value={filtroTabla} onChange={e => setFiltroTabla(e.target.value)}
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all">
+          {TABLAS.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+        </select>
+        <select value={filtroOp} onChange={e => setFiltroOp(e.target.value)}
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all">
+          {OPERACIONES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
+        <select value={limit} onChange={e => setLimit(Number(e.target.value))}
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all">
+          <option value={50}>Últimos 50</option>
+          <option value={100}>Últimos 100</option>
+          <option value={500}>Últimos 500</option>
+          <option value={2000}>Últimos 2000</option>
+        </select>
+        <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+          title="Desde"
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all" />
+        <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+          title="Hasta"
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all" />
+        <div className="flex-1" />
+        <button onClick={() => { setSearch(''); setFiltroTabla('todas'); setFiltroOp('todas'); setFechaDesde(''); setFechaHasta(''); }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12.5px] font-medium text-ink-700 border border-line rounded-lg hover:bg-surface hover:border-ink-100 transition-colors">
+          Limpiar
+        </button>
+        <button onClick={cargar}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12.5px] font-medium text-white bg-ink-900 hover:bg-ink-800 rounded-lg transition-colors shadow-[0_4px_14px_-6px_rgba(11,18,32,0.45)]">
+          <RefreshCw size={13} strokeWidth={1.75} /> Recargar
+        </button>
+      </Toolbar>
 
-      {/* Lista */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-slate-50 to-gray-50 border-b-2 border-slate-200">
-              <tr>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Fecha</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Operación</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Tabla</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">ID</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Actor</th>
-                <th className="px-5 py-3 text-center text-xs font-bold text-gray-700 uppercase">Detalles</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <LoadingRow colSpan={6} mensaje="Cargando log..." color="slate" />
-              ) : filtered.length === 0 ? (
-                <EmptyRow colSpan={6} icon={FileText} mensaje="No hay eventos que coincidan con los filtros" />
-              ) : filtered.map(l => {
-                const op = opStyle(l.operacion);
-                const OpIcon = op.icon;
-                return (
-                  <tr key={l.id_audit} className="hover:bg-slate-50 transition">
-                    <td className="px-5 py-3 text-xs text-gray-700 font-mono whitespace-nowrap">
-                      {l.ocurrio_en?.slice(0, 19).replace('T', ' ')}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-medium border ${op.bg}`}>
-                        {OpIcon && <OpIcon size={11} />}
-                        {op.l}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-sm text-gray-800 font-mono">
-                      {TABLAS.find(t => t.v === l.tabla)?.l ?? l.tabla}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-gray-500 font-mono">#{l.id_registro}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center">
-                          <User size={12} className="text-slate-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">{l.actor_nombre}</p>
-                          {l.actor_rol && <p className="text-xs text-gray-500">{l.actor_rol}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <button onClick={() => setDetalle(l)}
-                        className="text-xs text-slate-600 hover:text-slate-900 font-medium underline">
-                        Ver
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length > 0 && (
-          <div className="px-5 py-3 border-t border-gray-100 text-xs text-gray-500">
-            Mostrando {filtered.length} de {logs.length} eventos cargados.
-            {logs.length === limit && ` (Límite alcanzado — sube el límite para ver más)`}
-          </div>
-        )}
-      </div>
+      <TableShell>
+        <Thead columnas={[
+          'Fecha', 'Operación', 'Tabla', 'ID', 'Actor',
+          { label: 'Detalles', align: 'center' },
+        ]} />
+        <Tbody>
+          {loading ? (
+            <LoadingRow colSpan={6} mensaje="Cargando log…" color="slate" />
+          ) : filtered.length === 0 ? (
+            <EmptyRow colSpan={6} icon={FileText} mensaje="No hay eventos que coincidan con los filtros" />
+          ) : filtered.map(l => {
+            const op = opStyle(l.operacion);
+            const OpIcon = op.icon;
+            return (
+              <Tr key={l.id_audit}>
+                <td className="px-5 py-3.5 text-[12px] text-ink-700 font-mono whitespace-nowrap">
+                  {l.ocurrio_en?.slice(0, 19).replace('T', ' ')}
+                </td>
+                <td className="px-5 py-3.5">
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md font-medium border ${op.bg}`}>
+                    {OpIcon && <OpIcon size={10} strokeWidth={2} />}
+                    {op.l}
+                  </span>
+                </td>
+                <td className="px-5 py-3.5 text-[13px] text-ink-800 font-mono">
+                  {TABLAS.find(t => t.v === l.tabla)?.l ?? l.tabla}
+                </td>
+                <td className="px-5 py-3.5 text-[12px] text-ink-500 font-mono">#{l.id_registro}</td>
+                <td className="px-5 py-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-surface border border-line">
+                      <User size={12} className="text-ink-700" strokeWidth={1.75} />
+                    </span>
+                    <div>
+                      <p className="text-[13px] font-medium text-ink-900">{l.actor_nombre}</p>
+                      {l.actor_rol && <p className="text-[11px] text-ink-500">{l.actor_rol}</p>}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-5 py-3.5 text-center">
+                  <button onClick={() => setDetalle(l)}
+                    className="text-[12px] text-brand-600 hover:text-brand-700 font-medium underline-offset-2 hover:underline">
+                    Ver
+                  </button>
+                </td>
+              </Tr>
+            );
+          })}
+        </Tbody>
+      </TableShell>
+      {filtered.length > 0 && (
+        <p className="text-[11.5px] text-ink-500 px-1">
+          Mostrando {filtered.length} de {logs.length} eventos cargados.
+          {logs.length === limit && ` (Límite alcanzado — sube el límite para ver más)`}
+        </p>
+      )}
 
       {detalle && <ModalDetalle log={detalle} onClose={() => setDetalle(null)} />}
     </div>
@@ -243,59 +221,65 @@ function ModalDetalle({ log, onClose }) {
   }, [log]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-slate-800 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
-          <div>
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <ShieldCheck size={20} /> Evento de auditoría #{log.id_audit}
-            </h2>
-            <p className="text-slate-300 text-xs">
-              {log.ocurrio_en?.replace('T', ' ').slice(0, 19)} · por {log.actor_nombre} ({log.actor_rol ?? '—'})
-            </p>
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex justify-between items-start gap-4 z-10">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-ink-700" />
+          <div className="flex items-start gap-3 ml-2">
+            <span className="flex-shrink-0 inline-flex w-9 h-9 items-center justify-center rounded-lg border bg-surface border-line text-ink-700">
+              <ShieldCheck size={16} strokeWidth={1.75} />
+            </span>
+            <div>
+              <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">
+                Evento de auditoría #{log.id_audit}
+              </h2>
+              <p className="text-[12px] text-ink-500 mt-0.5">
+                {log.ocurrio_en?.replace('T', ' ').slice(0, 19)} · por <span className="text-ink-700 font-medium">{log.actor_nombre}</span> ({log.actor_rol ?? '—'})
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg">
-            <X size={22} />
+          <button onClick={onClose} className="flex-shrink-0 -mt-0.5 -mr-1 text-ink-300 hover:text-ink-900 hover:bg-surface p-1.5 rounded-lg transition-colors">
+            <X size={18} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           {/* Resumen */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2.5">
             <Info label="Operación" valor={
-              <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-medium border ${op.bg}`}>
+              <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md font-medium border ${op.bg}`}>
                 {op.l}
               </span>
             } />
-            <Info label="Tabla"    valor={<span className="font-mono">{log.tabla}</span>} />
-            <Info label="ID registro" valor={<span className="font-mono">#{log.id_registro}</span>} />
+            <Info label="Tabla"       valor={<span className="font-mono text-[13px]">{log.tabla}</span>} />
+            <Info label="ID registro" valor={<span className="font-mono text-[13px]">#{log.id_registro}</span>} />
           </div>
 
           {/* UPDATE: diff campo por campo */}
           {log.operacion === 'UPDATE' && (
             <div>
-              <h3 className="text-sm font-bold text-gray-700 mb-2">
+              <h3 className="text-[13px] font-semibold text-ink-800 mb-2.5">
                 Campos modificados ({cambios.length})
               </h3>
               {cambios.length === 0 ? (
-                <p className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded-lg">
+                <p className="text-[12px] text-ink-500 italic p-3 bg-surface border border-line rounded-lg">
                   Sin cambios significativos (probablemente solo se tocó updated_at).
                 </p>
               ) : (
                 <div className="space-y-2">
                   {cambios.map(c => (
-                    <div key={c.campo} className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700 font-mono">
+                    <div key={c.campo} className="border border-line rounded-xl overflow-hidden">
+                      <div className="bg-surface border-b border-line px-3 py-1.5 text-[12px] font-medium text-ink-700 font-mono">
                         {c.campo}
                       </div>
-                      <div className="grid grid-cols-2 divide-x divide-gray-200">
-                        <div className="p-3 bg-red-50">
-                          <p className="text-[10px] uppercase font-semibold text-red-700 mb-1">Antes</p>
-                          <pre className="text-xs text-gray-800 whitespace-pre-wrap break-words">{formatValue(c.antes)}</pre>
+                      <div className="grid grid-cols-2 divide-x divide-line">
+                        <div className="p-3 bg-red-50/60">
+                          <p className="text-[10px] uppercase tracking-[0.10em] font-medium text-red-700 mb-1">Antes</p>
+                          <pre className="text-[12px] text-ink-800 whitespace-pre-wrap break-words font-mono">{formatValue(c.antes)}</pre>
                         </div>
-                        <div className="p-3 bg-green-50">
-                          <p className="text-[10px] uppercase font-semibold text-green-700 mb-1">Después</p>
-                          <pre className="text-xs text-gray-800 whitespace-pre-wrap break-words">{formatValue(c.despues)}</pre>
+                        <div className="p-3 bg-emerald-50/60">
+                          <p className="text-[10px] uppercase tracking-[0.10em] font-medium text-emerald-700 mb-1">Después</p>
+                          <pre className="text-[12px] text-ink-800 whitespace-pre-wrap break-words font-mono">{formatValue(c.despues)}</pre>
                         </div>
                       </div>
                     </div>
@@ -305,29 +289,29 @@ function ModalDetalle({ log, onClose }) {
             </div>
           )}
 
-          {/* INSERT: estado completo */}
+          {/* INSERT */}
           {log.operacion === 'INSERT' && (
             <div>
-              <h3 className="text-sm font-bold text-green-700 mb-2 flex items-center gap-1">
-                <Plus size={14} /> Estado del registro creado
+              <h3 className="text-[13px] font-semibold text-emerald-700 mb-2.5 flex items-center gap-1.5">
+                <Plus size={13} strokeWidth={2} /> Estado del registro creado
               </h3>
               <JsonView data={log.after_data} />
             </div>
           )}
 
-          {/* DELETE: snapshot antes de borrar */}
+          {/* DELETE */}
           {log.operacion === 'DELETE' && (
             <div>
-              <h3 className="text-sm font-bold text-red-700 mb-2 flex items-center gap-1">
-                <Trash2 size={14} /> Estado del registro antes de borrar
+              <h3 className="text-[13px] font-semibold text-red-700 mb-2.5 flex items-center gap-1.5">
+                <Trash2 size={13} strokeWidth={2} /> Estado del registro antes de borrar
               </h3>
               <JsonView data={log.before_data} />
             </div>
           )}
 
           {/* Footer */}
-          <div className="pt-4 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
+          <div className="pt-4 border-t border-line flex items-center justify-between">
+            <p className="text-[11.5px] text-ink-500">
               UUID actor: <span className="font-mono">{log.actor_uuid ?? '—'}</span>
             </p>
             <button
@@ -338,9 +322,9 @@ function ModalDetalle({ log, onClose }) {
                 a.href = url; a.download = `audit-${log.id_audit}.json`; a.click();
                 URL.revokeObjectURL(url);
               }}
-              className="flex items-center gap-2 text-xs text-slate-600 hover:text-slate-900 font-medium"
+              className="inline-flex items-center gap-1.5 text-[12px] text-brand-600 hover:text-brand-700 font-medium"
             >
-              <Download size={14} /> Exportar JSON
+              <Download size={13} strokeWidth={1.75} /> Exportar JSON
             </button>
           </div>
         </div>
@@ -359,20 +343,20 @@ function formatValue(v) {
 
 function JsonView({ data }) {
   const [open, setOpen] = useState(false);
-  if (!data || Object.keys(data).length === 0) return <p className="text-xs text-gray-400">Sin datos</p>;
+  if (!data || Object.keys(data).length === 0) return <p className="text-[12px] text-ink-300">Sin datos</p>;
   const entries = Object.entries(data);
   const mostrar = open ? entries : entries.slice(0, 8);
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-xl divide-y divide-gray-200">
+    <div className="bg-surface border border-line rounded-xl divide-y divide-line">
       {mostrar.map(([k, v]) => (
-        <div key={k} className="px-3 py-2 grid grid-cols-3 gap-2 text-xs">
-          <span className="text-gray-500 font-mono col-span-1">{k}</span>
-          <span className="col-span-2 text-gray-800 break-words whitespace-pre-wrap font-mono">{formatValue(v)}</span>
+        <div key={k} className="px-3 py-2 grid grid-cols-3 gap-2 text-[12px]">
+          <span className="text-ink-500 font-mono col-span-1">{k}</span>
+          <span className="col-span-2 text-ink-800 break-words whitespace-pre-wrap font-mono">{formatValue(v)}</span>
         </div>
       ))}
       {entries.length > 8 && (
         <button onClick={() => setOpen(o => !o)}
-          className="w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-1">
+          className="w-full px-3 py-2 text-[12px] text-ink-700 hover:bg-white/50 flex items-center justify-center gap-1.5 transition-colors">
           {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           {open ? 'Mostrar menos' : `Ver ${entries.length - 8} campos más`}
         </button>
@@ -383,9 +367,9 @@ function JsonView({ data }) {
 
 function Info({ label, valor }) {
   return (
-    <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <div className="text-sm font-semibold text-gray-900">{valor}</div>
+    <div className="rounded-lg border border-line bg-surface/60 px-3 py-2">
+      <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">{label}</p>
+      <div className="mt-0.5 text-[13.5px] font-medium text-ink-900">{valor}</div>
     </div>
   );
 }

@@ -1,173 +1,163 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Calendar, Clock, Users, ClipboardList, AlertCircle,
-  CalendarClock, Activity, ArrowRight
+  Calendar, Clock, Users, ClipboardList, CalendarClock, ArrowRight,
 } from 'lucide-react';
 import { useAuth, useDashboardMedico } from '../../../hooks';
+import {
+  PageHero, LiveTimeBadge, StatCard, Panel, PanelLink,
+  StatusPill, EmptyState, ListRow, ErrorBlock,
+} from '../../dashboard/ui/dashboardUI';
 
 export default function MedicoDashboard() {
   const navigate = useNavigate();
   const { usuarioLogueado } = useAuth();
   const { agenda, proximas, counts, loading, error } = useDashboardMedico();
 
-  const cards = [
-    { title: 'Citas hoy',     value: agenda.length,    icon: CalendarClock, color: 'emerald', path: '/medico/agenda' },
-    { title: 'Mis pacientes', value: counts.pacientes, icon: Users,         color: 'blue',    path: '/medico/pacientes' },
-    { title: 'Consultas',     value: counts.consultas, icon: ClipboardList, color: 'purple',  path: '/medico/consultas' },
+  const greeting = greetingForHour(new Date().getHours());
+  const doctorName = usuarioLogueado?.nombres ?? 'Doctor(a)';
+  const today = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const stats = [
+    { label: 'Citas hoy',     value: agenda.length,    icon: CalendarClock, path: '/medico/agenda' },
+    { label: 'Mis pacientes', value: counts.pacientes, icon: Users,         path: '/medico/pacientes' },
+    { label: 'Consultas',     value: counts.consultas, icon: ClipboardList, path: '/medico/consultas' },
   ];
-
-  const colors = {
-    emerald: 'from-emerald-500 to-teal-600',
-    blue:    'from-blue-500 to-indigo-600',
-    purple:  'from-purple-500 to-pink-600',
-  };
-
-  const estadoColor = (estado) => ({
-    programada: 'bg-blue-100 text-blue-700',
-    confirmada: 'bg-green-100 text-green-700',
-    en_curso:   'bg-yellow-100 text-yellow-700',
-    completada: 'bg-gray-100 text-gray-700',
-    cancelada:  'bg-red-100 text-red-700',
-    no_asistio: 'bg-orange-100 text-orange-700',
-  }[estado] ?? 'bg-gray-100 text-gray-700');
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
-              Bienvenido, Dr(a). {usuarioLogueado?.nombres ?? 'Médico'}
-            </h1>
-            <p className="text-emerald-100">{usuarioLogueado?.especialidad ?? 'Profesional médico'}</p>
-            <p className="text-sm text-emerald-100 mt-2">
-              {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-6 text-center">
-            <Activity size={40} className="mx-auto mb-2" />
-            <p className="text-sm font-medium">Activo</p>
-            <p className="text-2xl font-bold">
-              {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Mi consulta"
+        title={
+          <>
+            {greeting}, Dr(a). <span className="text-ink-700 font-normal">{doctorName}.</span>
+          </>
+        }
+        subtitle={
+          <>
+            {today}
+            {usuarioLogueado?.especialidad && (
+              <span className="ml-2 text-ink-300">·</span>
+            )}
+            {usuarioLogueado?.especialidad && (
+              <span className="ml-2">{usuarioLogueado.especialidad}</span>
+            )}
+          </>
+        }
+        side={<LiveTimeBadge />}
+        accent="accent"
+      />
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBlock message={error} />
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-6">
-        {cards.map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <button
-              key={i}
-              onClick={() => navigate(c.path)}
-              className="text-left bg-white rounded-xl shadow-md hover:shadow-xl transition p-6 border border-gray-100 group"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colors[c.color]} flex items-center justify-center shadow-lg`}>
-                  <Icon className="text-white" size={28} />
-                </div>
-                <ArrowRight className="text-gray-300 group-hover:text-emerald-600 transition" size={20} />
-              </div>
-              <h3 className="text-gray-600 text-sm font-medium mb-1">{c.title}</h3>
-              <p className="text-3xl font-bold text-gray-900">
-                {loading ? <span className="animate-pulse text-gray-300">···</span> : c.value}
-              </p>
-            </button>
-          );
-        })}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {stats.map((s) => (
+          <StatCard
+            key={s.label}
+            label={s.label}
+            value={s.value}
+            icon={s.icon}
+            loading={loading}
+            onClick={() => navigate(s.path)}
+            accent="accent"
+          />
+        ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-6">
         {/* Agenda de hoy */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Agenda de hoy</h2>
-              <p className="text-sm text-gray-500">Citas programadas para hoy</p>
-            </div>
-            <button onClick={() => navigate('/medico/agenda')} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
-              Ver completa
-            </button>
-          </div>
-
+        <Panel
+          title="Agenda de hoy"
+          subtitle="Citas programadas para hoy"
+          action={<PanelLink onClick={() => navigate('/medico/agenda')}>Ver completa</PanelLink>}
+        >
           {loading ? (
-            <div className="text-center py-8 text-gray-400">Cargando...</div>
+            <SkeletonList />
           ) : agenda.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <CalendarClock size={32} className="mx-auto mb-2 text-gray-300" />
-              No tienes citas para hoy
-            </div>
+            <EmptyState icon={CalendarClock} title="No tienes citas para hoy" hint="Te avisaremos cuando se agende una nueva." />
           ) : (
-            <div className="space-y-3">
+            <ul className="-mx-3 divide-y divide-line/60">
               {agenda.slice(0, 5).map((c) => (
-                <div key={c.id_cita} className="flex items-center gap-4 p-3 rounded-lg hover:bg-emerald-50 transition border border-gray-100">
-                  <div className="bg-emerald-100 rounded-lg p-2 w-14 text-center">
-                    <p className="text-xs text-emerald-700 font-semibold">{c.hora?.slice(0, 5)}</p>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{c.paciente_nombre ?? '—'}</p>
-                    <p className="text-xs text-gray-500 truncate">{c.motivo ?? 'Sin motivo registrado'}</p>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${estadoColor(c.estado)}`}>
-                    {c.estado}
-                  </span>
-                </div>
+                <li key={c.id_cita}>
+                  <ListRow
+                    leading={
+                      <div className="flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-accent-500/8 border border-accent-500/15 text-accent-500">
+                        <span className="text-[12px] font-semibold tabular-nums leading-none">
+                          {c.hora?.slice(0, 5) ?? '—'}
+                        </span>
+                      </div>
+                    }
+                    title={c.paciente_nombre ?? '—'}
+                    subtitle={c.motivo ?? 'Sin motivo registrado'}
+                    trailing={<StatusPill estado={c.estado} />}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </Panel>
 
         {/* Próximas citas */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Próximas citas</h2>
-              <p className="text-sm text-gray-500">Programadas para los próximos días</p>
-            </div>
-            <button onClick={() => navigate('/medico/citas')} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
-              Ver todas
-            </button>
-          </div>
-
+        <Panel
+          title="Próximas citas"
+          subtitle="Programadas para los próximos días"
+          action={<PanelLink onClick={() => navigate('/medico/citas')}>Ver todas</PanelLink>}
+        >
           {loading ? (
-            <div className="text-center py-8 text-gray-400">Cargando...</div>
+            <SkeletonList />
           ) : proximas.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Calendar size={32} className="mx-auto mb-2 text-gray-300" />
-              Sin próximas citas
-            </div>
+            <EmptyState icon={Calendar} title="Sin próximas citas" />
           ) : (
-            <div className="space-y-3">
+            <ul className="-mx-3 divide-y divide-line/60">
               {proximas.map((c) => (
-                <div key={c.id_cita} className="flex items-center gap-4 p-3 rounded-lg hover:bg-blue-50 transition border border-gray-100">
-                  <div className="bg-blue-100 rounded-lg p-2">
-                    <Calendar size={18} className="text-blue-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{c.paciente_nombre ?? '—'}</p>
-                    <p className="text-xs text-gray-500 flex items-center gap-2 mt-1">
-                      <Clock size={12} />
-                      {c.fecha} · {c.hora?.slice(0, 5)} · {c.tipo_consulta ?? 'Consulta'}
-                    </p>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${estadoColor(c.estado)}`}>
-                    {c.estado}
-                  </span>
-                </div>
+                <li key={c.id_cita}>
+                  <ListRow
+                    leading={
+                      <span className="inline-flex w-10 h-10 items-center justify-center rounded-lg bg-brand-50 border border-brand-100 text-brand-700">
+                        <Calendar size={16} strokeWidth={1.75} />
+                      </span>
+                    }
+                    title={c.paciente_nombre ?? '—'}
+                    subtitle={
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock size={11} strokeWidth={1.75} className="text-ink-300" />
+                        {c.fecha} · {c.hora?.slice(0, 5)} · {c.tipo_consulta ?? 'Consulta'}
+                      </span>
+                    }
+                    trailing={<StatusPill estado={c.estado} />}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </Panel>
       </div>
     </div>
+  );
+}
+
+function greetingForHour(h) {
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
+
+function SkeletonList({ rows = 4 }) {
+  return (
+    <ul className="space-y-2">
+      {Array.from({ length: rows }).map((_, i) => (
+        <li key={i} className="flex items-center gap-4 py-3">
+          <div className="w-12 h-12 rounded-lg bg-line/50 motion-safe:animate-pulse" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-1/3 rounded bg-line/50 motion-safe:animate-pulse" />
+            <div className="h-2.5 w-1/2 rounded bg-line/40 motion-safe:animate-pulse" />
+          </div>
+          <div className="w-16 h-5 rounded bg-line/50 motion-safe:animate-pulse" />
+        </li>
+      ))}
+    </ul>
   );
 }

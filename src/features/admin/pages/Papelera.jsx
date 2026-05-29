@@ -8,18 +8,20 @@ import { papeleraService } from '../../../services';
 import { useAuth, usePapelera } from '../../../hooks';
 import {
   PageHeader, KPI, ErrorBanner, SuccessBanner, SearchBar, EmptyState,
+  Toolbar, LoadingState,
 } from '../../../shared/components/ui';
 
 const TABLAS = [
-  { v: 'todas',            l: 'Todas',     icon: FileText },
+  { v: 'todas',            l: 'Todas',     icon: FileText,
+    color: 'border-line bg-white',                                badge: 'bg-surface text-ink-700 border border-line' },
   { v: 'consulta_medica',  l: 'Consultas', icon: ClipboardList,
-    color: 'border-purple-200 bg-purple-50', badge: 'bg-purple-100 text-purple-700' },
+    color: 'border-violet-100 bg-violet-50/60',                   badge: 'bg-violet-50 text-violet-700 border border-violet-100' },
   { v: 'cita',             l: 'Citas',     icon: Calendar,
-    color: 'border-blue-200 bg-blue-50',     badge: 'bg-blue-100 text-blue-700' },
+    color: 'border-brand-100 bg-brand-50/60',                     badge: 'bg-brand-50 text-brand-700 border border-brand-100' },
   { v: 'paciente',         l: 'Pacientes', icon: User,
-    color: 'border-green-200 bg-green-50',   badge: 'bg-green-100 text-green-700' },
+    color: 'border-emerald-100 bg-emerald-50/60',                 badge: 'bg-emerald-50 text-emerald-700 border border-emerald-100' },
   { v: 'medico',           l: 'Médicos',   icon: Stethoscope,
-    color: 'border-teal-200 bg-teal-50',     badge: 'bg-teal-100 text-teal-700' },
+    color: 'border-teal-100 bg-teal-50/60',                       badge: 'bg-teal-50 text-teal-700 border border-teal-100' },
 ];
 
 const styleFor = (tabla) => TABLAS.find(t => t.v === tabla) ?? TABLAS[0];
@@ -106,13 +108,11 @@ export default function Papelera() {
 
   if (!esAdmin) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-12 text-center space-y-3">
-        <ShieldCheck size={48} className="mx-auto text-red-500" />
-        <h2 className="text-xl font-bold text-gray-900">Acceso restringido</h2>
-        <p className="text-sm text-gray-500">
-          La papelera es solo para administradores.
-        </p>
-      </div>
+      <EmptyState
+        icon={ShieldCheck}
+        titulo="Acceso restringido"
+        descripcion="La papelera es solo para administradores."
+      />
     );
   }
 
@@ -121,81 +121,69 @@ export default function Papelera() {
       <PageHeader
         titulo="Papelera"
         descripcion="Registros borrados lógicamente — restauralos antes de purgar."
-        icon={<Trash2 size={32} />}
-        variant="amber"
+        eyebrow="Papelera"
+        icon={<Trash2 size={11} strokeWidth={2.25} />}
+        variant="rose"
       >
         <KPI label="Total"     value={loading ? '···' : counts.todas} />
-        <KPI label="Consultas" value={loading ? '···' : counts.consulta_medica} />
-        <KPI label="Citas"     value={loading ? '···' : counts.cita} />
-        <KPI label="Pacientes" value={loading ? '···' : counts.paciente} />
+        <KPI label="Consultas" value={loading ? '···' : counts.consulta_medica} color="text-violet-700" />
+        <KPI label="Citas"     value={loading ? '···' : counts.cita}            color="text-brand-700" />
+        <KPI label="Pacientes" value={loading ? '···' : counts.paciente}        color="text-emerald-700" />
       </PageHeader>
 
       <ErrorBanner msg={error} onDismiss={() => setError('')} />
       <SuccessBanner msg={okMsg} />
 
-      {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-          <Filter size={16} /> Filtros
+      <Toolbar>
+        <div className="flex items-center gap-1.5 text-[12px] uppercase tracking-[0.10em] font-medium text-ink-500 mr-1">
+          <Filter size={12} strokeWidth={2} /> Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <SearchBar
-            className="md:col-span-2"
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por ID o contenido del resumen..."
-            focusColor="amber"
-          />
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Desde</label>
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Hasta</label>
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" />
-          </div>
-        </div>
+        <SearchBar
+          className="min-w-[220px]"
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por ID o contenido del resumen…"
+        />
+        <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+          title="Desde"
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all" />
+        <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+          title="Hasta"
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all" />
+        <div className="flex-1" />
+        <button onClick={cargar}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12.5px] font-medium text-ink-700 border border-line rounded-lg hover:bg-surface hover:border-ink-100 transition-colors">
+          <RefreshCw size={13} strokeWidth={1.75} /> Recargar
+        </button>
+      </Toolbar>
 
-        {/* Tabs de tabla */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-          {TABLAS.map(t => {
-            const Ico = t.icon;
-            const activo = filtroTabla === t.v;
-            const n = counts[t.v] ?? 0;
-            return (
-              <button
-                key={t.v}
-                onClick={() => setFiltroTabla(t.v)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border ${
-                  activo
-                    ? 'bg-amber-600 text-white border-amber-600 shadow-md'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300'
-                }`}
-              >
-                <Ico size={14} /> {t.l}
-                <span className={`text-xs px-1.5 rounded-full ${activo ? 'bg-white/30' : 'bg-gray-100'}`}>
-                  {n}
-                </span>
-              </button>
-            );
-          })}
-          <button
-            onClick={cargar}
-            className="ml-auto flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg"
-          >
-            <RefreshCw size={14} /> Recargar
-          </button>
-        </div>
+      {/* Tabs de tabla */}
+      <div className="flex flex-wrap gap-1.5">
+        {TABLAS.map(t => {
+          const Ico = t.icon;
+          const activo = filtroTabla === t.v;
+          const n = counts[t.v] ?? 0;
+          return (
+            <button
+              key={t.v}
+              onClick={() => setFiltroTabla(t.v)}
+              className={[
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all duration-150',
+                activo
+                  ? 'bg-rose-600 text-white shadow-[0_4px_14px_-6px_rgba(11,18,32,0.35)]'
+                  : 'bg-surface text-ink-700 hover:bg-ink-100/40 border border-line',
+              ].join(' ')}
+            >
+              <Ico size={13} strokeWidth={1.75} /> {t.l}
+              <span className={activo ? 'text-white/70' : 'text-ink-500'}>({n})</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Lista */}
       {loading ? (
-        <div className="bg-white rounded-xl shadow-md p-16 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-amber-600" />
-          <p className="text-gray-500 text-sm">Cargando papelera...</p>
-        </div>
+        <LoadingState mensaje="Cargando papelera…" color="amber" />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Trash2}
@@ -247,48 +235,48 @@ function ItemCard({ item, actor, onRestaurar, onVerDetalle }) {
   const st = styleFor(item.tabla);
   const Ico = st.icon;
   return (
-    <div className={`rounded-xl border-2 ${st.color} p-4 shadow-sm hover:shadow-md transition`}>
+    <div className={`rounded-2xl border ${st.color} p-4 shadow-[0_1px_2px_rgba(11,18,32,0.04)] hover:shadow-[0_8px_24px_-14px_rgba(11,18,32,0.16)] transition-all duration-200`}>
       <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-9 h-9 rounded-lg ${st.badge} flex items-center justify-center`}>
-            <Ico size={18} />
-          </div>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className={`inline-flex w-9 h-9 items-center justify-center rounded-lg ${st.badge}`}>
+            <Ico size={15} strokeWidth={1.75} />
+          </span>
           <div>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${st.badge}`}>
+            <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-md font-medium ${st.badge}`}>
               {st.l}
             </span>
-            <p className="text-xs text-gray-500 font-mono mt-1">ID #{item.id_registro}</p>
+            <p className="text-[11px] text-ink-500 font-mono mt-1">ID #{item.id_registro}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onVerDetalle}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 transition"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-line text-ink-700 text-[12px] font-medium rounded-lg hover:bg-surface hover:border-ink-100 transition-colors"
             title="Ver datos completos del registro"
           >
-            <Eye size={14} /> Ver
+            <Eye size={13} strokeWidth={1.75} /> Ver
           </button>
           <button
             onClick={onRestaurar}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[12px] font-medium rounded-lg shadow-[0_4px_14px_-6px_rgba(11,18,32,0.45)] active:scale-[0.99] transition-all duration-150"
           >
-            <RotateCcw size={14} /> Restaurar
+            <RotateCcw size={13} strokeWidth={1.75} /> Restaurar
           </button>
         </div>
       </div>
 
       <ResumenItem tabla={item.tabla} resumen={item.resumen} />
 
-      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5 text-gray-600 min-w-0">
-          <User size={12} className="flex-shrink-0" />
+      <div className="mt-3 pt-3 border-t border-line/70 flex items-center justify-between text-[11.5px]">
+        <div className="flex items-center gap-1.5 text-ink-500 min-w-0">
+          <User size={11} className="flex-shrink-0" strokeWidth={1.75} />
           <span className="truncate">
-            Borrado por: <strong>{actor?.nombre_completo ?? '(usuario eliminado o sistema)'}</strong>
-            {actor?.rol_nombre && <span className="text-gray-400"> · {actor.rol_nombre}</span>}
+            Borrado por: <strong className="font-medium text-ink-700">{actor?.nombre_completo ?? '(usuario eliminado o sistema)'}</strong>
+            {actor?.rol_nombre && <span className="text-ink-300"> · {actor.rol_nombre}</span>}
           </span>
         </div>
-        <div className="flex items-center gap-1 text-gray-500 flex-shrink-0" title={item.deleted_at}>
-          <Clock size={11} /> {timeAgo(item.deleted_at)}
+        <div className="flex items-center gap-1 text-ink-500 flex-shrink-0" title={item.deleted_at}>
+          <Clock size={10} strokeWidth={1.75} /> {timeAgo(item.deleted_at)}
         </div>
       </div>
     </div>
@@ -298,47 +286,47 @@ function ItemCard({ item, actor, onRestaurar, onVerDetalle }) {
 // ─── Renderiza el JSON resumen según la tabla ─────────────────────────────────
 function ResumenItem({ tabla, resumen }) {
   if (!resumen || typeof resumen !== 'object') {
-    return <p className="text-xs text-gray-400 italic">Sin información de resumen</p>;
+    return <p className="text-[12px] text-ink-300 italic">Sin información de resumen</p>;
   }
   if (tabla === 'consulta_medica') {
     return (
-      <div className="space-y-1 text-sm">
-        <p className="font-bold text-gray-900 truncate">{resumen.paciente ?? '—'}</p>
-        {resumen.documento && <p className="text-xs text-gray-500 font-mono">Doc {resumen.documento}</p>}
-        <p className="text-gray-700"><span className="font-semibold">Fecha:</span> {String(resumen.fecha ?? '—').slice(0, 16).replace('T', ' ')}</p>
-        <p className="text-gray-700 line-clamp-2"><span className="font-semibold">Motivo:</span> {resumen.motivo ?? '—'}</p>
-        {resumen.dx && <p className="text-emerald-700 line-clamp-1"><span className="font-semibold">Dx:</span> {resumen.dx}</p>}
+      <div className="space-y-1 text-[13px]">
+        <p className="font-medium text-ink-900 truncate">{resumen.paciente ?? '—'}</p>
+        {resumen.documento && <p className="text-[11.5px] text-ink-500 font-mono">Doc {resumen.documento}</p>}
+        <p className="text-ink-700"><span className="font-medium">Fecha:</span> {String(resumen.fecha ?? '—').slice(0, 16).replace('T', ' ')}</p>
+        <p className="text-ink-700 line-clamp-2"><span className="font-medium">Motivo:</span> {resumen.motivo ?? '—'}</p>
+        {resumen.dx && <p className="text-emerald-700 line-clamp-1"><span className="font-medium">Dx:</span> {resumen.dx}</p>}
       </div>
     );
   }
   if (tabla === 'cita') {
     return (
-      <div className="space-y-1 text-sm">
-        <p className="font-bold text-gray-900 truncate">{resumen.paciente ?? '—'}</p>
-        {resumen.documento && <p className="text-xs text-gray-500 font-mono">Doc {resumen.documento}</p>}
-        <p className="text-gray-700"><span className="font-semibold">Médico:</span> Dr(a). {resumen.medico ?? '—'}</p>
-        <p className="text-gray-700"><span className="font-semibold">Fecha:</span> {String(resumen.fecha ?? '—').slice(0, 16).replace('T', ' ')}</p>
-        <p className="text-gray-700">
-          <span className="font-semibold">Estado:</span> {resumen.estado ?? '—'}
-          {resumen.motivo && <span className="text-gray-500 ml-1">· {resumen.motivo}</span>}
+      <div className="space-y-1 text-[13px]">
+        <p className="font-medium text-ink-900 truncate">{resumen.paciente ?? '—'}</p>
+        {resumen.documento && <p className="text-[11.5px] text-ink-500 font-mono">Doc {resumen.documento}</p>}
+        <p className="text-ink-700"><span className="font-medium">Médico:</span> Dr(a). {resumen.medico ?? '—'}</p>
+        <p className="text-ink-700"><span className="font-medium">Fecha:</span> {String(resumen.fecha ?? '—').slice(0, 16).replace('T', ' ')}</p>
+        <p className="text-ink-700">
+          <span className="font-medium">Estado:</span> {resumen.estado ?? '—'}
+          {resumen.motivo && <span className="text-ink-500 ml-1">· {resumen.motivo}</span>}
         </p>
       </div>
     );
   }
   if (tabla === 'paciente') {
     return (
-      <div className="space-y-1 text-sm">
-        <p className="font-bold text-gray-900 truncate">{resumen.nombre ?? '—'}</p>
+      <div className="space-y-1 text-[13px]">
+        <p className="font-medium text-ink-900 truncate">{resumen.nombre ?? '—'}</p>
         {resumen.documento && (
-          <p className="text-xs text-gray-500 font-mono">
+          <p className="text-[11.5px] text-ink-500 font-mono">
             {resumen.tipo_documento ?? 'CC'} {resumen.documento}
           </p>
         )}
-        <p className="text-gray-700"><span className="font-semibold">HC:</span> {resumen.numero_historia ?? '—'}</p>
-        {resumen.email && <p className="text-gray-600 text-xs truncate">{resumen.email}</p>}
-        {resumen.telefono && <p className="text-gray-600 text-xs">Tel: {resumen.telefono}</p>}
+        <p className="text-ink-700"><span className="font-medium">HC:</span> {resumen.numero_historia ?? '—'}</p>
+        {resumen.email && <p className="text-ink-500 text-[11.5px] truncate">{resumen.email}</p>}
+        {resumen.telefono && <p className="text-ink-500 text-[11.5px]">Tel: {resumen.telefono}</p>}
         {resumen.tipo_sangre && (
-          <span className="inline-block text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+          <span className="inline-block text-[11px] px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-100 font-medium mt-1">
             Sangre: {resumen.tipo_sangre}
           </span>
         )}
@@ -347,18 +335,18 @@ function ResumenItem({ tabla, resumen }) {
   }
   if (tabla === 'medico') {
     return (
-      <div className="space-y-1 text-sm">
-        <p className="font-bold text-gray-900 truncate">Dr(a). {resumen.nombre ?? '—'}</p>
-        {resumen.documento && <p className="text-xs text-gray-500 font-mono">Doc {resumen.documento}</p>}
-        <p className="text-gray-700"><span className="font-semibold">Especialidad:</span> {resumen.especialidad ?? '—'}</p>
-        <p className="text-gray-700"><span className="font-semibold">Licencia:</span> {resumen.numero_licencia ?? '—'}</p>
-        {resumen.consultorio && <p className="text-gray-700"><span className="font-semibold">Consultorio:</span> {resumen.consultorio}</p>}
-        {resumen.email && <p className="text-gray-600 text-xs truncate">{resumen.email}</p>}
+      <div className="space-y-1 text-[13px]">
+        <p className="font-medium text-ink-900 truncate">Dr(a). {resumen.nombre ?? '—'}</p>
+        {resumen.documento && <p className="text-[11.5px] text-ink-500 font-mono">Doc {resumen.documento}</p>}
+        <p className="text-ink-700"><span className="font-medium">Especialidad:</span> {resumen.especialidad ?? '—'}</p>
+        <p className="text-ink-700"><span className="font-medium">Licencia:</span> {resumen.numero_licencia ?? '—'}</p>
+        {resumen.consultorio && <p className="text-ink-700"><span className="font-medium">Consultorio:</span> {resumen.consultorio}</p>}
+        {resumen.email && <p className="text-ink-500 text-[11.5px] truncate">{resumen.email}</p>}
       </div>
     );
   }
   return (
-    <pre className="text-xs text-gray-700 whitespace-pre-wrap bg-white/60 rounded-lg p-2 font-mono">
+    <pre className="text-[11.5px] text-ink-700 whitespace-pre-wrap bg-white/70 border border-line rounded-lg p-2 font-mono">
       {JSON.stringify(resumen, null, 2)}
     </pre>
   );
@@ -387,77 +375,80 @@ function ModalDetalle({ item, data, cargando, actor, onRestaurar, onClose }) {
   }, [data]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div className={`sticky top-0 z-10 px-6 py-4 flex justify-between items-center rounded-t-2xl ${st.badge}`}>
-          <div className="flex items-center gap-3">
-            <Ico size={24} />
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex justify-between items-start gap-4 z-10">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-rose-500" />
+          <div className="flex items-start gap-3 ml-2">
+            <span className={`flex-shrink-0 inline-flex w-9 h-9 items-center justify-center rounded-lg ${st.badge}`}>
+              <Ico size={17} strokeWidth={1.75} />
+            </span>
             <div>
-              <h2 className="text-xl font-bold">Detalle del registro borrado</h2>
-              <p className="text-xs opacity-80">{st.l} · ID #{item.id_registro} · borrado {timeAgo(item.deleted_at)}</p>
+              <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">Detalle del registro borrado</h2>
+              <p className="text-[12px] text-ink-500 mt-0.5">{st.l} · ID #{item.id_registro} · borrado {timeAgo(item.deleted_at)}</p>
             </div>
           </div>
-          <button onClick={onClose} className="hover:bg-black/10 p-2 rounded-lg">
-            <X size={22} />
+          <button onClick={onClose} className="flex-shrink-0 -mt-0.5 -mr-1 text-ink-300 hover:text-ink-900 hover:bg-surface p-1.5 rounded-lg transition-colors">
+            <X size={18} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          {/* Resumen rápido siempre visible (lo que ya muestra la card) */}
+        <div className="p-6 space-y-4 overflow-y-auto">
+          {/* Resumen rápido */}
           <div className={`rounded-xl border ${st.color} p-4`}>
-            <p className="text-xs font-bold uppercase text-gray-600 mb-2">Resumen</p>
+            <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-500 mb-2">Resumen</p>
             <ResumenItem tabla={item.tabla} resumen={item.resumen} />
           </div>
 
-          {/* Metadatos del borrado */}
-          <div className="grid grid-cols-2 gap-3">
-            <Info icon={User} label="Borrado por" value={actor?.nombre_completo ?? '(sistema)'} sub={actor?.rol_nombre} />
-            <Info icon={Clock} label="Fecha de borrado" value={item.deleted_at?.slice(0, 19).replace('T', ' ')} sub={timeAgo(item.deleted_at)} />
+          {/* Metadatos */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <InfoCell icon={User}  label="Borrado por"      value={actor?.nombre_completo ?? '(sistema)'} sub={actor?.rol_nombre} />
+            <InfoCell icon={Clock} label="Fecha de borrado" value={item.deleted_at?.slice(0, 19).replace('T', ' ')} sub={timeAgo(item.deleted_at)} />
           </div>
 
           {/* Snapshot completo del registro */}
           {cargando ? (
             <div className="py-12 text-center">
-              <Loader2 size={28} className="mx-auto mb-2 animate-spin text-amber-600" />
-              <p className="text-sm text-gray-500">Cargando datos completos...</p>
+              <Loader2 size={24} className="mx-auto mb-2 animate-spin text-rose-600" strokeWidth={1.75} />
+              <p className="text-[13px] text-ink-500">Cargando datos completos…</p>
             </div>
           ) : !flat ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-800 flex items-start gap-2">
-              <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2.5 text-[13px] text-amber-800 bg-amber-50/70 border-l-2 border-amber-500 pl-3 pr-3 py-2.5 rounded-r-md">
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5" strokeWidth={2} />
               No se pudo cargar el detalle de este registro.
             </div>
           ) : (
             <div>
-              <p className="text-xs font-bold uppercase text-gray-600 mb-2">
+              <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-500 mb-2">
                 Todos los datos guardados
               </p>
-              <div className="bg-gray-50 border border-gray-200 rounded-xl divide-y divide-gray-200 max-h-80 overflow-y-auto">
+              <div className="bg-surface border border-line rounded-xl divide-y divide-line max-h-80 overflow-y-auto">
                 {Object.entries(flat)
                   .filter(([, v]) => v !== null && v !== '' && v !== undefined)
                   .map(([k, v]) => (
-                    <div key={k} className="px-3 py-2 grid grid-cols-3 gap-2 text-xs">
-                      <span className="text-gray-500 font-mono col-span-1">{k}</span>
-                      <span className="col-span-2 text-gray-800 break-words whitespace-pre-wrap">
+                    <div key={k} className="px-3 py-2 grid grid-cols-3 gap-2 text-[12px]">
+                      <span className="text-ink-500 font-mono col-span-1">{k}</span>
+                      <span className="col-span-2 text-ink-800 break-words whitespace-pre-wrap font-mono">
                         {typeof v === 'object' ? JSON.stringify(v) : String(v)}
                       </span>
                     </div>
                   ))}
               </div>
-              <p className="text-xs text-gray-400 mt-2 italic">
+              <p className="text-[11.5px] text-ink-500 mt-2 italic">
                 Al restaurar, el registro vuelve exactamente con estos mismos datos.
               </p>
             </div>
           )}
 
           {/* Botones */}
-          <div className="flex gap-3 pt-3 border-t border-gray-200">
+          <div className="flex gap-3 pt-3 border-t border-line">
             <button onClick={onClose}
-              className="flex-1 px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold">
+              className="flex-1 px-5 py-2.5 bg-white border border-line text-ink-800 rounded-xl hover:bg-surface hover:border-ink-100 active:scale-[0.99] transition-all duration-150 text-[13.5px] font-medium">
               Cerrar
             </button>
             <button onClick={onRestaurar}
-              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl hover:from-amber-700 hover:to-orange-700 transition font-semibold shadow-lg flex items-center justify-center gap-2">
-              <RotateCcw size={16} /> Restaurar este registro
+              className="group flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[13.5px] font-medium shadow-[0_1px_2px_rgba(11,18,32,0.10),0_10px_24px_-14px_rgba(11,18,32,0.40)] active:scale-[0.99] transition-all duration-150">
+              <RotateCcw size={14} strokeWidth={1.75} /> Restaurar este registro
             </button>
           </div>
         </div>
@@ -466,14 +457,14 @@ function ModalDetalle({ item, data, cargando, actor, onRestaurar, onClose }) {
   );
 }
 
-function Info({ icon: Icon, label, value, sub }) {
+function InfoCell({ icon: Icon, label, value, sub }) {
   return (
-    <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
-      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-        {Icon && <Icon size={12} />} {label}
+    <div className="rounded-lg border border-line bg-surface/60 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">
+        {Icon && <Icon size={11} strokeWidth={2} />} {label}
       </div>
-      <p className="text-sm font-semibold text-gray-900 truncate">{value || '—'}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      <p className="mt-0.5 text-[13px] font-medium text-ink-900 truncate">{value || '—'}</p>
+      {sub && <p className="text-[11px] text-ink-500">{sub}</p>}
     </div>
   );
 }
@@ -482,49 +473,51 @@ function Info({ icon: Icon, label, value, sub }) {
 function ModalConfirmarRestaurar({ item, actor, trabajando, onConfirm, onClose }) {
   const st = styleFor(item.tabla);
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-4 flex items-center gap-3">
-          <div className="bg-white/20 rounded-full p-2">
-            <RotateCcw size={22} />
-          </div>
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-md overflow-hidden">
+        <div className="relative bg-white border-b border-line px-6 py-4 flex items-start gap-3">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-rose-500" />
+          <span className="ml-2 flex-shrink-0 inline-flex w-9 h-9 items-center justify-center rounded-lg bg-rose-50 border border-rose-100 text-rose-700">
+            <RotateCcw size={17} strokeWidth={1.75} />
+          </span>
           <div>
-            <h2 className="text-lg font-bold">Restaurar registro</h2>
-            <p className="text-xs text-amber-100">Volverá a estar visible para todos los usuarios</p>
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">Restaurar registro</h2>
+            <p className="text-[12px] text-ink-500 mt-0.5">Volverá a estar visible para todos los usuarios</p>
           </div>
         </div>
 
         <div className="p-6 space-y-4">
-          <p className="text-sm text-gray-700">
+          <p className="text-[13.5px] text-ink-700">
             ¿Confirmas que deseas restaurar este registro de la papelera?
           </p>
 
           <div className={`p-3 rounded-xl border ${st.color}`}>
             <div className="flex items-center gap-2 mb-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${st.badge}`}>{st.l}</span>
-              <span className="text-xs text-gray-600 font-mono">#{item.id_registro}</span>
+              <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-md font-medium ${st.badge}`}>{st.l}</span>
+              <span className="text-[11.5px] text-ink-500 font-mono">#{item.id_registro}</span>
             </div>
             <ResumenItem tabla={item.tabla} resumen={item.resumen} />
-            <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-200">
+            <p className="text-[11.5px] text-ink-500 mt-3 pt-2 border-t border-line/70">
               Borrado {timeAgo(item.deleted_at)} por{' '}
-              <strong>{actor?.nombre_completo ?? '(usuario eliminado)'}</strong>
+              <strong className="font-medium text-ink-700">{actor?.nombre_completo ?? '(usuario eliminado)'}</strong>
             </p>
           </div>
 
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
+          <div className="flex items-start gap-2.5 text-[12.5px] text-brand-800 bg-brand-50/70 border-l-2 border-brand-500 pl-3 pr-3 py-2.5 rounded-r-md">
             Al restaurar, el registro queda visible inmediatamente. La acción
             se registra en el log de auditoría como un UPDATE.
           </div>
 
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} disabled={trabajando}
-              className="flex-1 px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold disabled:opacity-60">
+              className="flex-1 px-5 py-2.5 bg-white border border-line text-ink-800 rounded-xl hover:bg-surface hover:border-ink-100 active:scale-[0.99] transition-all duration-150 text-[13.5px] font-medium disabled:opacity-60">
               Cancelar
             </button>
             <button onClick={onConfirm} disabled={trabajando}
-              className="flex-1 px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl hover:from-amber-700 hover:to-orange-700 transition font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
-              <RotateCcw size={16} />
-              {trabajando ? 'Restaurando...' : 'Sí, restaurar'}
+              className="group flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[13.5px] font-medium shadow-[0_1px_2px_rgba(11,18,32,0.10),0_10px_24px_-14px_rgba(11,18,32,0.40)] active:scale-[0.99] transition-all duration-150 disabled:opacity-60">
+              {trabajando
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Restaurando…</>
+                : <><RotateCcw size={14} strokeWidth={1.75} /> Sí, restaurar</>}
             </button>
           </div>
         </div>

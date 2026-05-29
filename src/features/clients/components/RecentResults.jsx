@@ -1,64 +1,45 @@
 import React from 'react';
 import { FileText, Download, Eye } from 'lucide-react';
+import { IconButton, ActionGroup } from '../../../shared/components/ui';
 
 const results = [
-  {
-    id: 1,
-    tipo: "Análisis de Sangre",
-    fecha: "20 Oct 2024",
-    estado: "Disponible",
-    medico: "Dra. María González"
-  },
-  {
-    id: 2,
-    tipo: "Radiografía de Tórax",
-    fecha: "18 Oct 2024",
-    estado: "Disponible",
-    medico: "Dr. Juan Martínez"
-  },
-  {
-    id: 3,
-    tipo: "Electrocardiograma",
-    fecha: "15 Oct 2024",
-    estado: "Disponible",
-    medico: "Dra. María González"
-  }
+  { id: 1, tipo: 'Análisis de sangre',      fecha: '20 Oct 2024', medico: 'Dra. María González' },
+  { id: 2, tipo: 'Radiografía de tórax',    fecha: '18 Oct 2024', medico: 'Dr. Juan Martínez' },
+  { id: 3, tipo: 'Electrocardiograma',      fecha: '15 Oct 2024', medico: 'Dra. María González' },
 ];
 
 export default function RecentResults() {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <section className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] p-6">
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-xl font-bold text-gray-800">Resultados Recientes</h2>
-        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+        <h2 className="text-[16px] font-semibold tracking-tight text-ink-900">Resultados recientes</h2>
+        <button className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700 transition-colors">
           Ver todos
         </button>
       </div>
 
-      <div className="space-y-3">
-        {results.map(result => (
-          <div key={result.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md transition">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <FileText className="text-green-600" size={20} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{result.tipo}</h3>
-                <p className="text-sm text-gray-500">{result.fecha} • {result.medico}</p>
+      <ul className="space-y-2">
+        {results.map(r => (
+          <li
+            key={r.id}
+            className="flex items-center justify-between gap-3 p-3 rounded-lg border border-line hover:border-ink-100 hover:bg-surface/60 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 flex-shrink-0">
+                <FileText size={15} strokeWidth={1.75} />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-[13.5px] font-medium text-ink-900 truncate">{r.tipo}</h3>
+                <p className="text-[11.5px] text-ink-500 truncate">{r.fecha} · {r.medico}</p>
               </div>
             </div>
-            
-            <div className="flex gap-2">
-              <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                <Eye size={18} />
-              </button>
-              <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition">
-                <Download size={18} />
-              </button>
-            </div>
-          </div>
+            <ActionGroup>
+              <IconButton icon={Eye}      tone="brand" title="Ver" />
+              <IconButton icon={Download} tone="ink"   title="Descargar" />
+            </ActionGroup>
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 }

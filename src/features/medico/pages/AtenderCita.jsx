@@ -4,12 +4,14 @@ import {
   ArrowLeft, AlertCircle, Loader2, User, Calendar, Clock,
   Stethoscope, ClipboardList, Pill, Activity, Heart,
   CheckCircle, FileText, Brain, BookOpen, PlusCircle, MinusCircle,
-  Star, ChevronDown, ChevronUp, Search, Paperclip,
+  Star, ChevronDown, ChevronUp, Search, Paperclip, ChevronRight,
+  FlaskConical, Printer,
 } from 'lucide-react';
-import { citaService, consultaService, adjuntoService } from '../../../services';
+import { citaService, consultaService, adjuntoService, medicoService, ordenExamenService } from '../../../services';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAdjuntosPacienteMedico } from '../../../hooks';
-import { FileUpload, AdjuntoListPorConsulta, AdjuntoViewer } from '../../../shared/components/ui';
+import { FileUpload, AdjuntoListPorConsulta, AdjuntoViewer, Modal } from '../../../shared/components/ui';
+import { generarPdfOrdenExamenes } from '../utils/generarPdfOrdenExamenes';
 
 // ─── Constantes médicas ────────────────────────────────────────────────────────
 const SISTEMAS = [
@@ -49,7 +51,7 @@ export default function AtenderCita() {
   const [cita, setCita]           = useState(null);
   const [paciente, setPaciente]   = useState(null);
   const [historia, setHistoria]   = useState({
-    consultas: [], diagnosticos: [], signos: [], ordenes: [],
+    consultas: [], diagnosticos: [], signos: [], ordenes: [], ordenesExamen: [],
   });
   const [tiposDx, setTiposDx]     = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -75,6 +77,16 @@ export default function AtenderCita() {
   // Se suben al bucket DESPUÉS de crear la consulta (necesitamos id_consulta).
   const [adjuntosPendientes, setAdjuntosPendientes] = useState([]); // [{file, descripcion}]
   const [visorAdjunto, setVisorAdjunto] = useState(null);
+
+  // Orden de exámenes paramédicos. El médico la llena en la pestaña "Exámenes"
+  // y al descargar se genera un PDF con datos del paciente + médico para que
+  // el paciente lo lleve al laboratorio. No se persiste en BD (es un artefacto
+  // físico/PDF), solo se imprime/descarga.
+  const [ordenExamenes, setOrdenExamenes] = useState({
+    items: [{ nombre: '', observaciones: '' }],
+    indicaciones: '',
+  });
+  const [generandoPdfOrden, setGenerandoPdfOrden] = useState(false);
 
   // ─── Carga inicial ──────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
@@ -117,9 +129,12 @@ export default function AtenderCita() {
           consultaService.getTiposDiagnostico(),
         ]);
 
-        const [diagsData, ordenesData] = await Promise.all([
+        const [diagsData, ordenesData, examenesData] = await Promise.all([
           consultaService.getDiagnosticosPacienteHistoria(pacId),
           consultaService.getOrdenesPacienteHistoria(pacId),
+          // Órdenes de exámenes previas — pueden no existir si la migración
+          // aún no se aplicó en Supabase; fallamos silenciosamente.
+          ordenExamenService.getPorPaciente(pacId).catch(() => []),
         ]);
 
         setHistoria({
@@ -127,6 +142,7 @@ export default function AtenderCita() {
           diagnosticos: diagsData,
           signos,
           ordenes: ordenesData,
+          ordenesExamen: examenesData,
         });
         setTiposDx(tipos);
       }
@@ -183,6 +199,25 @@ export default function AtenderCita() {
         console.warn('[AtenderCita] adjuntos con error:', erroresAdjuntos);
       }
 
+      // Persistir orden de exámenes si el médico la llenó. Los items con
+      // nombre vacío se ignoran. La orden queda ligada a la consulta y
+      // visible para el paciente en su portal y en el historial clínico.
+      const examenesValidos = ordenExamenes.items.filter(it => (it.nombre ?? '').trim());
+      if (examenesValidos.length > 0) {
+        try {
+          await ordenExamenService.crearConItems({
+            id_consulta: idConsulta,
+            id_paciente: Number(paciente.id_paciente),
+            id_medico:   idMedico,
+            indicaciones: ordenExamenes.indicaciones,
+            items: examenesValidos,
+          });
+        } catch (errOrd) {
+          console.warn('[AtenderCita] orden de exámenes con error:', errOrd.message);
+          // No abortamos: la consulta ya quedó guardada. Solo dejamos rastro.
+        }
+      }
+
       await citaService.marcarCompletada(citaId);
       navigate('/medico/citas');
     } catch (err) {
@@ -226,30 +261,78 @@ export default function AtenderCita() {
     { id: 2, label: 'Diagnóstico', icon: <ClipboardList size={15} /> },
     { id: 3, label: 'Plan',        icon: <Brain size={15} /> },
     { id: 4, label: 'Adjuntos',    icon: <Paperclip size={15} /> },
+    { id: 5, label: 'Exámenes',    icon: <FlaskConical size={15} /> },
   ];
+
+  // ─── Handlers de la orden de exámenes (Tab 5) ────────────────────────
+  const addExamen = () => setOrdenExamenes(p => ({
+    ...p, items: [...p.items, { nombre: '', observaciones: '' }],
+  }));
+  const removeExamen = (idx) => setOrdenExamenes(p => ({
+    ...p, items: p.items.filter((_, i) => i !== idx),
+  }));
+  const updateExamen = (idx, campo, valor) => setOrdenExamenes(p => ({
+    ...p,
+    items: p.items.map((it, i) => i === idx ? { ...it, [campo]: valor } : it),
+  }));
+  const updateIndicaciones = (valor) =>
+    setOrdenExamenes(p => ({ ...p, indicaciones: valor }));
+
+  const itemsValidos = ordenExamenes.items.filter(it => (it.nombre ?? '').trim());
+
+  const handleDescargarOrden = async () => {
+    if (itemsValidos.length === 0) {
+      setError('Agrega al menos un examen antes de descargar la orden.');
+      return;
+    }
+    setGenerandoPdfOrden(true);
+    setError('');
+    try {
+      // Buscar datos del médico (especialidad, licencia, consultorio) para el PDF.
+      let medicoData = null;
+      try {
+        const idMedico = await consultaService.resolveIdMedico(usuarioLogueado?.id_persona);
+        if (idMedico) medicoData = await medicoService.getById(idMedico);
+      } catch (err) {
+        console.warn('[orden examenes] no se pudo cargar perfil médico:', err.message);
+      }
+      generarPdfOrdenExamenes({
+        paciente,
+        medico: medicoData,
+        medicoFallback: usuarioLogueado,
+        cita,
+        orden: { items: itemsValidos, indicaciones: ordenExamenes.indicaciones },
+      });
+    } catch (err) {
+      setError(`No se pudo generar la orden: ${err.message ?? err}`);
+    } finally {
+      setGenerandoPdfOrden(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/medico/citas')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition" title="Volver">
-          <ArrowLeft size={20} />
+          className="inline-flex w-9 h-9 items-center justify-center text-ink-700 hover:bg-surface hover:text-ink-900 border border-line rounded-lg transition-colors" title="Volver">
+          <ArrowLeft size={16} strokeWidth={1.75} />
         </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Atender cita</h1>
-          <p className="text-sm text-gray-500">
-            {paciente?.nombre_completo} · {fecha} {hora} · Cita #{cita?.id_cita}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[20px] font-semibold tracking-tight text-ink-900">Atender cita</h1>
+          <p className="text-[12.5px] text-ink-500 truncate">
+            {paciente?.nombre_completo} · <span className="tabular-nums">{fecha} {hora}</span> · Cita #{cita?.id_cita}
           </p>
         </div>
-        <div className="text-xs px-3 py-1 rounded-full font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+        <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md font-medium border bg-amber-50 text-amber-700 border-amber-100">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
           {cita?.estado === 'en_curso' ? 'En curso' : cita?.estado}
-        </div>
+        </span>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl flex items-center gap-2 text-sm">
-          <AlertCircle size={16} /> {error}
+        <div role="alert" className="flex items-start gap-2.5 text-[13px] text-red-700 bg-red-50/70 border-l-2 border-red-500 pl-3 pr-3 py-2.5 rounded-r-md">
+          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" strokeWidth={2} /> {error}
         </div>
       )}
 
@@ -257,22 +340,23 @@ export default function AtenderCita() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* ── COLUMNA IZQUIERDA: formulario de consulta ─────────────────── */}
         <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3">
-              <h2 className="font-bold flex items-center gap-2">
-                <Stethoscope size={18} /> Consulta médica
+          <div className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
+            <div className="relative px-5 py-3.5 border-b border-line">
+              <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-emerald-500" />
+              <h2 className="ml-2 text-[14px] font-semibold tracking-tight text-ink-900 flex items-center gap-2">
+                <Stethoscope size={15} className="text-emerald-600" strokeWidth={1.75} /> Consulta médica
               </h2>
-              <p className="text-xs text-emerald-100">Completa los campos clínicos de esta atención</p>
+              <p className="ml-2 text-[11.5px] text-ink-500">Completa los campos clínicos de esta atención</p>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-line overflow-x-auto">
               {TABS.map(t => (
                 <button key={t.id} type="button" onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px ${
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
                     tab === t.id
-                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50'
-                      : 'border-transparent text-gray-600 hover:text-emerald-600 hover:border-emerald-300'
+                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50/40'
+                      : 'border-transparent text-ink-700 hover:bg-surface'
                   }`}
                 >
                   {t.icon} {t.label}
@@ -464,30 +548,151 @@ export default function AtenderCita() {
                 </div>
               )}
 
+              {/* ── TAB 5: ORDEN DE EXÁMENES PARAMÉDICOS ────────────────── */}
+              {tab === 5 && (
+                <div className="space-y-4">
+                  <Seccion titulo="Solicitud de exámenes" color="purple">
+                    <p className="text-[12px] text-ink-500 mb-3">
+                      Ingresa los exámenes a solicitar. Al{' '}
+                      <strong className="font-medium">guardar y finalizar la cita</strong>
+                      {' '}la orden queda registrada en la historia clínica del paciente, visible
+                      para él en su portal y para los demás médicos. Mientras tanto puedes
+                      descargar el PDF para entregarle al paciente.
+                    </p>
+
+                    <div className="space-y-2">
+                      {ordenExamenes.items.map((item, idx) => (
+                        <div key={idx} className="rounded-lg border border-line bg-white px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="inline-flex items-center gap-2 text-[11px] font-medium text-violet-700">
+                              <span className="inline-flex w-5 h-5 items-center justify-center rounded-md bg-violet-50 border border-violet-100 tabular-nums font-semibold">
+                                {idx + 1}
+                              </span>
+                              Examen
+                            </span>
+                            {ordenExamenes.items.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeExamen(idx)}
+                                className="text-ink-300 hover:text-red-600 transition-colors p-1"
+                                title="Quitar este examen"
+                                aria-label="Quitar examen"
+                              >
+                                <MinusCircle size={15} strokeWidth={1.75} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <input
+                              type="text"
+                              value={item.nombre}
+                              onChange={(e) => updateExamen(idx, 'nombre', e.target.value)}
+                              placeholder="Nombre del examen (Hemograma completo, glicemia, ecografía abdominal…)"
+                              className="w-full px-3 py-2 text-[13px] bg-white border border-line rounded-md text-ink-900 placeholder:text-ink-300 focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 transition-all"
+                            />
+                            <input
+                              type="text"
+                              value={item.observaciones}
+                              onChange={(e) => updateExamen(idx, 'observaciones', e.target.value)}
+                              placeholder="Observaciones o preparación (en ayunas, ayuno de 8h, etc.) — opcional"
+                              className="w-full px-3 py-1.5 text-[12px] bg-white border border-line rounded-md text-ink-700 placeholder:text-ink-300 focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 transition-all"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addExamen}
+                      className="mt-3 inline-flex items-center gap-2 text-[12.5px] font-medium text-violet-700 hover:text-violet-800 transition-colors"
+                    >
+                      <PlusCircle size={15} strokeWidth={1.75} /> Agregar otro examen
+                    </button>
+                  </Seccion>
+
+                  <Seccion titulo="Indicaciones generales" color="blue">
+                    <Textarea
+                      name="indicaciones"
+                      value={ordenExamenes.indicaciones}
+                      onChange={(e) => updateIndicaciones(e.target.value)}
+                      placeholder="Indicaciones para el paciente, preparación general, urgencia, lugar sugerido para realizar los exámenes…"
+                      rows={3}
+                    />
+                  </Seccion>
+
+                  {/* Resumen y descarga */}
+                  <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-[10.5px] uppercase tracking-[0.12em] font-medium text-violet-700">
+                          Resumen de la orden
+                        </p>
+                        <p className="text-[13.5px] font-semibold text-ink-900 mt-1">
+                          {itemsValidos.length} examen{itemsValidos.length === 1 ? '' : 'es'} a solicitar
+                        </p>
+                        <p className="text-[11.5px] text-ink-500 mt-0.5">
+                          Para <span className="font-medium text-ink-700">{paciente?.nombre_completo ?? '—'}</span>
+                          {paciente?.documento && ` · ${paciente.tipo_documento ?? 'CC'} ${paciente.documento}`}
+                        </p>
+                      </div>
+                      <FileText size={20} className="text-violet-600 flex-shrink-0" strokeWidth={1.5} />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleDescargarOrden}
+                      disabled={itemsValidos.length === 0 || generandoPdfOrden}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-violet-700 hover:bg-violet-800 active:scale-[0.99] text-white text-[13.5px] font-medium py-2.5 rounded-xl shadow-[0_1px_2px_rgba(11,18,32,0.10),0_8px_24px_-14px_rgba(124,58,237,0.5)] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {generandoPdfOrden ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" strokeWidth={1.75} />
+                          Generando PDF…
+                        </>
+                      ) : (
+                        <>
+                          <Printer size={14} strokeWidth={1.75} />
+                          Descargar orden en PDF
+                        </>
+                      )}
+                    </button>
+
+                    {itemsValidos.length === 0 && (
+                      <p className="mt-2 text-center text-[11px] text-ink-500">
+                        Llena el nombre de al menos un examen para habilitar la descarga.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Navegación entre tabs */}
-              <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+              <div className="flex justify-between items-center pt-2 border-t border-line/70">
                 <button type="button" onClick={() => setTab(t => Math.max(0, t - 1))} disabled={tab === 0}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30 transition">
+                  className="px-3 py-1.5 text-[12.5px] font-medium text-ink-700 hover:text-ink-900 disabled:opacity-40 transition-colors">
                   ← Anterior
                 </button>
-                <span className="text-xs text-gray-400">{tab + 1} / {TABS.length}</span>
+                <span className="text-[11px] text-ink-500 tabular-nums">{tab + 1} / {TABS.length}</span>
                 {tab < TABS.length - 1 ? (
                   <button type="button" onClick={() => setTab(t => t + 1)}
-                    className="px-4 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-800 transition">
+                    className="px-3 py-1.5 text-[12.5px] font-medium text-emerald-700 hover:text-emerald-800 transition-colors">
                     Siguiente →
                   </button>
                 ) : <div />}
               </div>
 
               {/* Botones */}
-              <div className="flex gap-3 pt-3 border-t border-gray-100">
+              <div className="flex gap-3 pt-3 border-t border-line/70">
                 <button type="button" onClick={() => navigate('/medico/citas')}
-                  className="flex-1 px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold">
+                  className="flex-1 px-5 py-2.5 bg-white border border-line text-ink-800 rounded-xl hover:bg-surface hover:border-ink-100 active:scale-[0.99] transition-all duration-150 text-[13.5px] font-medium">
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving}
-                  className="flex-1 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg disabled:opacity-60">
-                  {saving ? 'Guardando...' : 'Guardar y finalizar cita'}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[13.5px] font-medium shadow-[0_1px_2px_rgba(11,18,32,0.10),0_10px_24px_-14px_rgba(11,18,32,0.40)] active:scale-[0.99] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {saving
+                    ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Guardando…</>
+                    : 'Guardar y finalizar cita'}
                 </button>
               </div>
             </div>
@@ -521,17 +726,23 @@ function PanelHistoria({ paciente, historia, citaActual, onPreviewAdjunto }) {
   });
   const toggle = (k) => setOpen(p => ({ ...p, [k]: !p[k] }));
 
+  // Consulta abierta en el modal de "Ver detalle". El médico hace clic en
+  // una tarjeta de consulta previa y se le muestra todo el contenido clínico
+  // (anamnesis, examen, dx, plan, recetas y signos asociados a esa consulta).
+  const [consultaDetalle, setConsultaDetalle] = useState(null);
+
   if (!paciente) return null;
 
   return (
     <div className="space-y-3 sticky top-4">
       {/* Cabecera del paciente */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-3">
-          <h2 className="font-bold flex items-center gap-2">
-            <User size={18} /> Historia clínica
+      <div className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
+        <div className="relative px-4 py-3 border-b border-line">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-brand-500" />
+          <h2 className="ml-2 text-[13.5px] font-semibold tracking-tight text-ink-900 flex items-center gap-2">
+            <User size={14} className="text-brand-600" strokeWidth={1.75} /> Historia clínica
           </h2>
-          <p className="text-xs text-blue-100">Solo lectura · {paciente.numero_historia}</p>
+          <p className="ml-2 text-[11px] text-ink-500 font-mono">Solo lectura · {paciente.numero_historia}</p>
         </div>
         <div className="p-4 space-y-3 text-sm">
           <div>
@@ -581,25 +792,54 @@ function PanelHistoria({ paciente, historia, citaActual, onPreviewAdjunto }) {
         icon={<Stethoscope size={15} className="text-emerald-600" />}
         abierto={open.consultas} onToggle={() => toggle('consultas')}>
         {historia.consultas.length === 0 ? (
-          <p className="text-xs text-gray-400">Sin consultas previas</p>
+          <p className="text-[11.5px] text-ink-500">Sin consultas previas.</p>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {historia.consultas.map(c => (
-              <div key={c.id_consulta}
-                className={`p-2 rounded-lg border text-xs ${citaActual?.id_cita && c.id_consulta === citaActual.id_cita
-                  ? 'bg-emerald-50 border-emerald-300'
-                  : 'bg-gray-50 border-gray-200'}`}>
-                <p className="font-semibold text-gray-800">
-                  {c.fecha_consulta?.slice(0, 10)}
-                  {c.medico?.persona && (
-                    <span className="font-normal text-gray-500"> · Dr(a). {c.medico.persona.nombres} {c.medico.persona.apellidos}</span>
-                  )}
-                </p>
-                {c.motivo_consulta && <p className="text-gray-700"><strong>Motivo:</strong> {c.motivo_consulta}</p>}
-                {c.impresion_diagnostica && <p className="text-emerald-700"><strong>Dx:</strong> {c.impresion_diagnostica}</p>}
-                {c.plan_tratamiento && <p className="text-gray-600 truncate" title={c.plan_tratamiento}><strong>Plan:</strong> {c.plan_tratamiento}</p>}
-              </div>
-            ))}
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {historia.consultas.map(c => {
+              const esActual = citaActual?.id_cita && c.id_consulta === citaActual.id_cita;
+              return (
+                <button
+                  key={c.id_consulta}
+                  type="button"
+                  onClick={() => setConsultaDetalle(c)}
+                  title="Ver todo el contenido de esta consulta"
+                  className={[
+                    'group w-full text-left p-2.5 rounded-lg border transition-all duration-150',
+                    esActual
+                      ? 'bg-emerald-50 border-emerald-300 hover:border-emerald-400'
+                      : 'bg-white border-line hover:border-emerald-300 hover:bg-emerald-50/40',
+                  ].join(' ')}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12px] font-semibold text-ink-900">
+                        {c.fecha_consulta?.slice(0, 10)}
+                        {c.medico?.persona && (
+                          <span className="font-normal text-ink-500"> · Dr(a). {c.medico.persona.nombres} {c.medico.persona.apellidos}</span>
+                        )}
+                      </p>
+                      {c.motivo_consulta && (
+                        <p className="text-[11.5px] text-ink-700 mt-1 line-clamp-1">
+                          <span className="font-medium">Motivo:</span> {c.motivo_consulta}
+                        </p>
+                      )}
+                      {c.impresion_diagnostica && (
+                        <p className="text-[11.5px] text-emerald-700 line-clamp-1 mt-0.5">
+                          <span className="font-medium">Dx:</span> {c.impresion_diagnostica}
+                        </p>
+                      )}
+                      {c.plan_tratamiento && (
+                        <p className="text-[11px] text-ink-500 line-clamp-1 mt-0.5">
+                          <span className="font-medium">Plan:</span> {c.plan_tratamiento}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight size={13} strokeWidth={1.75}
+                      className="flex-shrink-0 text-ink-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all duration-150 mt-0.5" />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </Acordeon>
@@ -682,6 +922,283 @@ function PanelHistoria({ paciente, historia, citaActual, onPreviewAdjunto }) {
           <AdjuntoListPorConsulta adjuntos={adjuntosPaciente} onPreview={onPreviewAdjunto} />
         </div>
       </Acordeon>
+
+      {/* Modal: detalle completo de una consulta previa */}
+      {consultaDetalle && (
+        <DetalleConsultaPreviaModal
+          consulta={consultaDetalle}
+          diagnosticos={historia.diagnosticos}
+          signos={historia.signos}
+          ordenes={historia.ordenes}
+          ordenesExamen={historia.ordenesExamen ?? []}
+          adjuntos={adjuntosPaciente}
+          onPreviewAdjunto={onPreviewAdjunto}
+          onClose={() => setConsultaDetalle(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Modal: detalle completo de una consulta previa ─────────────────────────
+// Muestra todo el contenido clínico registrado en una consulta puntual:
+// anamnesis, examen, signos vitales, diagnósticos, plan, recetas y adjuntos
+// asociados. Los signos/diagnósticos/ordenes/adjuntos se filtran por id_consulta.
+function DetalleConsultaPreviaModal({
+  consulta, diagnosticos, signos, ordenes, ordenesExamen,
+  adjuntos, onPreviewAdjunto, onClose,
+}) {
+  const dxConsulta       = (diagnosticos  ?? []).filter(d => d.id_consulta === consulta.id_consulta);
+  const signosConsulta   = (signos        ?? []).filter(s => s.id_consulta === consulta.id_consulta);
+  const ordenesConsulta  = (ordenes       ?? []).filter(o => o.id_consulta === consulta.id_consulta);
+  const examenesConsulta = (ordenesExamen ?? []).filter(o => o.id_consulta === consulta.id_consulta);
+  const adjuntosConsulta = (adjuntos      ?? []).filter(a => a.id_consulta === consulta.id_consulta);
+
+  const fechaFmt = consulta.fecha_consulta
+    ? new Date(consulta.fecha_consulta).toLocaleDateString('es-ES', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      })
+    : '—';
+  const horaFmt = consulta.fecha_consulta
+    ? new Date(consulta.fecha_consulta).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  const medicoFmt = consulta.medico?.persona
+    ? `Dr(a). ${consulta.medico.persona.nombres} ${consulta.medico.persona.apellidos}`
+    : '—';
+
+  const hayAlgo = (
+    consulta.motivo_consulta || consulta.enfermedad_actual || consulta.revision_sistemas ||
+    consulta.examen_fisico || consulta.examenes_complementarios ||
+    consulta.impresion_diagnostica || consulta.analisis_clinico ||
+    consulta.plan_tratamiento || consulta.observaciones ||
+    dxConsulta.length || signosConsulta.length || ordenesConsulta.length ||
+    examenesConsulta.length || adjuntosConsulta.length
+  );
+
+  return (
+    <Modal
+      titulo="Detalle de la consulta"
+      subtitulo={`${fechaFmt}${horaFmt ? ` · ${horaFmt}` : ''} · ${medicoFmt}`}
+      onClose={onClose}
+      variant="emerald"
+      size="lg"
+    >
+      <div className="space-y-5">
+        {/* Anamnesis */}
+        {(consulta.motivo_consulta || consulta.enfermedad_actual || consulta.revision_sistemas) && (
+          <SeccionDetalle titulo="Anamnesis" icon={<BookOpen size={11} strokeWidth={2} />}>
+            <CampoLargo label="Motivo de consulta"    value={consulta.motivo_consulta} />
+            <CampoLargo label="Enfermedad actual"     value={consulta.enfermedad_actual} />
+            <CampoLargo label="Revisión por sistemas" value={consulta.revision_sistemas} />
+          </SeccionDetalle>
+        )}
+
+        {/* Signos vitales asociados a esta consulta */}
+        {signosConsulta.length > 0 && (
+          <SeccionDetalle titulo="Signos vitales" icon={<Activity size={11} strokeWidth={2} />}>
+            <div className="space-y-2">
+              {signosConsulta.map(s => (
+                <div key={s.id_signos} className="rounded-md border border-line bg-surface/60 px-3 py-2.5">
+                  {s.fecha_registro && (
+                    <p className="text-[10.5px] text-ink-500 mb-2 flex items-center gap-1">
+                      <Calendar size={10} strokeWidth={1.75} />
+                      {new Date(s.fecha_registro).toLocaleString('es-ES')}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                    {s.presion_sistolica       && <MiniDetalle label="PA"    value={`${s.presion_sistolica}/${s.presion_diastolica ?? '—'}`} />}
+                    {s.frecuencia_cardiaca     && <MiniDetalle label="FC"    value={`${s.frecuencia_cardiaca} bpm`} />}
+                    {s.frecuencia_respiratoria && <MiniDetalle label="FR"    value={`${s.frecuencia_respiratoria} rpm`} />}
+                    {s.temperatura             && <MiniDetalle label="T°"    value={`${s.temperatura}°C`} />}
+                    {s.saturacion_oxigeno      && <MiniDetalle label="SpO₂"  value={`${s.saturacion_oxigeno}%`} />}
+                    {s.peso                    && <MiniDetalle label="Peso"  value={`${s.peso} kg`} />}
+                    {s.talla                   && <MiniDetalle label="Talla" value={`${s.talla} m`} />}
+                  </div>
+                  {s.observaciones && (
+                    <p className="mt-2 pt-2 border-t border-line/70 text-[11.5px] text-ink-700">
+                      <span className="font-medium">Observaciones:</span> {s.observaciones}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </SeccionDetalle>
+        )}
+
+        {/* Examen físico + complementarios */}
+        {(consulta.examen_fisico || consulta.examenes_complementarios) && (
+          <SeccionDetalle titulo="Examen" icon={<Stethoscope size={11} strokeWidth={2} />}>
+            <CampoLargo label="Examen físico"            value={consulta.examen_fisico} />
+            <CampoLargo label="Exámenes complementarios" value={consulta.examenes_complementarios} />
+          </SeccionDetalle>
+        )}
+
+        {/* Diagnósticos */}
+        {dxConsulta.length > 0 && (
+          <SeccionDetalle titulo={`Diagnósticos (${dxConsulta.length})`} icon={<ClipboardList size={11} strokeWidth={2} />}>
+            <ul className="space-y-1.5">
+              {dxConsulta.map(d => (
+                <li key={d.id_diagnostico} className="flex items-start gap-2 px-3 py-2 bg-surface border border-line rounded-md">
+                  {d.es_principal && (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                      <Star size={9} className="fill-amber-500 text-amber-500" /> Principal
+                    </span>
+                  )}
+                  {d.codigo_cie10 && (
+                    <span className="text-[10px] font-mono bg-brand-50 text-brand-700 border border-brand-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                      {d.codigo_cie10}
+                    </span>
+                  )}
+                  <span className="flex-1 text-[12.5px] text-ink-800">{d.descripcion}</span>
+                  {d.tipo_diagnostico?.nombre && (
+                    <span className="text-[10.5px] text-ink-500 whitespace-nowrap">{d.tipo_diagnostico.nombre}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </SeccionDetalle>
+        )}
+
+        {/* Plan, impresión y observaciones */}
+        {(consulta.impresion_diagnostica || consulta.analisis_clinico || consulta.plan_tratamiento || consulta.observaciones) && (
+          <SeccionDetalle titulo="Impresión y plan" icon={<Brain size={11} strokeWidth={2} />}>
+            <CampoLargo label="Impresión diagnóstica" value={consulta.impresion_diagnostica} highlight />
+            <CampoLargo label="Análisis clínico"      value={consulta.analisis_clinico} />
+            <CampoLargo label="Plan de tratamiento"   value={consulta.plan_tratamiento} />
+            <CampoLargo label="Observaciones"         value={consulta.observaciones} />
+          </SeccionDetalle>
+        )}
+
+        {/* Recetas */}
+        {ordenesConsulta.length > 0 && (
+          <SeccionDetalle titulo={`Recetas (${ordenesConsulta.length})`} icon={<Pill size={11} strokeWidth={2} />}>
+            <div className="space-y-2">
+              {ordenesConsulta.map(o => (
+                <div key={o.id_orden} className="rounded-md border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
+                  <p className="text-[13px] font-medium text-ink-900">
+                    {o.medicamento?.nombre ?? '—'}
+                    {o.medicamento?.concentracion && (
+                      <span className="font-normal text-ink-500"> · {o.medicamento.concentracion}</span>
+                    )}
+                  </p>
+                  {[o.dosis, o.frecuencia, o.duracion].some(Boolean) && (
+                    <p className="text-[12px] text-ink-700 mt-0.5">
+                      {[o.dosis, o.frecuencia, o.duracion].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                  {o.indicaciones && (
+                    <p className="text-[11.5px] text-ink-500 italic mt-1">{o.indicaciones}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </SeccionDetalle>
+        )}
+
+        {/* Órdenes de exámenes paramédicos */}
+        {examenesConsulta.length > 0 && (
+          <SeccionDetalle
+            titulo={`Órdenes de exámenes (${examenesConsulta.length})`}
+            icon={<FlaskConical size={11} strokeWidth={2} />}
+          >
+            <div className="space-y-3">
+              {examenesConsulta.map(orden => {
+                const items = Array.isArray(orden.items) ? orden.items : [];
+                return (
+                  <div key={orden.id_orden_examen} className="rounded-md border border-violet-100 bg-violet-50/40 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-[12px] font-medium text-violet-800">
+                        <span className="font-mono">{orden.numero_orden ?? '—'}</span>
+                        <span className="text-ink-500 font-normal">
+                          {' · '}
+                          {orden.fecha_emision
+                            ? new Date(orden.fecha_emision).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : '—'}
+                        </span>
+                      </p>
+                      <span className="text-[10.5px] text-violet-700 font-medium tabular-nums">
+                        {items.length} examen{items.length === 1 ? '' : 'es'}
+                      </span>
+                    </div>
+                    <ul className="space-y-1 text-[12.5px] text-ink-800">
+                      {items.map(it => (
+                        <li key={it.id_item} className="flex items-start gap-2">
+                          <span className="inline-flex w-4 h-4 items-center justify-center rounded-sm bg-violet-100 text-violet-700 text-[9px] font-semibold tabular-nums flex-shrink-0 mt-0.5">
+                            {it.orden}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-medium">{it.nombre}</p>
+                            {it.observaciones && (
+                              <p className="text-[11.5px] text-ink-500 italic">{it.observaciones}</p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {orden.indicaciones && (
+                      <p className="mt-2 pt-2 border-t border-violet-100/70 text-[11.5px] text-ink-700">
+                        <span className="font-medium">Indicaciones:</span> {orden.indicaciones}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </SeccionDetalle>
+        )}
+
+        {/* Adjuntos de esta consulta */}
+        {adjuntosConsulta.length > 0 && (
+          <SeccionDetalle titulo={`Adjuntos (${adjuntosConsulta.length})`} icon={<Paperclip size={11} strokeWidth={2} />}>
+            <AdjuntoListPorConsulta adjuntos={adjuntosConsulta} onPreview={onPreviewAdjunto} />
+          </SeccionDetalle>
+        )}
+
+        {!hayAlgo && (
+          <p className="text-center text-[13px] text-ink-500 py-6">
+            Esta consulta no tiene contenido clínico registrado.
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function SeccionDetalle({ titulo, icon, children }) {
+  return (
+    <section>
+      <p className="text-[10.5px] uppercase tracking-[0.12em] font-medium text-emerald-700 mb-2 flex items-center gap-1.5">
+        {icon} {titulo}
+      </p>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function CampoLargo({ label, value, highlight = false }) {
+  if (!value) return null;
+  return (
+    <div className={[
+      'rounded-md border px-3 py-2',
+      highlight ? 'bg-emerald-50/60 border-emerald-100' : 'bg-surface/60 border-line',
+    ].join(' ')}>
+      <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">{label}</p>
+      <p className={[
+        'mt-0.5 text-[13px] whitespace-pre-wrap break-words',
+        highlight ? 'text-emerald-900 font-medium' : 'text-ink-800',
+      ].join(' ')}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MiniDetalle({ label, value }) {
+  return (
+    <div className="rounded border border-line bg-white px-2 py-1.5 text-center">
+      <p className="text-[10px] uppercase tracking-[0.08em] text-ink-500 leading-tight">{label}</p>
+      <p className="text-[12px] font-medium text-ink-900 tabular-nums leading-tight mt-0.5">{value}</p>
     </div>
   );
 }
@@ -689,22 +1206,22 @@ function PanelHistoria({ paciente, historia, citaActual, onPreviewAdjunto }) {
 // ─── Sub-componentes UI ────────────────────────────────────────────────────────
 function Seccion({ titulo, color = 'gray', children }) {
   const colors = {
-    blue:    'border-blue-200 bg-blue-50',
-    emerald: 'border-emerald-200 bg-emerald-50',
-    purple:  'border-purple-200 bg-purple-50',
-    red:     'border-red-200 bg-red-50',
-    orange:  'border-orange-200 bg-orange-50',
+    blue:    'border-brand-100   bg-brand-50/40',
+    emerald: 'border-emerald-100 bg-emerald-50/40',
+    purple:  'border-violet-100  bg-violet-50/40',
+    red:     'border-red-100     bg-red-50/40',
+    orange:  'border-orange-100  bg-orange-50/40',
   };
   const titles = {
-    blue:    'text-blue-700',
+    blue:    'text-brand-700',
     emerald: 'text-emerald-700',
-    purple:  'text-purple-700',
+    purple:  'text-violet-700',
     red:     'text-red-700',
     orange:  'text-orange-700',
   };
   return (
-    <div className={`rounded-xl border p-4 ${colors[color] ?? 'border-gray-200 bg-gray-50'}`}>
-      <p className={`text-xs font-bold uppercase mb-3 ${titles[color] ?? 'text-gray-600'}`}>{titulo}</p>
+    <div className={`rounded-xl border p-4 ${colors[color] ?? 'border-line bg-surface/60'}`}>
+      <p className={`text-[10.5px] font-medium uppercase tracking-[0.12em] mb-3 ${titles[color] ?? 'text-ink-700'}`}>{titulo}</p>
       {children}
     </div>
   );
@@ -713,12 +1230,17 @@ function Seccion({ titulo, color = 'gray', children }) {
 function Textarea({ label, name, value, onChange, rows = 2, required = false, placeholder = '', highlight = false }) {
   return (
     <div>
-      {label && <label className="text-sm font-medium text-gray-700 mb-2 block">{label}</label>}
+      {label && <label className="text-[13px] font-medium text-ink-700 mb-1.5 block">{label}</label>}
       <textarea
         name={name} value={value} onChange={onChange} rows={rows} required={required} placeholder={placeholder}
-        className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 resize-none ${
-          highlight ? 'border-emerald-400 focus:ring-emerald-500 bg-emerald-50' : 'border-gray-300 focus:ring-emerald-500'
-        }`}
+        className={[
+          'w-full px-3.5 py-2.5 text-[13.5px] rounded-xl resize-none transition-all duration-150',
+          'placeholder:text-ink-300 text-ink-900',
+          'focus:outline-none focus:ring-4',
+          highlight
+            ? 'bg-emerald-50/50 border border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/10'
+            : 'bg-white border border-line focus:border-brand-500 focus:ring-brand-500/10',
+        ].join(' ')}
       />
     </div>
   );
@@ -726,13 +1248,15 @@ function Textarea({ label, name, value, onChange, rows = 2, required = false, pl
 
 function Acordeon({ titulo, icon, abierto, onToggle, children }) {
   return (
-    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+    <div className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
       <button type="button" onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition">
-        <span className="flex items-center gap-2 text-sm font-bold text-gray-800">
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface transition-colors">
+        <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight text-ink-900">
           {icon} {titulo}
         </span>
-        {abierto ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+        {abierto
+          ? <ChevronUp   size={15} className="text-ink-500" strokeWidth={1.75} />
+          : <ChevronDown size={15} className="text-ink-500" strokeWidth={1.75} />}
       </button>
       {abierto && <div className="px-4 pb-4">{children}</div>}
     </div>
@@ -741,9 +1265,9 @@ function Acordeon({ titulo, icon, abierto, onToggle, children }) {
 
 function Mini({ label, value, highlight = false }) {
   return (
-    <div className={`px-2 py-1 rounded ${highlight ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
-      <p className="text-[10px] text-gray-500 leading-tight">{label}</p>
-      <p className={`font-semibold leading-tight ${highlight ? 'text-red-700' : 'text-gray-800'}`}>{value || '—'}</p>
+    <div className={`px-2 py-1.5 rounded-md ${highlight ? 'bg-rose-50 border border-rose-100' : 'bg-surface border border-line'}`}>
+      <p className="text-[10px] text-ink-500 leading-tight uppercase tracking-[0.08em]">{label}</p>
+      <p className={`text-[12px] font-medium tabular-nums leading-tight mt-0.5 ${highlight ? 'text-rose-700' : 'text-ink-900'}`}>{value || '—'}</p>
     </div>
   );
 }
@@ -772,13 +1296,13 @@ function AdjuntosFormPicker({ pendientes, onAdd, onChangeDescripcion, onRemove }
     <div className="space-y-3">
       <div
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50/30 transition"
+        className="border-2 border-dashed border-line rounded-xl p-6 text-center cursor-pointer hover:border-violet-300 hover:bg-violet-50/40 transition-colors"
       >
-        <Paperclip size={28} className="mx-auto mb-2 text-gray-400" />
-        <p className="text-sm text-gray-600">
+        <Paperclip size={24} className="mx-auto mb-2 text-ink-300" strokeWidth={1.75} />
+        <p className="text-[13px] text-ink-700">
           Haz clic o arrastra archivos para adjuntar
         </p>
-        <p className="text-xs text-gray-400 mt-1">PDF e imágenes · Máx 10 MB</p>
+        <p className="text-[11.5px] text-ink-500 mt-1">PDF e imágenes · Máx 10 MB</p>
         <input
           ref={inputRef}
           type="file"
@@ -793,22 +1317,25 @@ function AdjuntosFormPicker({ pendientes, onAdd, onChangeDescripcion, onRemove }
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-2 rounded text-xs">{error}</div>
+        <div className="flex items-start gap-2.5 text-[12px] text-red-700 bg-red-50/70 border-l-2 border-red-500 pl-3 pr-3 py-2 rounded-r-md">
+          <AlertCircle size={13} className="flex-shrink-0 mt-0.5" strokeWidth={2} />
+          <span>{error}</span>
+        </div>
       )}
 
       {pendientes.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-gray-600">Archivos pendientes ({pendientes.length})</p>
+          <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">
+            Archivos pendientes ({pendientes.length})
+          </p>
           {pendientes.map((p, idx) => {
             const isImg = p.file.type.startsWith('image/');
             return (
-              <div key={idx} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                {isImg
-                  ? <FileText size={18} className="text-purple-600 flex-shrink-0 mt-0.5" />
-                  : <FileText size={18} className="text-red-600   flex-shrink-0 mt-0.5" />}
+              <div key={idx} className="flex items-start gap-3 p-3 bg-white border border-line rounded-lg">
+                <FileText size={16} className={`flex-shrink-0 mt-0.5 ${isImg ? 'text-violet-600' : 'text-rose-600'}`} strokeWidth={1.75} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{p.file.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[13px] font-medium text-ink-900 truncate">{p.file.name}</p>
+                  <p className="text-[11px] text-ink-500">
                     {(p.file.size / 1024).toFixed(0)} KB · {p.file.type}
                   </p>
                   <input
@@ -816,13 +1343,13 @@ function AdjuntosFormPicker({ pendientes, onAdd, onChangeDescripcion, onRemove }
                     value={p.descripcion}
                     onChange={(e) => onChangeDescripcion(idx, e.target.value)}
                     placeholder="Descripción (opcional, ej: Radiografía PA)"
-                    className="w-full mt-2 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    className="w-full mt-2 px-2 py-1.5 text-[12px] border border-line rounded-md focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => onRemove(idx)}
-                  className="text-gray-400 hover:text-red-600 transition flex-shrink-0"
+                  className="text-ink-300 hover:text-red-600 transition-colors flex-shrink-0 p-1"
                   aria-label="Quitar"
                 >
                   ✕
@@ -830,7 +1357,7 @@ function AdjuntosFormPicker({ pendientes, onAdd, onChangeDescripcion, onRemove }
               </div>
             );
           })}
-          <p className="text-xs text-emerald-700 italic">
+          <p className="text-[11.5px] text-emerald-700">
             ✓ Se subirán al guardar y finalizar la cita.
           </p>
         </div>

@@ -37,7 +37,6 @@ import MedicoAtenderCita from './features/medico/pages/AtenderCita';
 import ClientDashboard from './features/clients/pages/ClientDashboard';
 import MiPerfil from './features/clients/pages/MiPerfil';
 import MisCitas from './features/clients/pages/MisCitas';
-import MisMedicamentos from './features/clients/pages/MisMedicamentos';
 import Resultados from './features/clients/pages/Resultados';
 import MiHistorial from './features/clients/pages/MiHistorial';
 import Documentos from './features/clients/pages/Documentos';
@@ -200,7 +199,6 @@ export default function AppRoutes() {
         <Route index element={<ClientDashboard />} />
         <Route path="perfil"        element={<MiPerfil />} />
         <Route path="citas"         element={<MisCitas />} />
-        <Route path="medicamentos"  element={<MisMedicamentos />} />
         <Route path="resultados"    element={<Resultados />} />
         <Route path="historial"     element={<MiHistorial />} />
         <Route path="documentos"    element={<Documentos />} />

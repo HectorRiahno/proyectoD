@@ -214,6 +214,22 @@ export const citaService = {
   },
 
   /**
+   * Devuelve las horas (HH:mm) que un médico ya tiene ocupadas en una fecha
+   * dada. Excluye canceladas. Útil para pintar el SlotPicker.
+   */
+  async getHorasOcupadasMedico(idMedico: number, fecha: string): Promise<string[]> {
+    const { data, error } = await supabase
+      .from(VIEW)
+      .select('hora, estado')
+      .eq('fecha', fecha)
+      .eq('id_medico', idMedico);
+    if (error) throw new ServiceError(error.message, error.code);
+    return ((data ?? []) as Array<{ hora: string; estado: string }>)
+      .filter(c => c.estado !== 'cancelada')
+      .map(c => (c.hora ?? '').slice(0, 5));
+  },
+
+  /**
    * Verifica si un médico específico tiene conflicto en fecha+hora.
    * Re-consulta justo antes del INSERT para mitigar race conditions.
    */

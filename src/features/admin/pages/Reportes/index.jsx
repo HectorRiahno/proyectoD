@@ -1,13 +1,12 @@
 import React, { useState, lazy, Suspense } from 'react';
 import {
   BarChart3, Users, Stethoscope, Clock, Receipt,
-  Package, ShieldCheck, UserCheck, AlertCircle,
+  Package, ShieldCheck, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../../../../hooks';
-import { PageHeader, LoadingState } from '../../../../shared/components/ui';
+import { PageHeader, LoadingState, EmptyState } from '../../../../shared/components/ui';
 
 // Lazy loading de cada sub-reporte — solo se carga el código del tab activo.
-// Esto ayuda a que el bundle inicial no cargue Recharts/exceljs si no se entra.
 const DashboardKPIs       = lazy(() => import('./DashboardKPIs'));
 const ReportePacientes    = lazy(() => import('./ReportePacientes'));
 const ReporteMedicos      = lazy(() => import('./ReporteMedicos'));
@@ -18,15 +17,26 @@ const ReporteAuditoria    = lazy(() => import('./ReporteAuditoria'));
 const ReporteUsuarios     = lazy(() => import('./ReporteUsuarios'));
 
 const TABS = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: BarChart3,   Component: DashboardKPIs,     desc: 'KPIs y comparativas' },
-  { id: 'pacientes',  label: 'Pacientes',  icon: Users,       Component: ReportePacientes,  desc: 'Demografía, frecuentes, inactivos' },
-  { id: 'medicos',    label: 'Médicos',    icon: Stethoscope, Component: ReporteMedicos,    desc: 'Productividad y rendimiento' },
-  { id: 'horarios',   label: 'Horarios',   icon: Clock,       Component: ReporteHorarios,   desc: 'Ocupación y horas pico' },
-  { id: 'financiero', label: 'Financiero', icon: Receipt,     Component: ReporteFinanciero, desc: 'Ingresos, cartera y métodos de pago' },
-  { id: 'inventario', label: 'Inventario', icon: Package,     Component: ReporteInventario, desc: 'Stock crítico y más usados' },
-  { id: 'auditoria',  label: 'Auditoría',  icon: ShieldCheck, Component: ReporteAuditoria,  desc: 'Eventos del sistema' },
-  { id: 'usuarios',   label: 'Usuarios',   icon: UserCheck,   Component: ReporteUsuarios,   desc: 'Cuentas activas e inactivas' },
+  { id: 'dashboard',  label: 'Dashboard',  icon: BarChart3,   accent: 'indigo',  Component: DashboardKPIs,     desc: 'KPIs y comparativas' },
+  { id: 'pacientes',  label: 'Pacientes',  icon: Users,       accent: 'emerald', Component: ReportePacientes,  desc: 'Demografía, frecuentes, inactivos' },
+  { id: 'medicos',    label: 'Médicos',    icon: Stethoscope, accent: 'violet',  Component: ReporteMedicos,    desc: 'Productividad y rendimiento' },
+  { id: 'horarios',   label: 'Horarios',   icon: Clock,       accent: 'teal',    Component: ReporteHorarios,   desc: 'Ocupación y horas pico' },
+  { id: 'financiero', label: 'Financiero', icon: Receipt,     accent: 'sky',     Component: ReporteFinanciero, desc: 'Ingresos, cartera y métodos de pago' },
+  { id: 'inventario', label: 'Inventario', icon: Package,     accent: 'amber',   Component: ReporteInventario, desc: 'Stock crítico y más usados' },
+  { id: 'auditoria',  label: 'Auditoría',  icon: ShieldCheck, accent: 'slate',   Component: ReporteAuditoria,  desc: 'Eventos del sistema' },
+  { id: 'usuarios',   label: 'Usuarios',   icon: UserCheck,   accent: 'fuchsia', Component: ReporteUsuarios,   desc: 'Cuentas activas e inactivas' },
 ];
+
+const ACCENT_TAB = {
+  indigo:  'bg-indigo-50 text-indigo-700 border-indigo-100',
+  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  violet:  'bg-violet-50 text-violet-700 border-violet-100',
+  teal:    'bg-teal-50 text-teal-700 border-teal-100',
+  sky:     'bg-sky-50 text-sky-700 border-sky-100',
+  amber:   'bg-amber-50 text-amber-700 border-amber-100',
+  slate:   'bg-surface text-ink-700 border-line',
+  fuchsia: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100',
+};
 
 export default function ReportesLayout() {
   const { esAdmin } = useAuth();
@@ -34,13 +44,11 @@ export default function ReportesLayout() {
 
   if (!esAdmin) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-        <AlertCircle size={48} className="mx-auto text-red-500 mb-3" />
-        <h2 className="text-xl font-bold text-gray-900">Acceso restringido</h2>
-        <p className="text-sm text-gray-500">
-          El módulo de Reportes y Seguimiento es solo para administradores.
-        </p>
-      </div>
+      <EmptyState
+        icon={ShieldCheck}
+        titulo="Acceso restringido"
+        descripcion="El módulo de Reportes y Seguimiento es solo para administradores."
+      />
     );
   }
 
@@ -50,16 +58,17 @@ export default function ReportesLayout() {
   return (
     <div className="space-y-6">
       <PageHeader
-        titulo="Reportes y Seguimiento"
+        titulo="Reportes y seguimiento"
         descripcion={tab.desc}
-        icon={<BarChart3 size={32} />}
-        variant="slate"
+        eyebrow="Reportes"
+        icon={<BarChart3 size={11} strokeWidth={2.25} />}
+        variant="indigo"
       />
 
       {/* Tabs horizontales con scroll en pantallas chicas */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+      <div className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
         <div className="overflow-x-auto">
-          <nav className="flex" role="tablist">
+          <nav className="flex p-1.5 gap-1" role="tablist">
             {TABS.map(t => {
               const Icon = t.icon;
               const activo = t.id === activeTab;
@@ -69,13 +78,14 @@ export default function ReportesLayout() {
                   role="tab"
                   aria-selected={activo}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex-shrink-0 flex items-center gap-2 px-5 py-3 text-sm font-semibold transition border-b-2 whitespace-nowrap ${
+                  className={[
+                    'inline-flex flex-shrink-0 items-center gap-2 px-3.5 py-2 text-[13px] font-medium rounded-lg whitespace-nowrap transition-all duration-150 border',
                     activo
-                      ? 'text-slate-900 border-slate-700 bg-slate-50'
-                      : 'text-gray-600 border-transparent hover:text-slate-900 hover:bg-gray-50'
-                  }`}
+                      ? `${ACCENT_TAB[t.accent] ?? ACCENT_TAB.slate}`
+                      : 'text-ink-700 border-transparent hover:bg-surface',
+                  ].join(' ')}
                 >
-                  <Icon size={16} />
+                  <Icon size={14} strokeWidth={1.75} />
                   {t.label}
                 </button>
               );
@@ -85,7 +95,7 @@ export default function ReportesLayout() {
       </div>
 
       {/* Contenido del tab activo */}
-      <Suspense fallback={<LoadingState mensaje={`Cargando ${tab.label.toLowerCase()}...`} />}>
+      <Suspense fallback={<LoadingState mensaje={`Cargando ${tab.label.toLowerCase()}…`} />}>
         <Component />
       </Suspense>
     </div>
