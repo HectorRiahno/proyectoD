@@ -109,19 +109,22 @@ export default function Usuarios() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[{ value: 'todos', label: 'Todos', tone: 'ink' }, ...ROLES.map(r => ({ ...r, tone: rolAvatarTone(r.value) }))].map(r => {
           const active = filterRol === r.value;
+          // NOTA: el fondo lo controla toneAccent (no hardcodeamos bg-white)
+          // para evitar que pelee con bg-{tone}-600 en el estado activo y
+          // deje el card blanco con texto blanco (invisible).
           const toneAccent = {
-            ink:     active ? 'bg-ink-900 text-white border-ink-900'                 : 'border-line hover:border-ink-300',
-            rose:    active ? 'bg-rose-600 text-white border-rose-600'               : 'border-line hover:border-rose-300',
-            violet:  active ? 'bg-violet-600 text-white border-violet-600'           : 'border-line hover:border-violet-300',
-            indigo:  active ? 'bg-indigo-600 text-white border-indigo-600'           : 'border-line hover:border-indigo-300',
-            emerald: active ? 'bg-emerald-600 text-white border-emerald-600'         : 'border-line hover:border-emerald-300',
-          }[r.tone] ?? 'border-line';
+            ink:     active ? 'bg-ink-900 text-white border-ink-900'         : 'bg-white border-line hover:border-ink-300',
+            rose:    active ? 'bg-rose-600 text-white border-rose-600'       : 'bg-white border-line hover:border-rose-300',
+            violet:  active ? 'bg-violet-600 text-white border-violet-600'   : 'bg-white border-line hover:border-violet-300',
+            indigo:  active ? 'bg-indigo-600 text-white border-indigo-600'   : 'bg-white border-line hover:border-indigo-300',
+            emerald: active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-line hover:border-emerald-300',
+          }[r.tone] ?? 'bg-white border-line';
 
           return (
             <button
               key={r.value}
               onClick={() => setFilterRol(r.value)}
-              className={`group relative overflow-hidden p-4 rounded-2xl border bg-white text-left transition-all duration-150 shadow-[0_1px_2px_rgba(11,18,32,0.04)] ${toneAccent} ${active ? 'shadow-[0_8px_24px_-12px_rgba(11,18,32,0.30)]' : ''}`}
+              className={`group relative overflow-hidden p-4 rounded-2xl border text-left transition-all duration-150 shadow-[0_1px_2px_rgba(11,18,32,0.04)] ${toneAccent} ${active ? 'shadow-[0_8px_24px_-12px_rgba(11,18,32,0.30)]' : ''}`}
             >
               <p className={`text-[10.5px] uppercase tracking-[0.10em] font-medium ${active ? 'text-white/75' : 'text-ink-500'}`}>
                 {r.label}

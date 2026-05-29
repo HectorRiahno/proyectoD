@@ -58,14 +58,14 @@ export function PageHeader({
 }) {
   const a = ACCENTS[variant] ?? ACCENTS.blue;
   return (
-    <header className="relative overflow-hidden rounded-2xl border border-line bg-white px-7 py-7 shadow-[0_1px_2px_rgba(11,18,32,0.04)]">
+    <header className="relative overflow-hidden rounded-2xl border border-line bg-white px-5 sm:px-7 py-5 sm:py-7 shadow-[0_1px_2px_rgba(11,18,32,0.04)]">
       {/* Mancha de color sutil, no banner */}
       <div
         aria-hidden
         className="absolute -top-24 -right-20 w-[320px] h-[320px] rounded-full blur-3xl opacity-70"
         style={{ background: `radial-gradient(circle, ${a.glow}, transparent 65%)` }}
       />
-      <div className="relative flex flex-wrap items-start justify-between gap-6">
+      <div className="relative flex flex-wrap items-start justify-between gap-4 sm:gap-6">
         <div className="min-w-0 flex-1">
           {(eyebrow || icon) && (
             <div className={`inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.16em] font-medium rounded-full ${a.tint} ${a.border} ${a.text} border px-2 py-0.5`}>
@@ -73,15 +73,15 @@ export function PageHeader({
               {eyebrow ?? 'Panel'}
             </div>
           )}
-          <h1 className="mt-2.5 text-[28px] leading-[1.15] font-semibold tracking-[-0.022em] text-ink-900">
+          <h1 className="mt-2.5 text-[22px] sm:text-[28px] leading-[1.15] font-semibold tracking-[-0.022em] text-ink-900">
             {titulo}
           </h1>
           {descripcion && (
-            <p className="mt-1.5 text-[13.5px] text-ink-500">{descripcion}</p>
+            <p className="mt-1.5 text-[12.5px] sm:text-[13.5px] text-ink-500">{descripcion}</p>
           )}
         </div>
         {children && (
-          <div className="flex items-stretch gap-3">{children}</div>
+          <div className="flex flex-wrap items-stretch gap-3">{children}</div>
         )}
       </div>
     </header>

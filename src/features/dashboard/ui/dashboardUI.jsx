@@ -11,7 +11,7 @@ import { ArrowRight, AlertCircle } from 'lucide-react';
 /** Header de página con saludo + fecha + reloj/status, sin gradientes. */
 export function PageHero({ eyebrow, title, subtitle, side, accent = 'brand' }) {
   return (
-    <header className="relative overflow-hidden rounded-2xl border border-line bg-white px-7 py-7 shadow-[0_1px_2px_rgba(11,18,32,0.04)]">
+    <header className="relative overflow-hidden rounded-2xl border border-line bg-white px-5 sm:px-7 py-5 sm:py-7 shadow-[0_1px_2px_rgba(11,18,32,0.04)]">
       {/* Mancha de color sutil, no banner */}
       <div
         aria-hidden
@@ -20,18 +20,18 @@ export function PageHero({ eyebrow, title, subtitle, side, accent = 'brand' }) {
           ? 'radial-gradient(circle, rgba(110,231,215,0.30), transparent 65%)'
           : 'radial-gradient(circle, rgba(46,95,230,0.18), transparent 65%)' }}
       />
-      <div className="relative flex flex-wrap items-start justify-between gap-6">
+      <div className="relative flex flex-wrap items-start justify-between gap-4 sm:gap-6">
         <div className="min-w-0">
           {eyebrow && (
             <p className="text-[10.5px] uppercase tracking-[0.16em] font-medium text-ink-500">
               {eyebrow}
             </p>
           )}
-          <h1 className="mt-1.5 text-[28px] leading-[1.15] font-semibold tracking-[-0.022em] text-ink-900">
+          <h1 className="mt-1.5 text-[22px] sm:text-[28px] leading-[1.15] font-semibold tracking-[-0.022em] text-ink-900">
             {title}
           </h1>
           {subtitle && (
-            <p className="mt-1.5 text-[13.5px] text-ink-500 capitalize">{subtitle}</p>
+            <p className="mt-1.5 text-[12.5px] sm:text-[13.5px] text-ink-500 capitalize">{subtitle}</p>
           )}
         </div>
         {side}
