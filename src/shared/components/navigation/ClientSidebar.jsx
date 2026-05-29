@@ -65,16 +65,6 @@ export default function ClientSidebar() {
           );
         })}
       </nav>
-
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gradient-to-t from-sky-50 to-transparent">
-        <div className="text-xs text-center text-gray-600">
-          <p className="font-semibold">Modo: Paciente</p>
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Icons.Eye size={12} className="text-sky-600" />
-            <span className="text-xs text-sky-600 font-medium">Acceso de lectura</span>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }
