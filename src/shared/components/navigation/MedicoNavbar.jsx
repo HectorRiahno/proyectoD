@@ -1,10 +1,10 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, User, LogOut, Stethoscope } from "lucide-react";
+import { Activity, LogOut, Stethoscope, Menu } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../hooks/useAuth";
 
-function MedicoNavbar() {
+function MedicoNavbar({ onMenuClick }) {
   const navigate = useNavigate();
   const { usuarioLogueado } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -28,32 +28,47 @@ function MedicoNavbar() {
     }
   };
 
+  const nombreFull = usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Médico';
+  const nombreCorto = nombreFull.split(' ')[0];
+
   return (
     <header className="w-full bg-gradient-to-r from-white via-emerald-50 to-teal-50 shadow-md border-b border-emerald-100 fixed top-0 left-0 right-0 z-50 h-16">
-      <div className="flex items-center justify-between px-6 py-3 h-full">
-        <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-2 rounded-xl shadow-lg">
-            <Activity size={24} className="text-white" />
+      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 h-full gap-2">
+        {/* Lado izquierdo: hamburger (mobile) + brand */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {onMenuClick && (
+            <button
+              type="button"
+              onClick={onMenuClick}
+              className="lg:hidden inline-flex w-9 h-9 items-center justify-center rounded-lg text-emerald-700 hover:bg-emerald-100/60 transition-colors flex-shrink-0"
+              aria-label="Abrir menú"
+            >
+              <Menu size={18} strokeWidth={1.75} />
+            </button>
+          )}
+          <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-2 rounded-xl shadow-lg flex-shrink-0">
+            <Activity size={20} className="text-white" />
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-bold text-base text-gray-900">HospitalIS Pro</span>
-            <span className="text-xs font-medium text-emerald-600">Portal médico</span>
+          <div className="hidden sm:flex flex-col leading-tight min-w-0">
+            <span className="font-bold text-[14px] text-gray-900 truncate">HospitalIS Pro</span>
+            <span className="text-[11px] font-medium text-emerald-600">Portal médico</span>
           </div>
         </div>
 
-        <div className="relative" ref={userMenuRef}>
+        {/* Lado derecho: menú usuario */}
+        <div className="relative flex-shrink-0" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="flex items-center gap-3 text-gray-700 hover:bg-white px-3 py-2 rounded-xl transition-all hover:shadow-md"
+            className="flex items-center gap-2 sm:gap-3 text-gray-700 hover:bg-white px-2 sm:px-3 py-2 rounded-xl transition-all hover:shadow-md"
           >
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-lg p-2 shadow-md">
-              <Stethoscope size={18} className="text-white" />
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-lg p-1.5 sm:p-2 shadow-md flex-shrink-0">
+              <Stethoscope size={16} className="text-white" />
             </div>
-            <div className="flex flex-col leading-tight text-left">
-              <span className="text-sm font-bold text-gray-900">
-                Dr(a). {usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Médico'}
+            <div className="hidden sm:flex flex-col leading-tight text-left min-w-0">
+              <span className="text-[13px] font-bold text-gray-900 truncate max-w-[160px] lg:max-w-[220px]">
+                Dr(a). <span className="md:hidden">{nombreCorto}</span><span className="hidden md:inline">{nombreFull}</span>
               </span>
-              <span className="text-xs text-emerald-600 font-medium">
+              <span className="text-[11px] text-emerald-600 font-medium truncate max-w-[160px] lg:max-w-[220px]">
                 {usuarioLogueado?.especialidad ?? 'Médico'}
               </span>
             </div>
@@ -62,7 +77,7 @@ function MedicoNavbar() {
           {userMenuOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
               <div className="p-3 border-b">
-                <p className="text-sm font-semibold text-gray-900">{usuarioLogueado?.email}</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{usuarioLogueado?.email}</p>
                 <p className="text-xs text-gray-500">{usuarioLogueado?.rol_nombre}</p>
               </div>
               <button

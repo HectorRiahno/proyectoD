@@ -129,7 +129,7 @@ function EmployeeSidebar() {
         })}
       </nav>
 
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gradient-to-t from-blue-50 to-transparent">
+      <div className="hidden lg:block absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gradient-to-t from-blue-50 to-transparent">
         <div className="text-xs text-center text-gray-600">
           <p className="font-semibold">Modo: Empleado</p>
           <p className="text-gray-500 mt-1">Control Total del Sistema</p>

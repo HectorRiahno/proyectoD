@@ -108,10 +108,10 @@ export default function Horarios() {
 
       <ErrorBanner msg={error} onRetry={cargar} />
 
-      {/* Layout de dos columnas */}
-      <div className="flex gap-6 items-start">
+      {/* Layout de dos columnas (apila en mobile) */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-start">
         {/* ── Panel izquierdo: lista de médicos ── */}
-        <div className="w-80 flex-shrink-0 space-y-3">
+        <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-3">
           <SearchBar
             value={search}
             onChange={setSearch}
