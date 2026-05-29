@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Heart, AlertCircle, Loader2, ClipboardList, Calendar, Activity,
+  Heart, ClipboardList, Calendar, Activity,
   Thermometer, Wind, Star, Paperclip, Download, Eye, FileText,
-  Image as ImageIcon, Stethoscope,
+  Image as ImageIcon, Stethoscope, Loader2,
 } from 'lucide-react';
 import historialService from '../../../services/historialService';
 import { adjuntoService } from '../../../services';
 import { useMisAdjuntos } from '../../../hooks';
-import { AdjuntoViewer } from '../../../shared/components/ui';
+import {
+  AdjuntoViewer,
+  PageHeader, ErrorBanner, EmptyState, LoadingState,
+  IconButton, ActionGroup,
+} from '../../../shared/components/ui';
 
 export default function Resultados() {
   const [signos, setSignos] = useState([]);
@@ -16,8 +20,6 @@ export default function Resultados() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState('examenes');
 
-  // Adjuntos de exámenes (radiografías, PDFs de resultados) subidos por
-  // el médico en sus consultas. Vienen de vw_paciente_mis_adjuntos.
   const { adjuntos, loading: loadingAdj } = useMisAdjuntos();
 
   useEffect(() => {
@@ -39,35 +41,27 @@ export default function Resultados() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-sky-600 to-cyan-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Resultados</h1>
-            <p className="text-sky-100">Exámenes, signos vitales y diagnósticos registrados</p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Resultados"
+        descripcion="Exámenes, signos vitales y diagnósticos registrados"
+        eyebrow="Resultados"
+        icon={<ClipboardList size={11} strokeWidth={2.25} />}
+        variant="sky"
+      />
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBanner msg={error} />
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-md p-2 border border-gray-100 flex gap-2">
-        <Tab activo={tab === 'examenes'} onClick={() => setTab('examenes')} icon={<Paperclip size={16} />} label={`Exámenes (${adjuntos.length})`} />
-        <Tab activo={tab === 'signos'}   onClick={() => setTab('signos')}   icon={<Heart size={16} />} label={`Signos vitales (${signos.length})`} />
-        <Tab activo={tab === 'dx'}       onClick={() => setTab('dx')}       icon={<ClipboardList size={16} />} label={`Diagnósticos (${diagnosticos.length})`} />
+      <div className="inline-flex p-1 rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] gap-1 w-full md:w-auto">
+        <Tab activo={tab === 'examenes'} onClick={() => setTab('examenes')} icon={Paperclip}     label="Exámenes"      count={adjuntos.length} />
+        <Tab activo={tab === 'signos'}   onClick={() => setTab('signos')}   icon={Heart}         label="Signos vitales" count={signos.length} />
+        <Tab activo={tab === 'dx'}       onClick={() => setTab('dx')}       icon={ClipboardList} label="Diagnósticos"  count={diagnosticos.length} />
       </div>
 
       {tab === 'examenes' ? (
         <ExamenesAdjuntos adjuntos={adjuntos} loading={loadingAdj} />
       ) : loading ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-sky-600" />
-          <p className="text-gray-500">Cargando resultados...</p>
-        </div>
+        <LoadingState mensaje="Cargando resultados…" />
       ) : tab === 'signos' ? (
         <SignosVitales signos={signos} />
       ) : (
@@ -78,13 +72,10 @@ export default function Resultados() {
 }
 
 // ─── Tab: Exámenes y archivos adjuntos ─────────────────────────────────────────
-// Agrupa los adjuntos por consulta para que el paciente vea el contexto:
-// fecha, médico, motivo, diagnóstico y la lista de archivos descargables.
 function ExamenesAdjuntos({ adjuntos, loading }) {
   const [visor, setVisor] = useState(null);
   const [descargandoId, setDescargandoId] = useState(null);
 
-  // Agrupar por id_consulta — cada consulta puede tener varios archivos
   const grupos = useMemo(() => {
     const map = new Map();
     for (const a of adjuntos) {
@@ -118,25 +109,15 @@ function ExamenesAdjuntos({ adjuntos, loading }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-        <Loader2 size={32} className="mx-auto mb-2 animate-spin text-sky-600" />
-        <p className="text-gray-500">Cargando exámenes...</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingState mensaje="Cargando exámenes…" />;
 
   if (grupos.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-        <Paperclip size={48} className="mx-auto mb-4 text-gray-300" />
-        <p className="text-gray-700 font-medium">No tienes resultados de exámenes</p>
-        <p className="text-xs text-gray-500 mt-1">
-          Tu médico subirá aquí las radiografías, ecografías o resultados de
-          laboratorio cuando estén disponibles.
-        </p>
-      </div>
+      <EmptyState
+        icon={Paperclip}
+        titulo="No tienes resultados de exámenes"
+        descripcion="Tu médico subirá aquí las radiografías, ecografías o resultados de laboratorio cuando estén disponibles."
+      />
     );
   }
 
@@ -144,82 +125,77 @@ function ExamenesAdjuntos({ adjuntos, loading }) {
     <>
       <div className="space-y-4">
         {grupos.map(g => (
-          <div key={g.id_consulta} className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+          <article key={g.id_consulta} className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
             {/* Cabecera con info de la consulta */}
-            <div className="bg-gradient-to-r from-sky-50 to-cyan-50 border-b border-sky-100 px-5 py-4">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="relative px-5 py-4 bg-sky-50/40 border-b border-sky-100">
+              <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-sky-500" />
+              <div className="ml-2 flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="bg-sky-600 rounded-lg p-2 flex-shrink-0">
-                    <Stethoscope size={16} className="text-white" />
-                  </div>
+                  <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-sky-600 text-white shadow-[0_4px_14px_-6px_rgba(14,165,233,0.45)] flex-shrink-0">
+                    <Stethoscope size={15} strokeWidth={1.75} />
+                  </span>
                   <div className="min-w-0">
-                    <p className="font-bold text-gray-900 text-sm">
+                    <p className="text-[13.5px] font-semibold tracking-tight text-ink-900">
                       Consulta del {g.fecha_consulta?.slice(0, 10)}
                     </p>
                     {g.medico_nombre && (
-                      <p className="text-xs text-gray-600">
+                      <p className="text-[12px] text-ink-600 mt-0.5">
                         Dr(a). {g.medico_nombre}
-                        {g.medico_especialidad && <span className="text-gray-400"> · {g.medico_especialidad}</span>}
+                        {g.medico_especialidad && <span className="text-ink-500"> · {g.medico_especialidad}</span>}
                       </p>
                     )}
                   </div>
                 </div>
-                <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-sky-100 text-sky-700 flex items-center gap-1 flex-shrink-0">
-                  <Paperclip size={11} /> {g.archivos.length} archivo{g.archivos.length !== 1 ? 's' : ''}
+                <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md bg-white border border-sky-100 text-sky-700 font-medium flex-shrink-0">
+                  <Paperclip size={11} strokeWidth={1.75} /> {g.archivos.length} archivo{g.archivos.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
-              {/* Motivo + diagnóstico — contexto clínico */}
-              <div className="mt-3 space-y-1.5 text-sm">
+              {/* Motivo + diagnóstico */}
+              <div className="ml-2 mt-3 space-y-1 text-[12.5px]">
                 {g.motivo_consulta && (
-                  <p className="text-gray-700"><span className="font-semibold">Motivo:</span> {g.motivo_consulta}</p>
+                  <p className="text-ink-700"><span className="font-medium text-ink-900">Motivo:</span> {g.motivo_consulta}</p>
                 )}
                 {g.impresion_diagnostica && (
-                  <p className="text-sky-800"><span className="font-semibold">Diagnóstico:</span> {g.impresion_diagnostica}</p>
+                  <p className="text-sky-800"><span className="font-medium">Diagnóstico:</span> {g.impresion_diagnostica}</p>
                 )}
               </div>
             </div>
 
             {/* Lista de archivos */}
-            <div className="divide-y divide-gray-100">
+            <ul className="divide-y divide-line/70">
               {g.archivos.map(a => {
                 const esImagen = a.tipo_mime?.startsWith('image/');
                 return (
-                  <div key={a.id_adjunto} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition">
-                    <div className={`rounded-lg p-2 flex-shrink-0 ${esImagen ? 'bg-purple-100' : 'bg-red-100'}`}>
+                  <li key={a.id_adjunto} className="px-5 py-3 flex items-center gap-3 hover:bg-surface/70 transition-colors">
+                    <span className={`inline-flex w-9 h-9 items-center justify-center rounded-md flex-shrink-0 ${esImagen ? 'bg-violet-50 border border-violet-100 text-violet-700' : 'bg-rose-50 border border-rose-100 text-rose-700'}`}>
                       {esImagen
-                        ? <ImageIcon size={16} className="text-purple-700" />
-                        : <FileText size={16} className="text-red-700" />}
-                    </div>
+                        ? <ImageIcon size={14} strokeWidth={1.75} />
+                        : <FileText size={14} strokeWidth={1.75} />}
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{a.nombre_archivo}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-[13px] font-medium text-ink-900 truncate">{a.nombre_archivo}</p>
+                      <p className="text-[11.5px] text-ink-500">
                         {(a.tamanio_bytes / 1024).toFixed(0)} KB · subido {a.fecha_subida?.slice(0, 10)}
                         {a.descripcion && <span> · {a.descripcion}</span>}
                       </p>
                     </div>
-                    <button
-                      onClick={() => setVisor(a)}
-                      title="Ver"
-                      className="p-2 text-sky-600 hover:bg-sky-50 rounded-lg transition flex-shrink-0"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    <button
-                      onClick={() => descargar(a)}
-                      disabled={descargandoId === a.id_adjunto}
-                      title="Descargar"
-                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition flex-shrink-0 disabled:opacity-50"
-                    >
-                      {descargandoId === a.id_adjunto
-                        ? <Loader2 size={16} className="animate-spin" />
-                        : <Download size={16} />}
-                    </button>
-                  </div>
+                    <ActionGroup>
+                      <IconButton icon={Eye} tone="sky" title="Ver" onClick={() => setVisor(a)} />
+                      <IconButton
+                        icon={descargandoId === a.id_adjunto ? Loader2 : Download}
+                        tone="emerald"
+                        title="Descargar"
+                        onClick={() => descargar(a)}
+                        disabled={descargandoId === a.id_adjunto}
+                        className={descargandoId === a.id_adjunto ? '[&_svg]:animate-spin' : ''}
+                      />
+                    </ActionGroup>
+                  </li>
                 );
               })}
-            </div>
-          </div>
+            </ul>
+          </article>
         ))}
       </div>
 
@@ -228,123 +204,100 @@ function ExamenesAdjuntos({ adjuntos, loading }) {
   );
 }
 
-function Tab({ activo, onClick, icon, label }) {
+function Tab({ activo, onClick, icon: Icon, label, count }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-        activo ? 'bg-sky-600 text-white shadow-md' : 'text-gray-700 hover:bg-gray-100'
-      }`}
+      className={[
+        'flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-[12.5px] font-medium transition-all duration-150',
+        activo
+          ? 'bg-sky-600 text-white shadow-[0_4px_14px_-6px_rgba(11,18,32,0.35)]'
+          : 'text-ink-700 hover:bg-surface',
+      ].join(' ')}
     >
-      {icon}
+      {Icon && <Icon size={13} strokeWidth={1.75} />}
       {label}
+      {count != null && (
+        <span className={activo ? 'text-white/70' : 'text-ink-500'}>({count})</span>
+      )}
     </button>
   );
 }
 
 function SignosVitales({ signos }) {
   if (signos.length === 0) {
-    return (
-      <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-        <Heart size={48} className="mx-auto mb-4 text-gray-300" />
-        <p className="text-gray-500">No tienes signos vitales registrados</p>
-      </div>
-    );
+    return <EmptyState icon={Heart} titulo="No tienes signos vitales registrados" />;
   }
 
   return (
     <div className="space-y-4">
       {signos.map((s) => (
-        <div key={s.id_signos} className="bg-white rounded-xl shadow-md border border-gray-100 p-5">
+        <article key={s.id_signos} className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">
-              <Activity className="text-sky-600" size={18} />
+            <h3 className="text-[14px] font-semibold tracking-tight text-ink-900 flex items-center gap-2">
+              <Activity className="text-sky-600" size={15} strokeWidth={1.75} />
               Registro de signos vitales
             </h3>
-            <p className="text-xs text-gray-500 flex items-center gap-1">
-              <Calendar size={12} />
+            <p className="text-[11.5px] text-ink-500 flex items-center gap-1 tabular-nums">
+              <Calendar size={11} strokeWidth={1.75} />
               {s.fecha_registro ? new Date(s.fecha_registro).toLocaleString('es-ES') : '—'}
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             {(s.presion_sistolica || s.presion_diastolica) && (
-              <Metric
-                icon={<Heart size={16} className="text-red-500" />}
-                label="Presión arterial"
-                value={`${s.presion_sistolica ?? '—'}/${s.presion_diastolica ?? '—'}`}
-                unit="mmHg"
-                color="red"
-              />
+              <Metric icon={Heart}      label="Presión arterial"   value={`${s.presion_sistolica ?? '—'}/${s.presion_diastolica ?? '—'}`} unit="mmHg" color="rose" />
             )}
             {s.frecuencia_cardiaca && (
-              <Metric
-                icon={<Activity size={16} className="text-pink-500" />}
-                label="Frec. cardíaca"
-                value={s.frecuencia_cardiaca}
-                unit="bpm"
-                color="pink"
-              />
+              <Metric icon={Activity}   label="Frec. cardíaca"     value={s.frecuencia_cardiaca}     unit="bpm" color="rose" />
             )}
             {s.frecuencia_respiratoria && (
-              <Metric
-                icon={<Wind size={16} className="text-blue-500" />}
-                label="Frec. respiratoria"
-                value={s.frecuencia_respiratoria}
-                unit="rpm"
-                color="blue"
-              />
+              <Metric icon={Wind}       label="Frec. respiratoria" value={s.frecuencia_respiratoria} unit="rpm" color="brand" />
             )}
             {s.temperatura && (
-              <Metric
-                icon={<Thermometer size={16} className="text-orange-500" />}
-                label="Temperatura"
-                value={s.temperatura}
-                unit="°C"
-                color="orange"
-              />
+              <Metric icon={Thermometer} label="Temperatura"        value={s.temperatura}             unit="°C"  color="amber" />
             )}
             {s.saturacion_oxigeno && (
-              <Metric label="SpO₂"   value={s.saturacion_oxigeno} unit="%"  color="cyan" />
+              <Metric label="SpO₂"   value={s.saturacion_oxigeno} unit="%"  color="sky" />
             )}
             {s.peso && (
-              <Metric label="Peso"   value={s.peso}                 unit="kg" color="purple" />
+              <Metric label="Peso"   value={s.peso}                unit="kg" color="violet" />
             )}
             {s.talla && (
-              <Metric label="Talla"  value={s.talla}                unit="m"  color="indigo" />
+              <Metric label="Talla"  value={s.talla}               unit="m"  color="indigo" />
             )}
           </div>
 
           {s.observaciones && (
-            <div className="mt-4 bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 mb-1">Observaciones</p>
-              <p className="text-sm text-gray-800">{s.observaciones}</p>
+            <div className="mt-4 rounded-lg border border-line bg-surface/60 px-3 py-2">
+              <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">Observaciones</p>
+              <p className="mt-0.5 text-[13px] text-ink-800">{s.observaciones}</p>
             </div>
           )}
-        </div>
+        </article>
       ))}
     </div>
   );
 }
 
-function Metric({ icon, label, value, unit, color = 'gray' }) {
+function Metric({ icon: Icon, label, value, unit, color = 'gray' }) {
   const colors = {
-    red:    'bg-red-50 border-red-200 text-red-900',
-    pink:   'bg-pink-50 border-pink-200 text-pink-900',
-    blue:   'bg-blue-50 border-blue-200 text-blue-900',
-    orange: 'bg-orange-50 border-orange-200 text-orange-900',
-    cyan:   'bg-cyan-50 border-cyan-200 text-cyan-900',
-    purple: 'bg-purple-50 border-purple-200 text-purple-900',
-    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-900',
-    gray:   'bg-gray-50 border-gray-200 text-gray-900',
+    rose:   { tint: 'bg-rose-50',    border: 'border-rose-100',    iconC: 'text-rose-600',    value: 'text-rose-900' },
+    brand:  { tint: 'bg-brand-50',   border: 'border-brand-100',   iconC: 'text-brand-700',   value: 'text-brand-900' },
+    amber:  { tint: 'bg-amber-50',   border: 'border-amber-100',   iconC: 'text-amber-700',   value: 'text-amber-900' },
+    sky:    { tint: 'bg-sky-50',     border: 'border-sky-100',     iconC: 'text-sky-700',     value: 'text-sky-900' },
+    violet: { tint: 'bg-violet-50',  border: 'border-violet-100',  iconC: 'text-violet-700',  value: 'text-violet-900' },
+    indigo: { tint: 'bg-indigo-50',  border: 'border-indigo-100',  iconC: 'text-indigo-700',  value: 'text-indigo-900' },
+    gray:   { tint: 'bg-surface',    border: 'border-line',        iconC: 'text-ink-500',     value: 'text-ink-900' },
   };
+  const c = colors[color] ?? colors.gray;
   return (
-    <div className={`rounded-lg border p-3 ${colors[color]}`}>
-      <p className="text-xs font-medium opacity-80 mb-1 flex items-center gap-1">
-        {icon} {label}
+    <div className={`rounded-lg border px-3 py-2.5 ${c.tint} ${c.border}`}>
+      <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium opacity-80 flex items-center gap-1">
+        {Icon && <Icon size={11} className={c.iconC} strokeWidth={2} />} {label}
       </p>
-      <p className="text-xl font-bold">
-        {value} <span className="text-xs font-normal opacity-70">{unit}</span>
+      <p className={`mt-1 text-[18px] font-semibold tabular-nums leading-none ${c.value}`}>
+        {value} <span className="text-[11px] font-normal opacity-70">{unit}</span>
       </p>
     </div>
   );
@@ -352,51 +305,46 @@ function Metric({ icon, label, value, unit, color = 'gray' }) {
 
 function Diagnosticos({ diagnosticos }) {
   if (diagnosticos.length === 0) {
-    return (
-      <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-        <ClipboardList size={48} className="mx-auto mb-4 text-gray-300" />
-        <p className="text-gray-500">No tienes diagnósticos registrados</p>
-      </div>
-    );
+    return <EmptyState icon={ClipboardList} titulo="No tienes diagnósticos registrados" />;
   }
 
   return (
     <div className="space-y-3">
       {diagnosticos.map((d) => (
-        <div key={d.id_diagnostico} className="bg-white rounded-xl shadow-md border border-gray-100 p-5 flex items-start gap-4">
-          <div className="bg-sky-100 rounded-lg p-3 flex-shrink-0">
-            <ClipboardList size={20} className="text-sky-600" />
-          </div>
+        <article key={d.id_diagnostico} className="rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(11,18,32,0.04)] flex items-start gap-4 hover:border-ink-100 hover:shadow-[0_8px_24px_-14px_rgba(11,18,32,0.16)] transition-all duration-200">
+          <span className="inline-flex w-11 h-11 items-center justify-center rounded-lg bg-sky-50 border border-sky-100 text-sky-700 flex-shrink-0">
+            <ClipboardList size={17} strokeWidth={1.75} />
+          </span>
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-2">
+            <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {d.codigo_cie10 && (
-                  <span className="font-mono text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded">
+                  <span className="font-mono text-[11px] bg-sky-50 text-sky-700 border border-sky-100 px-1.5 py-0.5 rounded-md font-medium">
                     {d.codigo_cie10}
                   </span>
                 )}
                 {d.es_principal && (
-                  <span className="flex items-center gap-1 text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-medium">
-                    <Star size={10} className="fill-yellow-500" /> Principal
+                  <span className="flex items-center gap-1 text-[11px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded-md font-medium">
+                    <Star size={10} className="fill-amber-500 text-amber-500" /> Principal
                   </span>
                 )}
                 {d.tipo_diagnostico && (
-                  <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                  <span className="text-[11px] bg-surface text-ink-700 border border-line px-1.5 py-0.5 rounded-md font-medium">
                     {d.tipo_diagnostico}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 flex items-center gap-1 flex-shrink-0">
-                <Calendar size={12} />
+              <p className="text-[11.5px] text-ink-500 flex items-center gap-1 flex-shrink-0 tabular-nums">
+                <Calendar size={11} strokeWidth={1.75} />
                 {d.fecha?.slice(0, 10) ?? '—'}
               </p>
             </div>
-            <p className="text-sm text-gray-800 mb-2">{d.descripcion}</p>
+            <p className="text-[13px] text-ink-800">{d.descripcion}</p>
             {d.medico_nombre && (
-              <p className="text-xs text-gray-500">Emitido por {d.medico_nombre}</p>
+              <p className="text-[11.5px] text-ink-500 mt-1.5">Emitido por <span className="text-ink-700 font-medium">{d.medico_nombre}</span></p>
             )}
           </div>
-        </div>
+        </article>
       ))}
     </div>
   );

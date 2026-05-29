@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Search, Plus, Edit, Trash2, AlertCircle, Loader2,
-  Clock, Calendar, ToggleLeft, ToggleRight, X,
-  Stethoscope, CalendarDays, RefreshCw,
+  Plus, Edit, Trash2, AlertCircle, Loader2,
+  Clock, Calendar, ToggleLeft, ToggleRight,
+  Stethoscope, CalendarDays,
 } from 'lucide-react';
 import { horarioService } from '../../../services';
 import { useHorarios } from '../../../hooks';
-import { Modal, PageHeader, KPI, ErrorBanner, BotonesForm } from '../../../shared/components/ui';
+import {
+  Modal, PageHeader, KPI, ErrorBanner, BotonesForm,
+  SearchBar, AccentButton, EmptyState, IconButton, ActionGroup, Avatar,
+} from '../../../shared/components/ui';
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 const DIA_COLOR = {
-  Lunes:      'bg-blue-100 text-blue-700 border-blue-200',
-  Martes:     'bg-indigo-100 text-indigo-700 border-indigo-200',
-  Miércoles:  'bg-purple-100 text-purple-700 border-purple-200',
-  Jueves:     'bg-pink-100 text-pink-700 border-pink-200',
-  Viernes:    'bg-orange-100 text-orange-700 border-orange-200',
-  Sábado:     'bg-teal-100 text-teal-700 border-teal-200',
-  Domingo:    'bg-red-100 text-red-700 border-red-200',
+  Lunes:      'bg-brand-50 text-brand-700 border-brand-100',
+  Martes:     'bg-indigo-50 text-indigo-700 border-indigo-100',
+  Miércoles:  'bg-violet-50 text-violet-700 border-violet-100',
+  Jueves:     'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100',
+  Viernes:    'bg-amber-50 text-amber-700 border-amber-100',
+  Sábado:     'bg-teal-50 text-teal-700 border-teal-100',
+  Domingo:    'bg-rose-50 text-rose-700 border-rose-100',
 };
-
-const initials = (n) =>
-  (n ?? '?').split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase();
 
 const fmtTime = (t) => t ? t.slice(0, 5) : '—';
 
@@ -44,8 +44,6 @@ export default function Horarios() {
   const [editando, setEditando]   = useState(null);
   const [creando, setCreando]     = useState(false);
 
-  // Refrescar cuando la pestaña vuelve a estar visible — esto evita que
-  // queden datos viejos o un estado "cargando" eterno tras inactividad.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') cargar();
@@ -97,12 +95,14 @@ export default function Horarios() {
   return (
     <div className="space-y-6">
       <PageHeader
-        titulo="Horarios Médicos"
+        titulo="Horarios médicos"
         descripcion="Asigna y gestiona las franjas horarias del personal médico"
-        variant="emerald"
+        eyebrow="Horarios"
+        icon={<Clock size={11} strokeWidth={2.25} />}
+        variant="teal"
       >
         <KPI label="Total médicos"       value={loading ? '···' : medicos.length} />
-        <KPI label="Con horario"         value={loading ? '···' : medicosConHorario} />
+        <KPI label="Con horario"         value={loading ? '···' : medicosConHorario} color="text-teal-700" />
         <KPI label="Franjas registradas" value={loading ? '···' : horarios.length} />
       </PageHeader>
 
@@ -112,34 +112,27 @@ export default function Horarios() {
       <div className="flex gap-6 items-start">
         {/* ── Panel izquierdo: lista de médicos ── */}
         <div className="w-80 flex-shrink-0 space-y-3">
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Buscar médico..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              />
-            </div>
-          </div>
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar médico…"
+          />
 
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 px-4 py-3">
-              <p className="text-xs font-bold text-gray-700 uppercase">
+          <div className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
+            <div className="px-4 py-3 border-b border-line bg-surface">
+              <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-500">
                 Médicos ({medicosFiltered.length})
               </p>
             </div>
 
-            <div className="divide-y divide-gray-100 max-h-[calc(100vh-24rem)] overflow-y-auto">
+            <div className="divide-y divide-line/70 max-h-[calc(100vh-24rem)] overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-10">
-                  <Loader2 size={24} className="animate-spin text-emerald-600" />
+                  <Loader2 size={20} className="animate-spin text-teal-600" strokeWidth={1.75} />
                 </div>
               ) : medicosFiltered.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  <Stethoscope size={32} className="mx-auto mb-2 text-gray-300" />
+                <div className="text-center py-10 text-[13px] text-ink-500">
+                  <Stethoscope size={24} className="mx-auto mb-2 text-ink-300" strokeWidth={1.75} />
                   Sin resultados
                 </div>
               ) : (
@@ -150,34 +143,30 @@ export default function Horarios() {
                     <button
                       key={m.id_medico}
                       onClick={() => setMedicoSelId(m.id_medico)}
-                      className={`w-full text-left px-4 py-3 transition flex items-center gap-3 ${
+                      className={[
+                        'w-full text-left px-4 py-3 transition-colors flex items-center gap-3',
                         activo
-                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white'
-                          : 'hover:bg-emerald-50'
-                      }`}
+                          ? 'bg-teal-600 text-white'
+                          : 'hover:bg-surface',
+                      ].join(' ')}
                     >
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm ${
-                        activo
-                          ? 'bg-white/20 text-white'
-                          : 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white'
-                      }`}>
-                        {initials(m.nombre_completo)}
-                      </div>
+                      <Avatar name={m.nombre_completo} tone={activo ? 'ink' : 'teal'} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-semibold truncate ${activo ? 'text-white' : 'text-gray-900'}`}>
+                        <p className={`text-[13px] font-medium truncate ${activo ? 'text-white' : 'text-ink-900'}`}>
                           {m.nombre_completo}
                         </p>
-                        <p className={`text-xs truncate ${activo ? 'text-emerald-100' : 'text-gray-500'}`}>
+                        <p className={`text-[11.5px] truncate ${activo ? 'text-white/70' : 'text-ink-500'}`}>
                           {m.especialidad ?? 'Sin especialidad'}
                         </p>
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                      <span className={[
+                        'text-[11px] px-1.5 py-0.5 rounded-md font-medium flex-shrink-0 tabular-nums',
                         activo
                           ? 'bg-white/20 text-white'
                           : cnt > 0
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-500'
-                      }`}>
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            : 'bg-surface text-ink-500 border border-line',
+                      ].join(' ')}>
                         {cnt}
                       </span>
                     </button>
@@ -191,45 +180,42 @@ export default function Horarios() {
         {/* ── Panel derecho: horarios del médico seleccionado ── */}
         <div className="flex-1 min-w-0">
           {!medicoSel ? (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center min-h-[400px] text-center p-8">
-              <CalendarDays size={64} className="text-gray-200 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-500 mb-1">Selecciona un médico</h3>
-              <p className="text-sm text-gray-400">Elige un médico de la lista para ver y gestionar su horario</p>
-            </div>
+            <EmptyState
+              icon={CalendarDays}
+              titulo="Selecciona un médico"
+              descripcion="Elige un médico de la lista para ver y gestionar su horario."
+            />
           ) : (
             <div className="space-y-4">
               {/* Cabecera del médico seleccionado */}
-              <div className="bg-white rounded-xl shadow-md border border-gray-100 p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-md flex-shrink-0">
-                      {initials(medicoSel.nombre_completo)}
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Dr(a). {medicoSel.nombre_completo}</h2>
-                      <p className="text-purple-600 text-sm font-medium">{medicoSel.especialidad ?? 'Sin especialidad'}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">
+              <div className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <Avatar name={medicoSel.nombre_completo} tone="teal" size="lg" />
+                    <div className="min-w-0">
+                      <h2 className="text-[18px] font-semibold tracking-tight text-ink-900 truncate">
+                        Dr(a). {medicoSel.nombre_completo}
+                      </h2>
+                      <p className="text-[13px] font-medium text-violet-700 truncate">{medicoSel.especialidad ?? 'Sin especialidad'}</p>
+                      <p className="text-[11.5px] text-ink-500 mt-0.5">
                         {horariosDelMedico.length}{' '}
                         {horariosDelMedico.length === 1 ? 'franja registrada' : 'franjas registradas'}
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setCreando(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition font-semibold shadow-lg text-sm"
-                  >
-                    <Plus size={18} /> Agregar franja
-                  </button>
+                  <AccentButton variant="teal" icon={Plus} onClick={() => setCreando(true)}>
+                    Agregar franja
+                  </AccentButton>
                 </div>
               </div>
 
               {/* Sin franjas */}
               {horariosDelMedico.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center py-16 text-center">
-                  <Clock size={48} className="text-gray-200 mb-3" />
-                  <p className="text-gray-500 font-medium">Sin franjas horarias</p>
-                  <p className="text-sm text-gray-400 mt-1">Agrega el horario de trabajo del médico</p>
-                </div>
+                <EmptyState
+                  icon={Clock}
+                  titulo="Sin franjas horarias"
+                  descripcion="Agrega el horario de trabajo del médico."
+                />
               ) : (
                 /* Tablas por día */
                 <div className="space-y-3">
@@ -237,63 +223,51 @@ export default function Horarios() {
                     const slots = horariosPorDia[dia];
                     if (slots.length === 0) return null;
                     return (
-                      <div key={dia} className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                        <div className={`px-5 py-3 border-b flex items-center gap-2 ${DIA_COLOR[dia]}`}>
-                          <Calendar size={15} />
-                          <span className="font-bold text-sm">{dia}</span>
-                          <span className="ml-auto text-xs font-medium opacity-70">
+                      <div key={dia} className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] overflow-hidden">
+                        <div className={`px-5 py-2.5 border-b flex items-center gap-2 ${DIA_COLOR[dia]}`}>
+                          <Calendar size={13} strokeWidth={1.75} />
+                          <span className="text-[12.5px] font-semibold tracking-tight">{dia}</span>
+                          <span className="ml-auto text-[11px] font-medium opacity-70">
                             {slots.length} {slots.length === 1 ? 'franja' : 'franjas'}
                           </span>
                         </div>
                         <table className="w-full">
-                          <thead className="bg-gray-50 border-b border-gray-200">
+                          <thead className="bg-surface border-b border-line">
                             <tr>
-                              <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase">Hora inicio</th>
-                              <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase">Hora fin</th>
-                              <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase">Duración</th>
-                              <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 uppercase">Disponible</th>
-                              <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 uppercase">Acciones</th>
+                              <th className="px-5 py-2.5 text-left text-[10.5px] font-semibold text-ink-500 uppercase tracking-[0.10em]">Hora inicio</th>
+                              <th className="px-5 py-2.5 text-left text-[10.5px] font-semibold text-ink-500 uppercase tracking-[0.10em]">Hora fin</th>
+                              <th className="px-5 py-2.5 text-left text-[10.5px] font-semibold text-ink-500 uppercase tracking-[0.10em]">Duración</th>
+                              <th className="px-5 py-2.5 text-center text-[10.5px] font-semibold text-ink-500 uppercase tracking-[0.10em]">Disponible</th>
+                              <th className="px-5 py-2.5 text-center text-[10.5px] font-semibold text-ink-500 uppercase tracking-[0.10em]">Acciones</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {slots.map((h, idx) => {
+                          <tbody className="divide-y divide-line/70">
+                            {slots.map((h) => {
                               const dur = calcDuracion(h.hora_inicio, h.hora_fin);
                               return (
-                                <tr key={h.id_horario} className={`hover:bg-emerald-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                <tr key={h.id_horario} className="hover:bg-surface/70 transition-colors">
                                   <td className="px-5 py-3">
-                                    <span className="font-mono font-semibold text-gray-900">{fmtTime(h.hora_inicio)}</span>
+                                    <span className="font-mono text-[13px] font-medium text-ink-900">{fmtTime(h.hora_inicio)}</span>
                                   </td>
                                   <td className="px-5 py-3">
-                                    <span className="font-mono font-semibold text-gray-900">{fmtTime(h.hora_fin)}</span>
+                                    <span className="font-mono text-[13px] font-medium text-ink-900">{fmtTime(h.hora_fin)}</span>
                                   </td>
-                                  <td className="px-5 py-3 text-sm text-gray-600">
+                                  <td className="px-5 py-3 text-[12.5px] text-ink-700">
                                     {dur !== null ? `${dur} min` : '—'}
                                   </td>
                                   <td className="px-5 py-3 text-center">
                                     <button onClick={() => toggleDisponible(h)} className="mx-auto block" title={h.disponible ? 'Deshabilitar' : 'Habilitar'}>
                                       {h.disponible
-                                        ? <ToggleRight size={26} className="text-green-500" />
-                                        : <ToggleLeft  size={26} className="text-gray-400" />}
+                                        ? <ToggleRight size={22} className="text-emerald-500" strokeWidth={1.75} />
+                                        : <ToggleLeft  size={22} className="text-ink-300" strokeWidth={1.75} />}
                                     </button>
-                                    <p className="text-xs text-gray-500 mt-0.5">{h.disponible ? 'Sí' : 'No'}</p>
+                                    <p className="text-[11px] text-ink-500 mt-0.5">{h.disponible ? 'Sí' : 'No'}</p>
                                   </td>
                                   <td className="px-5 py-3">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <button
-                                        onClick={() => setEditando(h)}
-                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                                        title="Editar"
-                                      >
-                                        <Edit size={16} />
-                                      </button>
-                                      <button
-                                        onClick={() => eliminar(h)}
-                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                                        title="Eliminar"
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    </div>
+                                    <ActionGroup>
+                                      <IconButton icon={Edit}   tone="indigo" title="Editar"   onClick={() => setEditando(h)} />
+                                      <IconButton icon={Trash2} tone="red"    title="Eliminar" onClick={() => eliminar(h)}    />
+                                    </ActionGroup>
                                   </td>
                                 </tr>
                               );
@@ -372,84 +346,88 @@ function ModalHorario({ horario, idMedico, onClose }) {
   const durPreview = calcDuracion(form.hora_inicio, form.hora_fin);
 
   return (
-    <Modal titulo={esEdicion ? 'Editar franja horaria' : 'Nueva franja horaria'} onClose={onClose}>
+    <Modal
+      titulo={esEdicion ? 'Editar franja horaria' : 'Nueva franja horaria'}
+      variant="teal"
+      onClose={onClose}
+    >
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Selector de día */}
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-3 block">Día de la semana *</label>
+          <label className="text-[13px] font-medium text-ink-700 mb-2.5 block">Día de la semana *</label>
           <div className="grid grid-cols-4 gap-2">
             {DIAS_SEMANA.map(dia => (
               <button
                 key={dia}
                 type="button"
                 onClick={() => setForm(p => ({ ...p, dia_semana: dia }))}
-                className={`py-2 px-2 rounded-xl text-sm font-medium transition border ${
+                className={`py-2 px-2 rounded-xl text-[12.5px] font-medium transition-all duration-150 border ${
                   form.dia_semana === dia
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-transparent shadow-md'
-                    : 'border-gray-300 text-gray-700 hover:border-emerald-400 hover:text-emerald-600'
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-[0_4px_14px_-6px_rgba(11,18,32,0.35)]'
+                    : 'bg-white border-line text-ink-700 hover:border-teal-300 hover:text-teal-700'
                 }`}
               >
                 {dia.slice(0, 3)}
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Seleccionado: <strong className="text-emerald-600">{form.dia_semana}</strong>
+          <p className="text-[11.5px] text-ink-500 mt-2">
+            Seleccionado: <strong className="font-medium text-teal-700">{form.dia_semana}</strong>
           </p>
         </div>
 
         {/* Horas */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Hora de inicio *</label>
+            <label className="text-[13px] font-medium text-ink-700 mb-1.5 block">Hora de inicio *</label>
             <input
               type="time"
               name="hora_inicio"
               value={form.hora_inicio}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              className="w-full px-3.5 py-2.5 text-[13.5px] font-mono bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Hora de fin *</label>
+            <label className="text-[13px] font-medium text-ink-700 mb-1.5 block">Hora de fin *</label>
             <input
               type="time"
               name="hora_fin"
               value={form.hora_fin}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              className="w-full px-3.5 py-2.5 text-[13.5px] font-mono bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
             />
           </div>
         </div>
 
         {/* Disponible */}
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+        <label htmlFor="chk-disponible" className="flex items-center gap-3 p-3 bg-surface border border-line rounded-xl cursor-pointer hover:border-ink-100 transition-colors">
           <input
             type="checkbox"
             name="disponible"
             id="chk-disponible"
             checked={form.disponible}
             onChange={handleChange}
-            className="w-5 h-5 rounded text-emerald-600"
+            className="w-4 h-4 rounded text-teal-600 accent-teal-600"
           />
-          <label htmlFor="chk-disponible" className="text-sm font-medium text-gray-700">
+          <span className="text-[13.5px] font-medium text-ink-800">
             Franja disponible para citas
-          </label>
-        </div>
+          </span>
+        </label>
 
         {/* Vista previa */}
         {durPreview !== null && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
-            <p className="font-semibold flex items-center gap-2">
-              <Clock size={14} />
-              {form.dia_semana}: {form.hora_inicio} – {form.hora_fin} · {durPreview} minutos
-            </p>
+          <div className="flex items-start gap-2.5 text-[13px] text-teal-800 bg-teal-50/70 border-l-2 border-teal-500 pl-3 pr-3 py-2.5 rounded-r-md">
+            <Clock size={14} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
+            <span>
+              <strong className="font-medium">{form.dia_semana}:</strong> {form.hora_inicio} – {form.hora_fin} · {durPreview} minutos
+            </span>
           </div>
         )}
 
-        {error && <ErrorBox msg={error} />}
+        {error && <LocalErrorBox msg={error} />}
         <BotonesForm
           onCancel={onClose}
           saving={saving}
@@ -460,12 +438,11 @@ function ModalHorario({ horario, idMedico, onClose }) {
   );
 }
 
-// ─── Local: ErrorBox inline (mantener — el global es similar, no vale la pena cambiar) ─────
-function ErrorBox({ msg }) {
+function LocalErrorBox({ msg }) {
   if (!msg) return null;
   return (
-    <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-center gap-2">
-      <AlertCircle size={16} className="flex-shrink-0" /> {msg}
+    <div role="alert" className="flex items-start gap-2.5 text-[13px] text-red-700 bg-red-50/70 border-l-2 border-red-500 pl-3 pr-3 py-2.5 rounded-r-md">
+      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" strokeWidth={2} /> {msg}
     </div>
   );
 }

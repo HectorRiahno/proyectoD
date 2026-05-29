@@ -1,18 +1,13 @@
 import React from 'react';
-import { CalendarClock, Clock, User, Phone, AlertCircle, Loader2, Mail } from 'lucide-react';
+import { CalendarClock, Clock, Phone, Mail } from 'lucide-react';
 import { useAgendaHoyMedico } from '../../../hooks';
+import {
+  PageHeader, KPI, ErrorBanner, EmptyState, LoadingState,
+  EstadoBadge, Avatar,
+} from '../../../shared/components/ui';
 
 export default function Agenda() {
   const { citas, loading, error } = useAgendaHoyMedico();
-
-  const estadoColor = (estado) => ({
-    programada: 'bg-blue-100 text-blue-700 border-blue-200',
-    confirmada: 'bg-green-100 text-green-700 border-green-200',
-    en_curso:   'bg-yellow-100 text-yellow-700 border-yellow-200',
-    completada: 'bg-gray-100 text-gray-700 border-gray-200',
-    cancelada:  'bg-red-100 text-red-700 border-red-200',
-    no_asistio: 'bg-orange-100 text-orange-700 border-orange-200',
-  }[estado] ?? 'bg-gray-100 text-gray-700');
 
   const hoyFmt = new Date().toLocaleDateString('es-ES', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -20,91 +15,88 @@ export default function Agenda() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Agenda de hoy</h1>
-            <p className="text-emerald-100 capitalize">{hoyFmt}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-emerald-100 mb-1">Citas</p>
-            <p className="text-4xl font-bold">{loading ? '···' : citas.length}</p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Agenda de hoy"
+        descripcion={hoyFmt}
+        eyebrow="Agenda"
+        icon={<CalendarClock size={11} strokeWidth={2.25} />}
+        variant="teal"
+      >
+        <KPI label="Citas" value={loading ? '···' : citas.length} color="text-teal-700" />
+      </PageHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBanner msg={error} />
 
       {loading ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-emerald-600" />
-          <p className="text-gray-500">Cargando agenda...</p>
-        </div>
+        <LoadingState mensaje="Cargando agenda…" />
       ) : citas.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <CalendarClock size={48} className="mx-auto mb-4 text-gray-300" />
-          <p className="text-gray-500">No tienes citas programadas para hoy</p>
-        </div>
+        <EmptyState icon={CalendarClock} titulo="No tienes citas programadas para hoy" />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {citas.map((c) => (
-            <div key={c.id_cita} className="bg-white rounded-xl shadow-md border border-gray-100 hover:shadow-xl transition overflow-hidden">
-              <div className="flex">
+            <article
+              key={c.id_cita}
+              className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] hover:border-ink-100 hover:shadow-[0_8px_28px_-14px_rgba(11,18,32,0.18)] transition-all duration-200 overflow-hidden"
+            >
+              <div className="flex flex-col sm:flex-row">
                 {/* Hora destacada */}
-                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white p-6 flex flex-col items-center justify-center min-w-[120px]">
-                  <Clock size={20} className="mb-1 opacity-80" />
-                  <p className="text-2xl font-bold">{c.hora?.slice(0, 5)}</p>
-                  <p className="text-xs opacity-80 mt-1">{c.tipo_consulta ?? 'Consulta'}</p>
+                <div className="bg-gradient-to-br from-teal-500 to-teal-700 text-white p-5 flex flex-col items-center justify-center min-w-[120px] sm:rounded-l-2xl">
+                  <Clock size={16} className="mb-1 opacity-80" strokeWidth={1.75} />
+                  <p className="text-[22px] font-semibold tabular-nums leading-none">
+                    {c.hora?.slice(0, 5)}
+                  </p>
+                  <p className="text-[11px] opacity-80 mt-1.5 uppercase tracking-[0.10em]">
+                    {c.tipo_consulta ?? 'Consulta'}
+                  </p>
                 </div>
 
                 {/* Datos del paciente */}
-                <div className="flex-1 p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold shadow-md">
-                        {(c.paciente_nombre ?? '?').split(' ').map((s) => s[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-900 text-lg">{c.paciente_nombre ?? '—'}</p>
-                        <p className="text-sm text-gray-500">
-                          Doc: {c.paciente_documento ?? '—'}
+                <div className="flex-1 p-5">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar name={c.paciente_nombre} tone="teal" />
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-semibold tracking-tight text-ink-900">
+                          {c.paciente_nombre ?? '—'}
+                        </p>
+                        <p className="text-[12px] text-ink-500 mt-0.5">
+                          Doc {c.paciente_documento ?? '—'}
                           {c.paciente_edad != null && ` · ${c.paciente_edad} años`}
-                          {c.numero_historia && ` · HC ${c.numero_historia}`}
+                          {c.numero_historia && (
+                            <>
+                              <span className="mx-1.5 text-ink-300">·</span>
+                              <span className="font-mono text-ink-700">HC {c.numero_historia}</span>
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
-                    <span className={`text-xs px-3 py-1 rounded-full font-medium border ${estadoColor(c.estado)}`}>
-                      {c.estado}
-                    </span>
+                    <EstadoBadge type="cita" estado={c.estado} />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12.5px]">
                     {c.motivo && (
-                      <div className="col-span-3 bg-gray-50 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 mb-1">Motivo</p>
-                        <p className="text-gray-800">{c.motivo}</p>
+                      <div className="sm:col-span-3 rounded-lg border border-line bg-surface/60 px-3 py-2">
+                        <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500 mb-0.5">Motivo</p>
+                        <p className="text-ink-800">{c.motivo}</p>
                       </div>
                     )}
                     {c.paciente_telefono && (
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone size={14} className="text-emerald-600" />
+                      <div className="flex items-center gap-2 text-ink-700">
+                        <Phone size={12} className="text-teal-600 flex-shrink-0" strokeWidth={1.75} />
                         {c.paciente_telefono}
                       </div>
                     )}
                     {c.paciente_email && (
-                      <div className="flex items-center gap-2 text-gray-600 col-span-2 truncate">
-                        <Mail size={14} className="text-emerald-600" />
+                      <div className="flex items-center gap-2 text-ink-700 sm:col-span-2 truncate">
+                        <Mail size={12} className="text-teal-600 flex-shrink-0" strokeWidth={1.75} />
                         <span className="truncate">{c.paciente_email}</span>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}

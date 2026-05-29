@@ -1,30 +1,35 @@
 import React from 'react';
 
-export default function StatsCard({ title, value, icon: Icon, color, highlight }) {
-  const colorClasses = {
-    blue: 'from-blue-500 to-blue-600',
-    red: 'from-red-500 to-red-600',
-    green: 'from-green-500 to-green-600',
-    purple: 'from-purple-500 to-purple-600'
-  };
+const TONES = {
+  blue:   { tint: 'bg-brand-50',   border: 'border-brand-100',   icon: 'text-brand-700' },
+  red:    { tint: 'bg-red-50',     border: 'border-red-100',     icon: 'text-red-700' },
+  green:  { tint: 'bg-emerald-50', border: 'border-emerald-100', icon: 'text-emerald-700' },
+  purple: { tint: 'bg-violet-50',  border: 'border-violet-100',  icon: 'text-violet-700' },
+  amber:  { tint: 'bg-amber-50',   border: 'border-amber-100',   icon: 'text-amber-700' },
+};
 
-  const bgColorClasses = {
-    blue: 'bg-blue-50',
-    red: 'bg-red-50',
-    green: 'bg-green-50',
-    purple: 'bg-purple-50'
-  };
-
+export default function StatsCard({ title, value, icon: Icon, color = 'blue', highlight }) {
+  const t = TONES[color] ?? TONES.blue;
   return (
-    <div className={`bg-white rounded-lg shadow-sm border ${highlight ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-200'} p-5 hover:shadow-md transition`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-600 font-medium mb-1">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <div
+      className={[
+        'rounded-2xl border bg-white px-5 py-4 transition-all duration-200',
+        'shadow-[0_1px_2px_rgba(11,18,32,0.04)]',
+        highlight
+          ? 'border-red-300 ring-4 ring-red-500/10'
+          : 'border-line hover:border-ink-100 hover:shadow-[0_8px_24px_-14px_rgba(11,18,32,0.16)]',
+      ].join(' ')}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">{title}</p>
+          <p className="mt-1 text-[24px] font-semibold tracking-tight tabular-nums text-ink-900 leading-none">
+            {value}
+          </p>
         </div>
-        <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${colorClasses[color]} flex items-center justify-center shadow-lg`}>
-          <Icon className="text-white" size={24} />
-        </div>
+        <span className={`flex-shrink-0 inline-flex w-9 h-9 items-center justify-center rounded-lg border ${t.tint} ${t.border} ${t.icon}`}>
+          {Icon ? <Icon size={16} strokeWidth={1.75} /> : null}
+        </span>
       </div>
     </div>
   );

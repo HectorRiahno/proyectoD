@@ -31,6 +31,14 @@ export { default as alertaService,      type Alerta, type SeveridadAlerta, type 
 export { default as adjuntoService, type Adjunto, TIPOS_PERMITIDOS, TAMANIO_MAX_BYTES } from './adjuntoService';
 export { generarPdfHistorialCliente } from './historialPdfService';
 
+// Órdenes de exámenes paramédicos
+export {
+  default as ordenExamenService,
+  type OrdenExamen,
+  type OrdenExamenItem,
+  type CrearOrdenExamenPayload,
+} from './ordenExamenService';
+
 // Módulo Reportes
 export {
   default as reportesService,

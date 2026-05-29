@@ -13,6 +13,12 @@ export { BotonesForm }                              from './BotonesForm';
 export { SearchBar }                                from './SearchBar';
 export { LoadingRow, EmptyRow, EmptyState, LoadingState } from './States';
 
+// Layout/listado
+export { Toolbar, AccentButton, TabPills }          from './Toolbar';
+export { TableShell, Thead, Tbody, Tr }             from './TableShell';
+export { IconButton, ActionGroup }                  from './IconButton';
+export { Avatar }                                   from './Avatar';
+
 // Adjuntos a consultas (PDFs / imágenes)
 export { FileUpload, FileUploadCompact } from './FileUpload';
 export { AdjuntoList, AdjuntoListPorConsulta } from './AdjuntoList';

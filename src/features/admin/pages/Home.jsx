@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Calendar, Activity, AlertCircle, Clock, ArrowUp,
-  UserPlus, Stethoscope, ClipboardList, TrendingUp
+  Users, Calendar, Stethoscope, ClipboardList, Clock,
+  UserPlus, TrendingUp, Pill, FileCheck2,
 } from 'lucide-react';
 import { useAuth, useDashboardAdmin } from '../../../hooks';
 import NuevaCitaModal from '../components/NuevaCitaModal';
+import {
+  PageHero, LiveTimeBadge, StatCard, Panel, PanelLink,
+  StatusPill, EmptyState, ListRow, ActionList, ErrorBlock,
+} from '../../dashboard/ui/dashboardUI';
 
 function Home() {
   const navigate = useNavigate();
@@ -13,165 +17,111 @@ function Home() {
   const { stats, proximasCitas, loading, error } = useDashboardAdmin(5);
   const [showCitaModal, setShowCitaModal] = useState(false);
 
-  const cards = [
-    { title: 'Pacientes', value: stats?.total_pacientes ?? 0, icon: Users,        color: 'blue',   sub: 'registrados' },
-    { title: 'Médicos',   value: stats?.total_medicos   ?? 0, icon: Stethoscope, color: 'purple', sub: 'activos' },
-    { title: 'Citas Hoy', value: stats?.citas_hoy       ?? 0, icon: Calendar,    color: 'green',  sub: `${stats?.citas_proximas ?? 0} próximas` },
-    { title: 'Consultas', value: stats?.total_consultas ?? 0, icon: ClipboardList, color: 'orange', sub: 'realizadas' },
+  const greeting = greetingForHour(new Date().getHours());
+  const userName = usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Administrador';
+  const today = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const primaryStats = [
+    { label: 'Pacientes',  value: stats?.total_pacientes ?? 0, sub: 'registrados',                        icon: Users,         path: '/dashboard/pacientes' },
+    { label: 'Médicos',    value: stats?.total_medicos   ?? 0, sub: 'activos',                            icon: Stethoscope,   path: '/dashboard/medicos' },
+    { label: 'Citas hoy',  value: stats?.citas_hoy       ?? 0, sub: `${stats?.citas_proximas ?? 0} próximas`, icon: Calendar,  path: '/dashboard/citas' },
+    { label: 'Consultas',  value: stats?.total_consultas ?? 0, sub: 'realizadas',                         icon: ClipboardList, path: '/dashboard/consultas' },
   ];
 
-  const colors = {
-    blue:   'from-blue-500 to-blue-600',
-    purple: 'from-purple-500 to-purple-600',
-    green:  'from-green-500 to-green-600',
-    orange: 'from-orange-500 to-orange-600',
-  };
+  const secondaryStats = [
+    { label: 'Asistentes activos',       value: stats?.total_asistentes    ?? 0, icon: Users },
+    { label: 'Diagnósticos registrados', value: stats?.total_diagnosticos ?? 0, icon: FileCheck2 },
+    { label: 'Medicamentos en catálogo', value: stats?.total_medicamentos ?? 0, icon: Pill },
+  ];
 
-  const estadoColor = (estado) => {
-    const map = {
-      programada: 'bg-blue-100 text-blue-700',
-      confirmada: 'bg-green-100 text-green-700',
-      en_curso:   'bg-yellow-100 text-yellow-700',
-      completada: 'bg-gray-100 text-gray-700',
-      cancelada:  'bg-red-100 text-red-700',
-      no_asistio: 'bg-red-100 text-red-700',
-    };
-    return map[estado] ?? 'bg-gray-100 text-gray-700';
-  };
+  const actions = [
+    { icon: Calendar,    label: 'Nueva cita',     desc: 'Programa una nueva consulta',          onClick: () => setShowCitaModal(true),         primary: true },
+    { icon: UserPlus,    label: 'Crear usuario',  desc: 'Médico, asistente o paciente',         onClick: () => navigate('/dashboard/usuarios') },
+    { icon: Users,       label: 'Ver pacientes',  desc: 'Listado completo e historiales',       onClick: () => navigate('/dashboard/pacientes') },
+    { icon: TrendingUp,  label: 'Reportes',       desc: 'Indicadores y exportaciones',          onClick: () => navigate('/dashboard/reportes') },
+  ];
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Panel de Administración</h1>
-            <p className="text-slate-200 text-lg">
-              Bienvenido, {usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Administrador'}
-            </p>
-            <p className="text-sm text-slate-200 mt-2">
-              {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-6 text-center">
-            <Activity size={40} className="mx-auto mb-2" />
-            <p className="text-sm font-medium">Sistema Activo</p>
-            <p className="text-2xl font-bold">
-              {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          </div>
-        </div>
+      <PageHero
+        eyebrow="Panel de administración"
+        title={<>{greeting}, <span className="text-ink-700 font-normal">{userName}.</span></>}
+        subtitle={today}
+        side={<LiveTimeBadge />}
+      />
+
+      <ErrorBlock message={error} />
+
+      {/* KPIs principales */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {primaryStats.map((s) => (
+          <StatCard
+            key={s.label}
+            label={s.label}
+            value={s.value}
+            sub={s.sub}
+            icon={s.icon}
+            loading={loading}
+            onClick={() => navigate(s.path)}
+          />
+        ))}
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} />
-          {error}
-        </div>
-      )}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-4 gap-6">
-        {cards.map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <div key={i} className="bg-white rounded-xl shadow-md hover:shadow-xl transition p-6 border border-gray-100">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colors[c.color]} flex items-center justify-center shadow-lg`}>
-                  <Icon className="text-white" size={28} />
-                </div>
-              </div>
-              <h3 className="text-gray-600 text-sm font-medium mb-2">{c.title}</h3>
-              <p className="text-3xl font-bold text-gray-900 mb-1">
-                {loading ? <span className="animate-pulse text-gray-300">···</span> : c.value}
-              </p>
-              <p className="text-xs text-gray-500">{c.sub}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        {/* Próximas citas */}
-        <div className="col-span-2 bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-800">Próximas Citas</h2>
-            <button onClick={() => navigate('/dashboard/citas')} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-              Ver todas
-            </button>
-          </div>
-
+      {/* Próximas citas + Acciones */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <Panel
+          className="lg:col-span-2"
+          title="Próximas citas"
+          subtitle="Próximas 5 programadas en el sistema"
+          action={<PanelLink onClick={() => navigate('/dashboard/citas')}>Ver todas</PanelLink>}
+        >
           {loading ? (
-            <div className="text-center py-8 text-gray-400">Cargando...</div>
+            <SkeletonList rows={4} />
           ) : proximasCitas.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Calendar size={32} className="mx-auto mb-2 text-gray-300" />
-              No hay citas programadas
-            </div>
+            <EmptyState icon={Calendar} title="No hay citas programadas" hint="Crea una nueva cita desde acciones rápidas." />
           ) : (
-            <div className="space-y-3">
+            <ul className="-mx-3 divide-y divide-line/60">
               {proximasCitas.map((c) => (
-                <div key={c.id_cita} className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 transition border border-gray-100">
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Calendar className="text-blue-600" size={20} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{c.paciente_nombre ?? '—'}</p>
-                    <p className="text-xs text-gray-500 flex items-center gap-2 mt-1">
-                      <Clock size={12} />
-                      {c.fecha} · {c.hora?.slice(0, 5)} · {c.medico_nombre ?? 'Sin médico'}
-                    </p>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${estadoColor(c.estado)}`}>
-                    {c.estado}
-                  </span>
-                </div>
+                <li key={c.id_cita}>
+                  <ListRow
+                    onClick={() => navigate('/dashboard/citas')}
+                    leading={
+                      <div className="flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-surface border border-line text-ink-700">
+                        <span className="text-[10px] uppercase tracking-wide text-ink-500 leading-none">
+                          {c.fecha?.slice(5, 10) ?? '—'}
+                        </span>
+                        <span className="text-[12.5px] font-semibold tabular-nums leading-none mt-1">
+                          {c.hora?.slice(0, 5) ?? '—'}
+                        </span>
+                      </div>
+                    }
+                    title={c.paciente_nombre ?? '—'}
+                    subtitle={
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock size={11} strokeWidth={1.75} className="text-ink-300" />
+                        {c.medico_nombre ?? 'Sin médico'}
+                      </span>
+                    }
+                    trailing={<StatusPill estado={c.estado} />}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </Panel>
 
-        {/* Acciones rápidas */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <h2 className="text-xl font-bold text-gray-800 mb-6">Acciones rápidas</h2>
-          <div className="space-y-3">
-            <button onClick={() => setShowCitaModal(true)}
-              className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition shadow-md">
-              <Calendar size={20} />
-              <span className="font-medium">Nueva cita</span>
-            </button>
-            <button onClick={() => navigate('/dashboard/usuarios')}
-              className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition shadow-md">
-              <UserPlus size={20} />
-              <span className="font-medium">Crear usuario</span>
-            </button>
-            <button onClick={() => navigate('/dashboard/pacientes')}
-              className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition shadow-md">
-              <Users size={20} />
-              <span className="font-medium">Ver pacientes</span>
-            </button>
-            <button onClick={() => navigate('/dashboard/reportes')}
-              className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-700 hover:to-red-700 transition shadow-md">
-              <TrendingUp size={20} />
-              <span className="font-medium">Reportes</span>
-            </button>
-          </div>
-        </div>
+        <Panel title="Acciones rápidas" subtitle="Atajos a las operaciones del día">
+          <ActionList items={actions} />
+        </Panel>
       </div>
 
-      {/* Resumen secundario */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Asistentes activos</p>
-          <p className="text-2xl font-bold text-gray-900">{stats?.total_asistentes ?? 0}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Diagnósticos registrados</p>
-          <p className="text-2xl font-bold text-gray-900">{stats?.total_diagnosticos ?? 0}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Medicamentos en catálogo</p>
-          <p className="text-2xl font-bold text-gray-900">{stats?.total_medicamentos ?? 0}</p>
-        </div>
+      {/* Stats secundarios */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {secondaryStats.map((s) => (
+          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} loading={loading} />
+        ))}
       </div>
 
       <NuevaCitaModal
@@ -180,6 +130,29 @@ function Home() {
         onSave={() => { setShowCitaModal(false); navigate('/dashboard/citas'); }}
       />
     </div>
+  );
+}
+
+function greetingForHour(h) {
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
+
+function SkeletonList({ rows = 3 }) {
+  return (
+    <ul className="space-y-2">
+      {Array.from({ length: rows }).map((_, i) => (
+        <li key={i} className="flex items-center gap-4 py-3">
+          <div className="w-12 h-12 rounded-lg bg-line/50 motion-safe:animate-pulse" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-1/3 rounded bg-line/50 motion-safe:animate-pulse" />
+            <div className="h-2.5 w-1/2 rounded bg-line/40 motion-safe:animate-pulse" />
+          </div>
+          <div className="w-16 h-5 rounded bg-line/50 motion-safe:animate-pulse" />
+        </li>
+      ))}
+    </ul>
   );
 }
 

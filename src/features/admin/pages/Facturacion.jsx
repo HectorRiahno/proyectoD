@@ -10,6 +10,7 @@ import { useAuth, useFacturas } from '../../../hooks';
 import {
   Modal, PageHeader, KPI, Campo, CampoReadOnly, ErrorBox, ErrorBanner,
   SuccessBanner, SearchBar, LoadingRow, EmptyRow, EstadoBadge,
+  Toolbar, TableShell, Thead, Tbody, Tr, IconButton, ActionGroup,
 } from '../../../shared/components/ui';
 import { generarPdfFactura } from '../../../shared/utils/generarPdfFactura';
 
@@ -117,170 +118,134 @@ export default function Facturacion() {
       <PageHeader
         titulo="Facturación"
         descripcion="Gestión de facturas y cobros"
-        icon={<Receipt size={32} />}
-        variant="blue"
+        eyebrow="Facturación"
+        icon={<Receipt size={11} strokeWidth={2.25} />}
+        variant="sky"
       >
         <KPI label="Total"       value={loading ? '···' : kpis.total} />
-        <KPI label="Pendientes"  value={loading ? '···' : kpis.pendientes} color="text-amber-300" />
-        <KPI label="Pagadas"     value={loading ? '···' : kpis.pagadas} color="text-green-300" />
+        <KPI label="Pendientes"  value={loading ? '···' : kpis.pendientes} color="text-amber-700" />
+        <KPI label="Pagadas"     value={loading ? '···' : kpis.pagadas}    color="text-emerald-700" />
         <KPI label="Por cobrar"  value={loading ? '···' : fmtMoney(kpis.porCobrar)} mono />
-        <KPI label="Mes actual"  value={loading ? '···' : fmtMoney(kpis.ingresosMes)} mono color="text-green-300" />
+        <KPI label="Mes actual"  value={loading ? '···' : fmtMoney(kpis.ingresosMes)} mono color="text-emerald-700" />
       </PageHeader>
 
       <ErrorBanner msg={error} onDismiss={() => setError('')} />
       <SuccessBanner msg={okMsg} />
 
-      {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-          <Filter size={16} /> Filtros
+      <Toolbar>
+        <div className="flex items-center gap-1.5 text-[12px] uppercase tracking-[0.10em] font-medium text-ink-500 mr-1">
+          <Filter size={12} strokeWidth={2} /> Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <SearchBar
-            className="md:col-span-2"
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por número, paciente, documento o médico..."
-            focusColor="blue"
-          />
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Desde</label>
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Hasta</label>
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-          </div>
-        </div>
+        <SearchBar
+          className="min-w-[240px]"
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por número, paciente, documento o médico…"
+        />
+        <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
+          title="Desde" />
+        <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+          className="px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
+          title="Hasta" />
+        <div className="flex-1" />
+        <button onClick={() => cargar()}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-[12.5px] font-medium text-ink-700 border border-line rounded-lg hover:bg-surface hover:border-ink-100 transition-colors">
+          <RefreshCw size={13} strokeWidth={1.75} /> Recargar
+        </button>
+      </Toolbar>
 
-        {/* Tabs de estado */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-          {ESTADOS.map(e => {
-            const activo = filtroEstado === e.v;
-            const n = e.v === 'todas' ? facturas.length : facturas.filter(f => f.estado === e.v).length;
-            return (
-              <button key={e.v} onClick={() => setFiltroEstado(e.v)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
-                  activo
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
-                }`}>
-                {e.l}
-                <span className={`ml-1 text-xs px-1.5 rounded-full ${activo ? 'bg-white/30' : 'bg-gray-100'}`}>
-                  {n}
-                </span>
-              </button>
-            );
-          })}
-          <button onClick={() => cargar()}
-            className="ml-auto flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg">
-            <RefreshCw size={14} /> Recargar
-          </button>
-        </div>
+      {/* Tabs estado */}
+      <div className="flex flex-wrap gap-1.5">
+        {ESTADOS.map(e => {
+          const active = filtroEstado === e.v;
+          const n = e.v === 'todas' ? facturas.length : facturas.filter(f => f.estado === e.v).length;
+          return (
+            <button
+              key={e.v}
+              onClick={() => setFiltroEstado(e.v)}
+              className={[
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all duration-150',
+                active
+                  ? 'bg-sky-600 text-white shadow-[0_4px_14px_-6px_rgba(11,18,32,0.35)]'
+                  : 'bg-surface text-ink-700 hover:bg-ink-100/40 border border-line',
+              ].join(' ')}
+            >
+              {e.l}
+              <span className={active ? 'text-white/70' : 'text-ink-500'}>({n})</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tabla */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-              <tr>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Número</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Estado</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Fecha</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Paciente</th>
-                <th className="px-5 py-3 text-left text-xs font-bold text-gray-700 uppercase">Médico</th>
-                <th className="px-5 py-3 text-right text-xs font-bold text-gray-700 uppercase">Total</th>
-                <th className="px-5 py-3 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <LoadingRow colSpan={7} mensaje="Cargando facturas..." color="blue" />
-              ) : filtered.length === 0 ? (
-                <EmptyRow colSpan={7} icon={Receipt} mensaje="No hay facturas que coincidan" />
-              ) : filtered.map(f => {
-                const st = estadoStyle(f.estado);
-                const StIcon = st.icon;
-                return (
-                  <tr key={f.id_factura} className="hover:bg-blue-50 transition">
-                    <td className="px-5 py-3">
-                      {f.numero_factura ? (
-                        <span className="font-mono font-semibold text-gray-900">{f.numero_factura}</span>
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">Sin emitir</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <EstadoBadge type="factura" estado={f.estado} withIcon />
-                    </td>
-                    <td className="px-5 py-3 text-xs text-gray-700 whitespace-nowrap">
-                      {f.fecha_emision?.slice(0, 10) ?? <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-gray-900 truncate max-w-[180px]">{f.paciente_nombre ?? '—'}</p>
-                      <p className="text-xs text-gray-500 font-mono">{f.paciente_documento}</p>
-                    </td>
-                    <td className="px-5 py-3 text-sm text-gray-700 truncate max-w-[160px]">
-                      Dr(a). {f.medico_nombre ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <span className="font-mono font-semibold text-gray-900">{fmtMoney(f.total)}</span>
-                      {f.items_count > 0 && (
-                        <p className="text-xs text-gray-500">{f.items_count} {f.items_count === 1 ? 'línea' : 'líneas'}</p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setDetalle(f)} title="Ver"
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                          <Eye size={16} />
-                        </button>
-                        {f.estado !== 'borrador' && (
-                          <button
-                            onClick={() => descargarPdf(f)}
-                            disabled={descargandoId === f.id_factura}
-                            title="Descargar PDF"
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
-                          >
-                            {descargandoId === f.id_factura
-                              ? <Loader2 size={16} className="animate-spin" />
-                              : <Download size={16} />}
-                          </button>
-                        )}
-                        {f.estado === 'borrador' && (
-                          <button onClick={() => setEditando(f)} title="Editar borrador"
-                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
-                            <Edit size={16} />
-                          </button>
-                        )}
-                        {f.estado === 'pendiente' && (
-                          <button onClick={() => setPagando(f)} title="Marcar como pagada"
-                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition">
-                            <DollarSign size={16} />
-                          </button>
-                        )}
-                        {['pendiente', 'pagada'].includes(f.estado) && (
-                          <button onClick={() => setAnulando(f)} title="Anular"
-                            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition">
-                            <Ban size={16} />
-                          </button>
-                        )}
-                        <button onClick={() => setEliminando(f)} title="Enviar a papelera"
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TableShell>
+        <Thead columnas={[
+          'Número', 'Estado', 'Fecha', 'Paciente', 'Médico',
+          { label: 'Total',    align: 'right' },
+          { label: 'Acciones', align: 'center' },
+        ]} />
+        <Tbody>
+          {loading ? (
+            <LoadingRow colSpan={7} mensaje="Cargando facturas…" />
+          ) : filtered.length === 0 ? (
+            <EmptyRow colSpan={7} icon={Receipt} mensaje="No hay facturas que coincidan" />
+          ) : filtered.map(f => (
+            <Tr key={f.id_factura}>
+              <td className="px-5 py-3.5">
+                {f.numero_factura ? (
+                  <span className="font-mono font-medium text-[13px] text-ink-900">{f.numero_factura}</span>
+                ) : (
+                  <span className="text-[11.5px] text-ink-300 italic">Sin emitir</span>
+                )}
+              </td>
+              <td className="px-5 py-3.5">
+                <EstadoBadge type="factura" estado={f.estado} withIcon />
+              </td>
+              <td className="px-5 py-3.5 text-[12px] text-ink-700 whitespace-nowrap tabular-nums">
+                {f.fecha_emision?.slice(0, 10) ?? <span className="text-ink-300">—</span>}
+              </td>
+              <td className="px-5 py-3.5">
+                <p className="text-[13px] font-medium text-ink-900 truncate max-w-[180px]">{f.paciente_nombre ?? '—'}</p>
+                <p className="text-[11.5px] text-ink-500 font-mono">{f.paciente_documento}</p>
+              </td>
+              <td className="px-5 py-3.5 text-[13px] text-ink-700 truncate max-w-[160px]">
+                Dr(a). {f.medico_nombre ?? '—'}
+              </td>
+              <td className="px-5 py-3.5 text-right">
+                <span className="font-mono text-[13.5px] font-semibold text-ink-900">{fmtMoney(f.total)}</span>
+                {f.items_count > 0 && (
+                  <p className="text-[11px] text-ink-500">{f.items_count} {f.items_count === 1 ? 'línea' : 'líneas'}</p>
+                )}
+              </td>
+              <td className="px-5 py-3.5">
+                <ActionGroup>
+                  <IconButton icon={Eye} tone="brand" title="Ver" onClick={() => setDetalle(f)} />
+                  {f.estado !== 'borrador' && (
+                    <IconButton
+                      icon={descargandoId === f.id_factura ? Loader2 : Download}
+                      tone="sky"
+                      title="Descargar PDF"
+                      onClick={() => descargarPdf(f)}
+                      disabled={descargandoId === f.id_factura}
+                      className={descargandoId === f.id_factura ? '[&_svg]:animate-spin' : ''}
+                    />
+                  )}
+                  {f.estado === 'borrador' && (
+                    <IconButton icon={Edit} tone="indigo" title="Editar borrador" onClick={() => setEditando(f)} />
+                  )}
+                  {f.estado === 'pendiente' && (
+                    <IconButton icon={DollarSign} tone="emerald" title="Marcar como pagada" onClick={() => setPagando(f)} />
+                  )}
+                  {['pendiente', 'pagada'].includes(f.estado) && (
+                    <IconButton icon={Ban} tone="amber" title="Anular" onClick={() => setAnulando(f)} />
+                  )}
+                  <IconButton icon={Trash2} tone="red" title="Enviar a papelera" onClick={() => setEliminando(f)} />
+                </ActionGroup>
+              </td>
+            </Tr>
+          ))}
+        </Tbody>
+      </TableShell>
 
       {detalle  && (
         <ModalDetalle

@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Search, Users, Eye, AlertCircle, Loader2, Phone, Mail,
+  Users, Eye, AlertCircle, Phone, Mail,
   Heart, FileText, ClipboardList, Activity, Pill, X,
-  Calendar, ChevronDown, ChevronUp, Stethoscope, Paperclip,
+  Calendar, ChevronDown, ChevronUp, ChevronRight, Stethoscope, Paperclip,
+  BookOpen, Brain, FlaskConical, Star,
 } from 'lucide-react';
-import { consultaService } from '../../../services';
+import { consultaService, ordenExamenService } from '../../../services';
 import { useMisPacientesMedico, useAdjuntosPacienteMedico } from '../../../hooks';
-import { AdjuntoListPorConsulta, AdjuntoViewer } from '../../../shared/components/ui';
+import {
+  AdjuntoListPorConsulta, AdjuntoViewer,
+  PageHeader, KPI, ErrorBanner, SearchBar,
+  EmptyState, LoadingState, Avatar,
+} from '../../../shared/components/ui';
 
 export default function MisPacientes() {
   const { pacientes, loading, error } = useMisPacientesMedico();
@@ -23,100 +28,75 @@ export default function MisPacientes() {
     );
   });
 
-  const initials = (n) => (n ?? '?').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
-
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Mis pacientes</h1>
-            <p className="text-emerald-100">Pacientes que has atendido</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-emerald-100 mb-1">Total</p>
-            <p className="text-4xl font-bold">{loading ? '···' : pacientes.length}</p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo="Mis pacientes"
+        descripcion="Pacientes que has atendido"
+        eyebrow="Pacientes"
+        icon={<Users size={11} strokeWidth={2.25} />}
+        variant="emerald"
+      >
+        <KPI label="Total" value={loading ? '···' : pacientes.length} />
+      </PageHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
+      <ErrorBanner msg={error} />
 
-      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, documento o número de historia..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
-      </div>
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por nombre, documento o número de historia…"
+      />
 
       {loading ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Loader2 size={32} className="mx-auto mb-2 animate-spin text-emerald-600" />
-          <p className="text-gray-500">Cargando pacientes...</p>
-        </div>
+        <LoadingState mensaje="Cargando pacientes…" />
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <Users size={48} className="mx-auto mb-4 text-gray-300" />
-          <p className="text-gray-500">No tienes pacientes registrados aún</p>
-        </div>
+        <EmptyState icon={Users} titulo="No tienes pacientes registrados aún" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((p) => (
-            <div
+            <article
               key={p.id_paciente}
-              className="bg-white rounded-xl shadow-md hover:shadow-xl transition p-5 border border-gray-100"
+              className="rounded-2xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(11,18,32,0.04)] hover:border-ink-100 hover:shadow-[0_8px_28px_-14px_rgba(11,18,32,0.18)] transition-all duration-200"
             >
               <div className="flex items-start gap-3 mb-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold shadow-md flex-shrink-0">
-                  {initials(p.nombre_completo)}
-                </div>
+                <Avatar name={p.nombre_completo} tone="emerald" size="lg" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 truncate">{p.nombre_completo}</p>
-                  <p className="text-xs text-gray-500 font-mono">{p.documento}</p>
-                  <p className="text-xs text-emerald-600 font-medium mt-1">HC {p.numero_historia}</p>
+                  <p className="text-[14px] font-semibold tracking-tight text-ink-900 truncate">{p.nombre_completo}</p>
+                  <p className="text-[11.5px] text-ink-500 font-mono">{p.documento}</p>
+                  <p className="text-[11.5px] text-emerald-700 font-medium mt-1">HC {p.numero_historia}</p>
                 </div>
               </div>
-              <div className="space-y-1 text-sm mb-4">
+              <div className="space-y-1.5 text-[12.5px] mb-4">
                 {p.edad != null && (
-                  <p className="text-gray-600">Edad: {p.edad} años</p>
+                  <p className="text-ink-700">Edad: <span className="font-medium text-ink-900">{p.edad} años</span></p>
                 )}
                 {p.tipo_sangre && (
-                  <p className="text-gray-600 flex items-center gap-2">
-                    <Heart size={12} className="text-red-500" /> {p.tipo_sangre}
+                  <p className="text-ink-700 flex items-center gap-2">
+                    <Heart size={11} className="text-rose-500" strokeWidth={2} /> {p.tipo_sangre}
                   </p>
                 )}
                 {p.ultima_cita_conmigo && (
-                  <p className="text-xs text-gray-500 pt-2 border-t border-gray-100 mt-2">
+                  <p className="text-[11.5px] text-ink-500 pt-2 border-t border-line/70 mt-2">
                     Última visita: {new Date(p.ultima_cita_conmigo).toLocaleDateString('es-ES')}
                   </p>
                 )}
               </div>
-              {/* Botones de acción */}
-              <div className="flex gap-2 pt-3 border-t border-gray-100">
+              <div className="flex gap-2 pt-3 border-t border-line">
                 <button
                   onClick={() => setSelected(p)}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 transition font-medium"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[12.5px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-lg transition-colors"
                 >
-                  <Eye size={15} /> Perfil
+                  <Eye size={13} strokeWidth={1.75} /> Perfil
                 </button>
                 <button
                   onClick={() => setHistorial(p)}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition font-medium"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[12.5px] font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-100 rounded-lg transition-colors"
                 >
-                  <ClipboardList size={15} /> Historial
+                  <ClipboardList size={13} strokeWidth={1.75} /> Historial
                 </button>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
@@ -129,44 +109,51 @@ export default function MisPacientes() {
 
 function DetallePaciente({ paciente, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl">
-          <div>
-            <h2 className="text-2xl font-bold">{paciente.nombre_completo}</h2>
-            <p className="text-emerald-100 text-sm">HC {paciente.numero_historia}</p>
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex justify-between items-start gap-4 z-10">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-emerald-500" />
+          <div className="flex items-start gap-3 ml-2">
+            <Avatar name={paciente.nombre_completo} tone="emerald" size="md" />
+            <div>
+              <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">{paciente.nombre_completo}</h2>
+              <p className="text-[12px] text-emerald-700 font-mono mt-0.5">HC {paciente.numero_historia}</p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">✕</button>
+          <button onClick={onClose} className="flex-shrink-0 -mt-0.5 -mr-1 text-ink-300 hover:text-ink-900 hover:bg-surface p-1.5 rounded-lg transition-colors">
+            <X size={18} strokeWidth={1.75} />
+          </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Info label="Documento" value={paciente.documento} />
-            <Info label="Edad" value={paciente.edad ? `${paciente.edad} años` : '—'} />
-            <Info label="Tipo de sangre" value={paciente.tipo_sangre} icon={<Heart size={14} className="text-red-500" />} />
-            <Info label="Fecha de nacimiento" value={paciente.fecha_nacimiento} />
-            <Info label="Email" value={paciente.email} icon={<Mail size={14} />} className="col-span-2" />
-            <Info label="Teléfono" value={paciente.telefono} icon={<Phone size={14} />} />
-            <Info label="Estado civil" value={paciente.estado_civil} />
-            <Info label="Ocupación" value={paciente.ocupacion} className="col-span-2" />
-            <Info label="Contacto emergencia" value={paciente.contacto_emergencia} className="col-span-2" />
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-2.5">
+            <InfoP label="Documento"           value={paciente.documento} />
+            <InfoP label="Edad"                value={paciente.edad ? `${paciente.edad} años` : '—'} />
+            <InfoP label="Tipo de sangre"      value={paciente.tipo_sangre} icon={<Heart size={11} className="text-rose-500" strokeWidth={2} />} />
+            <InfoP label="Fecha de nacimiento" value={paciente.fecha_nacimiento} />
+            <InfoP label="Email"               value={paciente.email}    icon={<Mail size={11} />} className="col-span-2" />
+            <InfoP label="Teléfono"            value={paciente.telefono} icon={<Phone size={11} />} />
+            <InfoP label="Estado civil"        value={paciente.estado_civil} />
+            <InfoP label="Ocupación"           value={paciente.ocupacion} className="col-span-2" />
+            <InfoP label="Contacto emergencia" value={paciente.contacto_emergencia} className="col-span-2" />
           </div>
 
           {paciente.alergias && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-xs font-bold text-red-700 uppercase mb-1 flex items-center gap-1">
-                <AlertCircle size={14} /> Alergias
-              </p>
-              <p className="text-sm text-red-900">{paciente.alergias}</p>
+            <div className="flex items-start gap-2.5 text-[13px] text-rose-800 bg-rose-50/70 border-l-2 border-rose-500 pl-3 pr-3 py-2.5 rounded-r-md">
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-rose-600" strokeWidth={2} />
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.10em] text-rose-700">Alergias</p>
+                <p className="text-[13px] text-rose-900 mt-0.5">{paciente.alergias}</p>
+              </div>
             </div>
           )}
 
           {paciente.ultima_cita_conmigo && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center gap-3">
-              <FileText size={20} className="text-emerald-600" />
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 flex items-center gap-3">
+              <FileText size={16} className="text-emerald-600" strokeWidth={1.75} />
               <div>
-                <p className="text-xs font-bold text-emerald-700 uppercase">Última visita conmigo</p>
-                <p className="text-sm text-emerald-900">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.10em] text-emerald-700">Última visita conmigo</p>
+                <p className="text-[13px] text-emerald-900">
                   {new Date(paciente.ultima_cita_conmigo).toLocaleDateString('es-ES', { dateStyle: 'long' })}
                 </p>
               </div>
@@ -178,44 +165,55 @@ function DetallePaciente({ paciente, onClose }) {
   );
 }
 
-function Info({ label, value, icon, className = '' }) {
+function InfoP({ label, value, icon, className = '' }) {
   return (
-    <div className={`p-3 bg-gray-50 rounded-lg ${className}`}>
-      <p className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+    <div className={`rounded-lg border border-line bg-surface/60 px-3 py-2 ${className}`}>
+      <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500 flex items-center gap-1">
         {icon} {label}
       </p>
-      <p className="font-semibold text-gray-900 break-words">{value || '—'}</p>
+      <p className="mt-0.5 text-[13.5px] font-medium text-ink-900 break-words">{value || <span className="text-ink-300 font-normal">—</span>}</p>
     </div>
   );
 }
 
 // ─── Modal de historial clínico completo ───────────────────────────────────────
 function ModalHistorial({ paciente, onClose }) {
-  const [consultas, setConsultas]   = useState([]);
-  const [signos, setSignos]         = useState([]);
-  const [diagnosticos, setDiag]     = useState([]);
-  const [ordenes, setOrdenes]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [abierto, setAbierto]       = useState({
+  const [consultas, setConsultas]         = useState([]);
+  const [signos, setSignos]               = useState([]);
+  const [diagnosticos, setDiag]           = useState([]);
+  const [ordenes, setOrdenes]             = useState([]);
+  const [ordenesExamen, setOrdenesExamen] = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [abierto, setAbierto]             = useState({
     consultas: true, signos: false, diagnosticos: false, recetas: false, adjuntos: false,
   });
   const [visorAdjunto, setVisorAdjunto] = useState(null);
+
+  // Consulta seleccionada para ver TODO su contenido en un modal aparte.
+  // El médico hace clic en una tarjeta de consulta del acordeón y se le
+  // muestran todos los campos clínicos + signos/dx/recetas/exámenes asociados.
+  const [consultaDetalle, setConsultaDetalle] = useState(null);
+
   const { adjuntos: adjuntosPaciente } = useAdjuntosPacienteMedico(paciente.id_paciente);
 
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
       try {
-        const [c, s, d, o] = await Promise.all([
+        const [c, s, d, o, oe] = await Promise.all([
           consultaService.getConsultasPacienteFichaMedico(paciente.id_paciente),
           consultaService.getSignosPacienteRecientes(paciente.id_paciente, 10),
           consultaService.getDiagnosticosPaciente(paciente.id_paciente),
           consultaService.getOrdenesPaciente(paciente.id_paciente),
+          // Órdenes de exámenes del paciente — si la migración no se aplicó
+          // todavía, caemos en []. silencioso.
+          ordenExamenService.getPorPaciente(paciente.id_paciente).catch(() => []),
         ]);
         setConsultas(c ?? []);
         setSignos(s ?? []);
         setDiag(d ?? []);
         setOrdenes(o ?? []);
+        setOrdenesExamen(oe ?? []);
       } finally {
         setLoading(false);
       }
@@ -226,130 +224,158 @@ function ModalHistorial({ paciente, onClose }) {
   const toggle = (key) => setAbierto(p => ({ ...p, [key]: !p[key] }));
 
   const secciones = [
-    { key: 'consultas',    label: `Consultas (${consultas.length})`,   icon: <Stethoscope size={16} /> },
-    { key: 'diagnosticos', label: `Diagnósticos (${diagnosticos.length})`, icon: <ClipboardList size={16} /> },
-    { key: 'recetas',      label: `Recetas (${ordenes.length})`,        icon: <Pill size={16} /> },
-    { key: 'signos',       label: `Signos vitales (${signos.length})`,  icon: <Activity size={16} /> },
-    { key: 'adjuntos',     label: `Adjuntos (${adjuntosPaciente.length})`, icon: <Paperclip size={16} /> },
+    { key: 'consultas',    label: `Consultas (${consultas.length})`,       icon: Stethoscope },
+    { key: 'diagnosticos', label: `Diagnósticos (${diagnosticos.length})`, icon: ClipboardList },
+    { key: 'recetas',      label: `Recetas (${ordenes.length})`,           icon: Pill },
+    { key: 'signos',       label: `Signos vitales (${signos.length})`,     icon: Activity },
+    { key: 'adjuntos',     label: `Adjuntos (${adjuntosPaciente.length})`, icon: Paperclip },
   ];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
-          <div>
-            <h2 className="text-2xl font-bold">Historia clínica</h2>
-            <p className="text-blue-100 text-sm">{paciente.nombre_completo} · HC {paciente.numero_historia}</p>
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex justify-between items-start gap-4 z-10">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-brand-500" />
+          <div className="ml-2">
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">Historia clínica</h2>
+            <p className="text-[12px] text-ink-500 mt-0.5">
+              {paciente.nombre_completo} · <span className="font-mono text-brand-700">HC {paciente.numero_historia}</span>
+            </p>
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition"><X size={24} /></button>
+          <button onClick={onClose} className="flex-shrink-0 -mt-0.5 -mr-1 text-ink-300 hover:text-ink-900 hover:bg-surface p-1.5 rounded-lg transition-colors">
+            <X size={18} strokeWidth={1.75} />
+          </button>
         </div>
 
-        <div className="p-6 space-y-3">
+        <div className="p-6 space-y-3 overflow-y-auto">
           {/* Resumen del paciente */}
-          <div className="grid grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl">
-            <div className="text-center"><p className="text-xs text-gray-500">Edad</p><p className="font-bold">{paciente.edad ?? '—'} años</p></div>
-            <div className="text-center"><p className="text-xs text-gray-500">Sangre</p><p className="font-bold text-red-600">{paciente.tipo_sangre ?? '—'}</p></div>
-            <div className="text-center"><p className="text-xs text-gray-500">Consultas</p><p className="font-bold">{consultas.length}</p></div>
-            <div className="text-center"><p className="text-xs text-gray-500">Diagnósticos</p><p className="font-bold">{diagnosticos.length}</p></div>
+          <div className="grid grid-cols-4 gap-2.5">
+            <ResumenCard label="Edad"         value={`${paciente.edad ?? '—'} ${paciente.edad ? 'años' : ''}`} />
+            <ResumenCard label="Sangre"       value={paciente.tipo_sangre ?? '—'} tono="rose" />
+            <ResumenCard label="Consultas"    value={consultas.length} />
+            <ResumenCard label="Diagnósticos" value={diagnosticos.length} />
           </div>
 
           {paciente.alergias && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2 text-sm text-red-800">
-              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-              <p><strong>Alergias:</strong> {paciente.alergias}</p>
+            <div className="flex items-start gap-2.5 text-[13px] text-rose-800 bg-rose-50/70 border-l-2 border-rose-500 pl-3 pr-3 py-2.5 rounded-r-md">
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-rose-600" strokeWidth={2} />
+              <p><strong className="font-medium">Alergias:</strong> {paciente.alergias}</p>
             </div>
           )}
 
           {loading ? (
-            <div className="py-8 text-center">
-              <Loader2 size={28} className="mx-auto mb-2 animate-spin text-blue-600" />
-              <p className="text-gray-500 text-sm">Cargando historial...</p>
-            </div>
+            <LoadingState mensaje="Cargando historial…" />
           ) : (
             <>
-              {/* Secciones colapsables */}
-              {secciones.map(s => (
-                <div key={s.key} className="border border-gray-200 rounded-xl overflow-hidden">
+              {secciones.map(({ key, label, icon: Ico }) => (
+                <div key={key} className="border border-line rounded-xl overflow-hidden">
                   <button
-                    onClick={() => toggle(s.key)}
-                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
+                    onClick={() => toggle(key)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-ink-100/40 transition-colors"
                   >
-                    <span className="flex items-center gap-2 font-semibold text-gray-800">
-                      {s.icon} {s.label}
+                    <span className="flex items-center gap-2 text-[13.5px] font-medium text-ink-900">
+                      {Ico && <Ico size={14} strokeWidth={1.75} className="text-brand-600" />}
+                      {label}
                     </span>
-                    {abierto[s.key] ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                    {abierto[key]
+                      ? <ChevronUp   size={15} className="text-ink-500" strokeWidth={1.75} />
+                      : <ChevronDown size={15} className="text-ink-500" strokeWidth={1.75} />}
                   </button>
 
-                  {abierto[s.key] && (
-                    <div className="p-4 space-y-3">
+                  {abierto[key] && (
+                    <div className="p-4 space-y-2.5 bg-white">
                       {/* Consultas */}
-                      {s.key === 'consultas' && (
-                        consultas.length === 0 ? <p className="text-sm text-gray-400">Sin consultas registradas</p> :
+                      {key === 'consultas' && (
+                        consultas.length === 0 ? <p className="text-[12.5px] text-ink-500">Sin consultas registradas.</p> :
                         consultas.map(c => (
-                          <div key={c.id_consulta} className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
-                            <p className="text-xs text-blue-600 font-bold flex items-center gap-1 mb-2">
-                              <Calendar size={12} /> {c.fecha_consulta?.slice(0, 10)}
-                            </p>
-                            {c.motivo_consulta && <p className="text-sm text-gray-800 mb-1"><strong>Motivo:</strong> {c.motivo_consulta}</p>}
-                            {c.impresion_diagnostica && (
-                              <p className="text-sm text-emerald-800 mb-1"><strong>Diagnóstico:</strong> {c.impresion_diagnostica}</p>
-                            )}
-                            {c.plan_tratamiento && <p className="text-sm text-gray-600"><strong>Tratamiento:</strong> {c.plan_tratamiento}</p>}
-                          </div>
+                          <button
+                            key={c.id_consulta}
+                            type="button"
+                            onClick={() => setConsultaDetalle(c)}
+                            title="Ver todo el contenido de esta consulta"
+                            className="group w-full text-left rounded-lg border border-brand-100 bg-brand-50/40 hover:border-brand-300 hover:bg-brand-50 px-3.5 py-3 transition-all duration-150"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] text-brand-700 font-medium flex items-center gap-1 mb-1.5">
+                                  <Calendar size={11} strokeWidth={1.75} /> {c.fecha_consulta?.slice(0, 10)}
+                                </p>
+                                {c.motivo_consulta && (
+                                  <p className="text-[13px] text-ink-800 mb-1 line-clamp-1">
+                                    <strong className="font-medium">Motivo:</strong> {c.motivo_consulta}
+                                  </p>
+                                )}
+                                {c.impresion_diagnostica && (
+                                  <p className="text-[13px] text-emerald-800 mb-1 line-clamp-1">
+                                    <strong className="font-medium">Diagnóstico:</strong> {c.impresion_diagnostica}
+                                  </p>
+                                )}
+                                {c.plan_tratamiento && (
+                                  <p className="text-[12.5px] text-ink-600 line-clamp-1">
+                                    <strong className="font-medium">Plan:</strong> {c.plan_tratamiento}
+                                  </p>
+                                )}
+                              </div>
+                              <ChevronRight
+                                size={14}
+                                strokeWidth={1.75}
+                                className="flex-shrink-0 text-ink-300 group-hover:text-brand-600 group-hover:translate-x-0.5 transition-all duration-150 mt-0.5"
+                              />
+                            </div>
+                          </button>
                         ))
                       )}
 
                       {/* Diagnósticos */}
-                      {s.key === 'diagnosticos' && (
-                        diagnosticos.length === 0 ? <p className="text-sm text-gray-400">Sin diagnósticos</p> :
+                      {key === 'diagnosticos' && (
+                        diagnosticos.length === 0 ? <p className="text-[12.5px] text-ink-500">Sin diagnósticos.</p> :
                         diagnosticos.map(d => (
-                          <div key={d.id_diagnostico} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                            {d.es_principal && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">Principal</span>}
-                            {d.codigo_cie10 && <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded whitespace-nowrap">{d.codigo_cie10}</span>}
-                            <p className="text-sm text-gray-800 flex-1">{d.descripcion}</p>
-                            <p className="text-xs text-gray-400">{d.fecha?.slice(0, 10)}</p>
+                          <div key={d.id_diagnostico} className="flex items-start gap-3 px-3 py-2.5 bg-surface border border-line rounded-lg">
+                            {d.es_principal && <span className="text-[10.5px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">Principal</span>}
+                            {d.codigo_cie10 && <span className="text-[10.5px] font-mono bg-brand-50 text-brand-700 border border-brand-100 px-1.5 py-0.5 rounded whitespace-nowrap">{d.codigo_cie10}</span>}
+                            <p className="text-[12.5px] text-ink-800 flex-1">{d.descripcion}</p>
+                            <p className="text-[11px] text-ink-500">{d.fecha?.slice(0, 10)}</p>
                           </div>
                         ))
                       )}
 
                       {/* Recetas */}
-                      {s.key === 'recetas' && (
-                        ordenes.length === 0 ? <p className="text-sm text-gray-400">Sin recetas</p> :
+                      {key === 'recetas' && (
+                        ordenes.length === 0 ? <p className="text-[12.5px] text-ink-500">Sin recetas.</p> :
                         ordenes.map(o => (
-                          <div key={o.id_orden} className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-                            <p className="font-semibold text-gray-900 text-sm">{o.medicamento?.nombre ?? '—'}</p>
-                            <p className="text-xs text-gray-500">{o.medicamento?.presentacion}</p>
-                            <p className="text-sm text-gray-700 mt-1">
+                          <div key={o.id_orden} className="rounded-lg border border-emerald-100 bg-emerald-50/40 px-3.5 py-3">
+                            <p className="text-[13.5px] font-medium text-ink-900">{o.medicamento?.nombre ?? '—'}</p>
+                            <p className="text-[11.5px] text-ink-500">{o.medicamento?.presentacion}</p>
+                            <p className="text-[12.5px] text-ink-700 mt-1">
                               {o.dosis && `${o.dosis} · `}{o.frecuencia && `${o.frecuencia} · `}{o.duracion}
                             </p>
-                            {o.indicaciones && <p className="text-xs text-gray-600 mt-1">{o.indicaciones}</p>}
+                            {o.indicaciones && <p className="text-[11.5px] text-ink-500 mt-1">{o.indicaciones}</p>}
                           </div>
                         ))
                       )}
 
                       {/* Signos vitales */}
-                      {s.key === 'signos' && (
-                        signos.length === 0 ? <p className="text-sm text-gray-400">Sin signos registrados</p> :
+                      {key === 'signos' && (
+                        signos.length === 0 ? <p className="text-[12.5px] text-ink-500">Sin signos registrados.</p> :
                         signos.map(s => (
-                          <div key={s.id_signos} className="p-3 bg-gray-50 rounded-xl">
-                            <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                              <Calendar size={12} /> {new Date(s.fecha_registro).toLocaleString('es-ES')}
+                          <div key={s.id_signos} className="rounded-lg border border-line bg-surface/60 px-3.5 py-3">
+                            <p className="text-[11px] text-ink-500 mb-2 flex items-center gap-1">
+                              <Calendar size={10} strokeWidth={1.75} /> {new Date(s.fecha_registro).toLocaleString('es-ES')}
                             </p>
-                            <div className="grid grid-cols-4 gap-2 text-sm">
-                              {s.presion_sistolica  && <Signo l="Presión" v={`${s.presion_sistolica}/${s.presion_diastolica}`} />}
-                              {s.frecuencia_cardiaca && <Signo l="FC" v={`${s.frecuencia_cardiaca} bpm`} />}
-                              {s.temperatura        && <Signo l="Temp." v={`${s.temperatura}°C`} />}
-                              {s.peso               && <Signo l="Peso" v={`${s.peso} kg`} />}
-                              {s.saturacion_oxigeno && <Signo l="SpO₂" v={`${s.saturacion_oxigeno}%`} />}
-                              {s.talla              && <Signo l="Talla" v={`${s.talla} m`} />}
+                            <div className="grid grid-cols-4 gap-2">
+                              {s.presion_sistolica   && <Signo l="Presión" v={`${s.presion_sistolica}/${s.presion_diastolica}`} />}
+                              {s.frecuencia_cardiaca && <Signo l="FC"      v={`${s.frecuencia_cardiaca} bpm`} />}
+                              {s.temperatura         && <Signo l="Temp."   v={`${s.temperatura}°C`} />}
+                              {s.peso                && <Signo l="Peso"    v={`${s.peso} kg`} />}
+                              {s.saturacion_oxigeno  && <Signo l="SpO₂"    v={`${s.saturacion_oxigeno}%`} />}
+                              {s.talla               && <Signo l="Talla"   v={`${s.talla} m`} />}
                             </div>
                           </div>
                         ))
                       )}
 
-                      {/* Adjuntos: PDFs / imágenes de consultas previas */}
-                      {s.key === 'adjuntos' && (
+                      {/* Adjuntos */}
+                      {key === 'adjuntos' && (
                         <AdjuntoListPorConsulta
                           adjuntos={adjuntosPaciente}
                           onPreview={setVisorAdjunto}
@@ -364,15 +390,311 @@ function ModalHistorial({ paciente, onClose }) {
         </div>
       </div>
       {visorAdjunto && <AdjuntoViewer adjunto={visorAdjunto} onClose={() => setVisorAdjunto(null)} />}
+
+      {/* Modal anidado: detalle completo de una consulta seleccionada */}
+      {consultaDetalle && (
+        <DetalleConsultaCompletaModal
+          consulta={consultaDetalle}
+          diagnosticos={diagnosticos}
+          signos={signos}
+          ordenes={ordenes}
+          ordenesExamen={ordenesExamen}
+          adjuntos={adjuntosPaciente}
+          onPreviewAdjunto={setVisorAdjunto}
+          onClose={() => setConsultaDetalle(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Modal: detalle COMPLETO de una consulta del historial ─────────────────
+// Muestra todos los campos clínicos registrados: anamnesis, examen físico,
+// signos vitales (filtrados por id_consulta), diagnósticos, plan, recetas,
+// órdenes de exámenes paramédicos y adjuntos asociados.
+function DetalleConsultaCompletaModal({
+  consulta, diagnosticos, signos, ordenes, ordenesExamen,
+  adjuntos, onPreviewAdjunto, onClose,
+}) {
+  const dxConsulta       = (diagnosticos  ?? []).filter(d => d.id_consulta === consulta.id_consulta);
+  const signosConsulta   = (signos        ?? []).filter(s => s.id_consulta === consulta.id_consulta);
+  const ordenesConsulta  = (ordenes       ?? []).filter(o => o.id_consulta === consulta.id_consulta);
+  const examenesConsulta = (ordenesExamen ?? []).filter(o => o.id_consulta === consulta.id_consulta);
+  const adjuntosConsulta = (adjuntos      ?? []).filter(a => a.id_consulta === consulta.id_consulta);
+
+  const fechaFmt = consulta.fecha_consulta
+    ? new Date(consulta.fecha_consulta).toLocaleDateString('es-ES', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      })
+    : '—';
+  const horaFmt = consulta.fecha_consulta
+    ? new Date(consulta.fecha_consulta).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  const medicoFmt = consulta.medico?.persona
+    ? `Dr(a). ${consulta.medico.persona.nombres} ${consulta.medico.persona.apellidos}`
+    : consulta.medico_nombre
+      ? `Dr(a). ${consulta.medico_nombre}`
+      : '—';
+
+  const hayAlgo = (
+    consulta.motivo_consulta || consulta.enfermedad_actual || consulta.revision_sistemas ||
+    consulta.examen_fisico || consulta.examenes_complementarios ||
+    consulta.impresion_diagnostica || consulta.analisis_clinico ||
+    consulta.plan_tratamiento || consulta.observaciones ||
+    dxConsulta.length || signosConsulta.length || ordenesConsulta.length ||
+    examenesConsulta.length || adjuntosConsulta.length
+  );
+
+  return (
+    <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center z-[60] p-4 motion-safe:[animation:hp-fade-up_0.2s_ease-out]">
+      <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_-20px_rgba(11,18,32,0.35)] border border-line w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-line px-6 py-4 flex justify-between items-start gap-4 z-10">
+          <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-emerald-500" />
+          <div className="ml-2 min-w-0">
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink-900">Detalle de la consulta</h2>
+            <p className="text-[12px] text-ink-500 mt-0.5 truncate">
+              <span className="capitalize">{fechaFmt}</span>
+              {horaFmt && ` · ${horaFmt}`} · {medicoFmt}
+            </p>
+          </div>
+          <button onClick={onClose} className="flex-shrink-0 -mt-0.5 -mr-1 text-ink-300 hover:text-ink-900 hover:bg-surface p-1.5 rounded-lg transition-colors">
+            <X size={18} strokeWidth={1.75} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5 overflow-y-auto">
+          {/* Anamnesis */}
+          {(consulta.motivo_consulta || consulta.enfermedad_actual || consulta.revision_sistemas) && (
+            <SeccionDC titulo="Anamnesis" icon={<BookOpen size={11} strokeWidth={2} />}>
+              <CampoDC label="Motivo de consulta"    value={consulta.motivo_consulta} />
+              <CampoDC label="Enfermedad actual"     value={consulta.enfermedad_actual} />
+              <CampoDC label="Revisión por sistemas" value={consulta.revision_sistemas} />
+            </SeccionDC>
+          )}
+
+          {/* Signos vitales */}
+          {signosConsulta.length > 0 && (
+            <SeccionDC titulo="Signos vitales" icon={<Activity size={11} strokeWidth={2} />}>
+              <div className="space-y-2">
+                {signosConsulta.map(s => (
+                  <div key={s.id_signos} className="rounded-md border border-line bg-surface/60 px-3 py-2.5">
+                    {s.fecha_registro && (
+                      <p className="text-[10.5px] text-ink-500 mb-2 flex items-center gap-1">
+                        <Calendar size={10} strokeWidth={1.75} />
+                        {new Date(s.fecha_registro).toLocaleString('es-ES')}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                      {s.presion_sistolica       && <MiniDC label="PA"    value={`${s.presion_sistolica}/${s.presion_diastolica ?? '—'}`} />}
+                      {s.frecuencia_cardiaca     && <MiniDC label="FC"    value={`${s.frecuencia_cardiaca} bpm`} />}
+                      {s.frecuencia_respiratoria && <MiniDC label="FR"    value={`${s.frecuencia_respiratoria} rpm`} />}
+                      {s.temperatura             && <MiniDC label="T°"    value={`${s.temperatura}°C`} />}
+                      {s.saturacion_oxigeno      && <MiniDC label="SpO₂"  value={`${s.saturacion_oxigeno}%`} />}
+                      {s.peso                    && <MiniDC label="Peso"  value={`${s.peso} kg`} />}
+                      {s.talla                   && <MiniDC label="Talla" value={`${s.talla} m`} />}
+                    </div>
+                    {s.observaciones && (
+                      <p className="mt-2 pt-2 border-t border-line/70 text-[11.5px] text-ink-700">
+                        <span className="font-medium">Observaciones:</span> {s.observaciones}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SeccionDC>
+          )}
+
+          {/* Examen físico + complementarios */}
+          {(consulta.examen_fisico || consulta.examenes_complementarios) && (
+            <SeccionDC titulo="Examen" icon={<Stethoscope size={11} strokeWidth={2} />}>
+              <CampoDC label="Examen físico"            value={consulta.examen_fisico} />
+              <CampoDC label="Exámenes complementarios" value={consulta.examenes_complementarios} />
+            </SeccionDC>
+          )}
+
+          {/* Diagnósticos */}
+          {dxConsulta.length > 0 && (
+            <SeccionDC titulo={`Diagnósticos (${dxConsulta.length})`} icon={<ClipboardList size={11} strokeWidth={2} />}>
+              <ul className="space-y-1.5">
+                {dxConsulta.map(d => (
+                  <li key={d.id_diagnostico} className="flex items-start gap-2 px-3 py-2 bg-surface border border-line rounded-md">
+                    {d.es_principal && (
+                      <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                        <Star size={9} className="fill-amber-500 text-amber-500" /> Principal
+                      </span>
+                    )}
+                    {d.codigo_cie10 && (
+                      <span className="text-[10px] font-mono bg-brand-50 text-brand-700 border border-brand-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                        {d.codigo_cie10}
+                      </span>
+                    )}
+                    <span className="flex-1 text-[12.5px] text-ink-800">{d.descripcion}</span>
+                    {d.tipo_diagnostico?.nombre && (
+                      <span className="text-[10.5px] text-ink-500 whitespace-nowrap">{d.tipo_diagnostico.nombre}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </SeccionDC>
+          )}
+
+          {/* Impresión y plan */}
+          {(consulta.impresion_diagnostica || consulta.analisis_clinico || consulta.plan_tratamiento || consulta.observaciones) && (
+            <SeccionDC titulo="Impresión y plan" icon={<Brain size={11} strokeWidth={2} />}>
+              <CampoDC label="Impresión diagnóstica" value={consulta.impresion_diagnostica} highlight />
+              <CampoDC label="Análisis clínico"      value={consulta.analisis_clinico} />
+              <CampoDC label="Plan de tratamiento"   value={consulta.plan_tratamiento} />
+              <CampoDC label="Observaciones"         value={consulta.observaciones} />
+            </SeccionDC>
+          )}
+
+          {/* Recetas */}
+          {ordenesConsulta.length > 0 && (
+            <SeccionDC titulo={`Recetas (${ordenesConsulta.length})`} icon={<Pill size={11} strokeWidth={2} />}>
+              <div className="space-y-2">
+                {ordenesConsulta.map(o => (
+                  <div key={o.id_orden} className="rounded-md border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
+                    <p className="text-[13px] font-medium text-ink-900">
+                      {o.medicamento?.nombre ?? '—'}
+                      {o.medicamento?.concentracion && (
+                        <span className="font-normal text-ink-500"> · {o.medicamento.concentracion}</span>
+                      )}
+                    </p>
+                    {[o.dosis, o.frecuencia, o.duracion].some(Boolean) && (
+                      <p className="text-[12px] text-ink-700 mt-0.5">
+                        {[o.dosis, o.frecuencia, o.duracion].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    {o.indicaciones && (
+                      <p className="text-[11.5px] text-ink-500 italic mt-1">{o.indicaciones}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SeccionDC>
+          )}
+
+          {/* Órdenes de exámenes paramédicos */}
+          {examenesConsulta.length > 0 && (
+            <SeccionDC titulo={`Órdenes de exámenes (${examenesConsulta.length})`} icon={<FlaskConical size={11} strokeWidth={2} />}>
+              <div className="space-y-3">
+                {examenesConsulta.map(orden => {
+                  const items = Array.isArray(orden.items) ? orden.items : [];
+                  return (
+                    <div key={orden.id_orden_examen} className="rounded-md border border-violet-100 bg-violet-50/40 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="text-[12px] font-medium text-violet-800">
+                          <span className="font-mono">{orden.numero_orden ?? '—'}</span>
+                          <span className="text-ink-500 font-normal">
+                            {' · '}
+                            {orden.fecha_emision
+                              ? new Date(orden.fecha_emision).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+                              : '—'}
+                          </span>
+                        </p>
+                        <span className="text-[10.5px] text-violet-700 font-medium tabular-nums">
+                          {items.length} examen{items.length === 1 ? '' : 'es'}
+                        </span>
+                      </div>
+                      <ul className="space-y-1 text-[12.5px] text-ink-800">
+                        {items.map(it => (
+                          <li key={it.id_item} className="flex items-start gap-2">
+                            <span className="inline-flex w-4 h-4 items-center justify-center rounded-sm bg-violet-100 text-violet-700 text-[9px] font-semibold tabular-nums flex-shrink-0 mt-0.5">
+                              {it.orden}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-medium">{it.nombre}</p>
+                              {it.observaciones && (
+                                <p className="text-[11.5px] text-ink-500 italic">{it.observaciones}</p>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      {orden.indicaciones && (
+                        <p className="mt-2 pt-2 border-t border-violet-100/70 text-[11.5px] text-ink-700">
+                          <span className="font-medium">Indicaciones:</span> {orden.indicaciones}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </SeccionDC>
+          )}
+
+          {/* Adjuntos */}
+          {adjuntosConsulta.length > 0 && (
+            <SeccionDC titulo={`Adjuntos (${adjuntosConsulta.length})`} icon={<Paperclip size={11} strokeWidth={2} />}>
+              <AdjuntoListPorConsulta adjuntos={adjuntosConsulta} onPreview={onPreviewAdjunto} />
+            </SeccionDC>
+          )}
+
+          {!hayAlgo && (
+            <p className="text-center text-[13px] text-ink-500 py-6">
+              Esta consulta no tiene contenido clínico registrado.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SeccionDC({ titulo, icon, children }) {
+  return (
+    <section>
+      <p className="text-[10.5px] uppercase tracking-[0.12em] font-medium text-emerald-700 mb-2 flex items-center gap-1.5">
+        {icon} {titulo}
+      </p>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function CampoDC({ label, value, highlight = false }) {
+  if (!value) return null;
+  return (
+    <div className={[
+      'rounded-md border px-3 py-2',
+      highlight ? 'bg-emerald-50/60 border-emerald-100' : 'bg-surface/60 border-line',
+    ].join(' ')}>
+      <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">{label}</p>
+      <p className={[
+        'mt-0.5 text-[13px] whitespace-pre-wrap break-words',
+        highlight ? 'text-emerald-900 font-medium' : 'text-ink-800',
+      ].join(' ')}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MiniDC({ label, value }) {
+  return (
+    <div className="rounded border border-line bg-white px-2 py-1.5 text-center">
+      <p className="text-[10px] uppercase tracking-[0.08em] text-ink-500 leading-tight">{label}</p>
+      <p className="text-[12px] font-medium text-ink-900 tabular-nums leading-tight mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function ResumenCard({ label, value, tono }) {
+  const valueColor = tono === 'rose' ? 'text-rose-700' : 'text-ink-900';
+  return (
+    <div className="rounded-lg border border-line bg-surface/60 px-3 py-2.5 text-center">
+      <p className="text-[10.5px] uppercase tracking-[0.10em] font-medium text-ink-500">{label}</p>
+      <p className={`mt-0.5 text-[15px] font-semibold tabular-nums ${valueColor}`}>{value}</p>
     </div>
   );
 }
 
 function Signo({ l, v }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-2 text-center">
-      <p className="text-xs text-gray-500">{l}</p>
-      <p className="font-semibold text-gray-900 text-xs">{v}</p>
+    <div className="rounded-md border border-line bg-white px-2 py-1.5 text-center">
+      <p className="text-[10.5px] text-ink-500">{l}</p>
+      <p className="text-[12px] font-medium text-ink-900 tabular-nums">{v}</p>
     </div>
   );
 }
