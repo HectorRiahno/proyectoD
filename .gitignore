@@ -17,13 +17,37 @@ lerna-debug.log*
 # ─── Secretos y variables de entorno ─────────────────────────────────
 # Nunca subir .env — usar .env.example como plantilla para nuevos devs
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.production
+.env.*
+!.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+# Secretos de Edge Functions (supabase secrets set --env-file ...)
+supabase/.env
+supabase/.env.*
+supabase/functions/.env
+supabase/functions/**/.env*
+
+# ─── Datos reales: respaldos y exportaciones ─────────────────────────
+# Un volcado de la base o un reporte exportado contiene historias
+# clínicas y datos personales: nunca van al repositorio.
+*.dump
+*.backup
+*.bak
+*.sql.gz
+backup*.sql
+respaldo*.sql
+dump*.sql
+supabase/backups/
+supabase/respaldos/
+# Cuentas de prueba con contraseñas conocidas: sólo en local
+supabase/seed-cuentas-prueba*.sql
+exports/
+descargas/
+*.xlsx
+*.xls
+*.csv
 
 # ─── Dependencias y artefactos de build ──────────────────────────────
 node_modules
@@ -56,19 +80,6 @@ coverage/
 # ─── Supabase CLI local (cachés y branches no se versionan) ──────────
 supabase/.temp/
 supabase/.branches/
-
-# ─── Migraciones SQL históricas (versiones reemplazadas) ─────────────
-# Las migraciones VIGENTES quedan tracked. Estas son las viejas que ya
-# fueron sustituidas por migrations posteriores y mantenerlas confunde.
-.supabase/auth-trigger.sql
-supabase/migration-consulta.sql
-supabase/migration-factura-fk.sql
-supabase/realtime.sql
-supabase/rls-admin.sql
-supabase/rls-medico.sql
-supabase/schema.sql
-supabase/seed.sql
-supabase/views.sql
 
 # ─── Config de herramientas de IA / asistentes locales ───────────────
 .claude/

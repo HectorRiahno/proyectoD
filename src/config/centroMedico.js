@@ -50,6 +50,44 @@ export const centroMedico = {
     vence:     'YYYY-MM-DD',            // fecha de vencimiento
     modalidad: 'Factura electrónica de venta',
   },
+
+  // ─── Página de inicio pública (landing) ──────────────────────────────
+  // Lo que ve cualquier persona antes de iniciar sesión. Los campos
+  // vacíos ('') no se muestran.
+  sitio: {
+    nombre:     'Centro Médico Hospitalis',
+    eslogan:    'Atención médica cercana, con tu historia clínica siempre en orden.',
+    telefono_citas: '+57 (1) 234-5678',
+    whatsapp:   '',                        // sólo dígitos con indicativo, ej: '573001234567'
+    email_contacto: 'contacto@hospitalis.co',
+    // Ubicación: se usa para el mapa y el botón "Cómo llegar".
+    // Si el mapa no cae en el sitio exacto, poner aquí las coordenadas
+    // (ej: '8.2373,-73.3561') o el nombre como aparece en Google Maps.
+    mapa_busqueda: 'Av. Principal #123, Ocaña, Norte de Santander',
+    referencia: '',                        // ej: 'Frente al parque principal, segundo piso'
+    horarios: [
+      ['Lunes a viernes',     '7:00 a. m. – 6:00 p. m.'],
+      ['Sábados',             '8:00 a. m. – 12:00 m.'],
+      ['Domingos y festivos', 'Cerrado'],
+    ],
+    especialidades: [
+      ['Medicina General',      'Consulta de primera vez, controles y remisiones.'],
+      ['Pediatría',             'Control de crecimiento y desarrollo, y enfermedades de la infancia.'],
+      ['Ginecología',           'Salud de la mujer, control prenatal y planificación.'],
+      ['Cardiología',           'Hipertensión, arritmias y prevención cardiovascular.'],
+      ['Dermatología',          'Piel, cabello y uñas.'],
+      ['Oftalmología',          'Salud visual y enfermedades de los ojos.'],
+      ['Traumatología',         'Huesos, articulaciones, lesiones y fracturas.'],
+      ['Odontología',           'Salud oral y tratamientos dentales.'],
+      ['Neurología',            'Dolor de cabeza, epilepsia y enfermedades del sistema nervioso.'],
+      ['Psiquiatría',           'Salud mental, ansiedad, depresión y trastornos del sueño.'],
+      ['Endocrinología',        'Diabetes, tiroides y control metabólico.'],
+      ['Gastroenterología',     'Estómago, intestino e hígado.'],
+      ['Urología',              'Vías urinarias y salud masculina.'],
+      ['Otorrinolaringología',  'Oído, nariz y garganta.'],
+      ['Oncología',             'Diagnóstico y seguimiento del cáncer.'],
+    ],
+  },
 };
 
 export default centroMedico;

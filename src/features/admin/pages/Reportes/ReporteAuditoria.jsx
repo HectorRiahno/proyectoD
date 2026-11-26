@@ -16,9 +16,12 @@ const rango0 = rangoUltimos30();
 const TABLAS = [
   '', 'consulta_medica', 'diagnostico', 'sintoma', 'signos_vitales',
   'orden_medica', 'cita', 'asignacion_rol', 'paciente', 'medico', 'persona',
+  'historial_clinico', 'consulta_adjunto', 'orden_examen', 'orden_examen_item',
+  'factura', 'factura_item', 'usuario', 'medicamento', 'categoria_medicamento',
+  'horario_medico', 'sesion', 'historia_clinica',
 ];
 
-const OPS = ['', 'INSERT', 'UPDATE', 'DELETE'];
+const OPS = ['', 'INSERT', 'UPDATE', 'DELETE', 'LOGIN', 'LECTURA', 'EXPORTACION'];
 
 const fmtFechaCorta = (iso) => {
   if (!iso) return '';
@@ -44,7 +47,7 @@ export default function ReporteAuditoria() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReporteAuditoriaPdf(data);
+    await exportarReporteAuditoriaPdf(data);
     await reportesService.registrarDescarga('auditoria', 'pdf', desde, hasta, { tabla, op });
   };
   const onExcel = async () => {

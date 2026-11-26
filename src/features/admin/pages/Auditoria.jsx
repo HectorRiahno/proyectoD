@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   ShieldCheck, RefreshCw, X,
   Plus, Edit, Trash2, User, ChevronDown, ChevronUp,
-  FileText, Download, Filter,
+  FileText, Download, Filter, LogIn, Eye,
 } from 'lucide-react';
 import { useAuth, useAuditoria } from '../../../hooks';
 import {
@@ -22,6 +22,18 @@ const TABLAS = [
   { v: 'paciente', l: 'Pacientes' },
   { v: 'medico', l: 'Médicos' },
   { v: 'persona', l: 'Personas' },
+  { v: 'historial_clinico', l: 'Historial clínico' },
+  { v: 'consulta_adjunto', l: 'Adjuntos' },
+  { v: 'orden_examen', l: 'Órdenes de exámenes' },
+  { v: 'orden_examen_item', l: 'Ítems de exámenes' },
+  { v: 'factura', l: 'Facturas' },
+  { v: 'factura_item', l: 'Ítems de factura' },
+  { v: 'usuario', l: 'Usuarios' },
+  { v: 'medicamento', l: 'Medicamentos' },
+  { v: 'categoria_medicamento', l: 'Categorías de medicamento' },
+  { v: 'horario_medico', l: 'Horarios' },
+  { v: 'sesion', l: 'Inicios de sesión' },
+  { v: 'historia_clinica', l: 'Accesos a historia clínica' },
 ];
 
 const OPERACIONES = [
@@ -29,6 +41,9 @@ const OPERACIONES = [
   { v: 'INSERT', l: 'Creación',  bg: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: Plus },
   { v: 'UPDATE', l: 'Edición',   bg: 'bg-brand-50 text-brand-700 border-brand-100',       icon: Edit },
   { v: 'DELETE', l: 'Borrado',   bg: 'bg-red-50 text-red-700 border-red-100',             icon: Trash2 },
+  { v: 'LOGIN',  l: 'Ingreso',   bg: 'bg-amber-50 text-amber-700 border-amber-100',       icon: LogIn },
+  { v: 'LECTURA',     l: 'Consulta de HC',    bg: 'bg-violet-50 text-violet-700 border-violet-100', icon: Eye },
+  { v: 'EXPORTACION', l: 'Exportación de HC', bg: 'bg-violet-50 text-violet-700 border-violet-100', icon: Download },
 ];
 
 const opStyle = (op) => OPERACIONES.find(o => o.v === op) ?? OPERACIONES[0];
@@ -294,6 +309,17 @@ function ModalDetalle({ log, onClose }) {
             <div>
               <h3 className="text-[13px] font-semibold text-emerald-700 mb-2.5 flex items-center gap-1.5">
                 <Plus size={13} strokeWidth={2} /> Estado del registro creado
+              </h3>
+              <JsonView data={log.after_data} />
+            </div>
+          )}
+
+          {/* LOGIN / LECTURA / EXPORTACION */}
+          {['LOGIN', 'LECTURA', 'EXPORTACION'].includes(log.operacion) && (
+            <div>
+              <h3 className="text-[13px] font-semibold text-amber-700 mb-2.5 flex items-center gap-1.5">
+                {op.icon && <op.icon size={13} strokeWidth={2} />}
+                {log.operacion === 'LOGIN' ? 'Inicio de sesión' : `${op.l} · paciente #${log.id_registro}`}
               </h3>
               <JsonView data={log.after_data} />
             </div>

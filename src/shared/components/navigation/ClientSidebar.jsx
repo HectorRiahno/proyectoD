@@ -1,11 +1,19 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import * as Icons from 'lucide-react';
+// Sólo los iconos del menú: `import * as Icons` metía los ~1500 de lucide en el bundle.
+import {
+  Calendar, CalendarPlus, ClipboardList, FileDown, FileText, LayoutDashboard, Receipt, User,
+} from 'lucide-react';
+
+const Icons = {
+  Calendar, CalendarPlus, ClipboardList, FileDown, FileText, LayoutDashboard, Receipt, User,
+};
 import { useAuth } from '../../../hooks/useAuth';
 
 const clientSidebarItems = [
   { id: 1, title: 'Mi Panel',         icon: 'LayoutDashboard', path: '/cliente',              description: 'Vista general' },
   { id: 2, title: 'Mis Citas',        icon: 'Calendar',        path: '/cliente/citas',        description: 'Agendamientos' },
+  { id: 9, title: 'Agendar Cita',     icon: 'CalendarPlus',    path: '/cliente/agendar',      description: 'Aparta tu cita' },
   { id: 3, title: 'Mi Historial',     icon: 'FileText',        path: '/cliente/historial',    description: 'Consultas' },
   { id: 5, title: 'Resultados',       icon: 'ClipboardList',   path: '/cliente/resultados',   description: 'Signos y diagnósticos' },
   { id: 8, title: 'Mis Facturas',     icon: 'Receipt',         path: '/cliente/facturas',     description: 'Cobros y pagos' },

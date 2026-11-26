@@ -111,6 +111,10 @@ export default function SetPassword() {
   }
 
   /* ─── 3. Form principal ─── */
+  // Los documentos 'AUTH-…' son provisionales (cuenta creada sin ficha).
+  const documento = [usuarioLogueado.documento]
+    .find(d => d && !/^AUTH-/i.test(d)) ?? null;
+
   return (
     <AuthShell>
       <PageTitle
@@ -123,13 +127,22 @@ export default function SetPassword() {
         }
       />
 
-      {/* Email read-only (tarjetita sutil, no bloque grande) */}
-      <div className="mb-5 flex items-center justify-between rounded-xl border border-line bg-white px-4 py-2.5">
-        <div className="min-w-0">
-          <p className="text-[10.5px] uppercase tracking-[0.10em] text-ink-500">Correo</p>
-          <p className="text-[13.5px] font-medium text-ink-900 truncate">{usuarioLogueado.email}</p>
-        </div>
-        <span className="text-[10.5px] uppercase tracking-[0.10em] text-ink-300">Bloqueado</span>
+      {/* Con qué va a ingresar: documento (si es real) o correo */}
+      <div className="mb-5 rounded-xl border border-line bg-white px-4 py-2.5">
+        {documento ? (
+          <>
+            <p className="text-[10.5px] uppercase tracking-[0.10em] text-ink-500">Tu usuario para ingresar</p>
+            <p className="text-[15px] font-semibold font-mono tracking-wide text-ink-900">{documento}</p>
+            <p className="text-[11.5px] text-ink-500 mt-0.5 truncate">
+              Número de documento · también puedes usar {usuarioLogueado.email}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-[10.5px] uppercase tracking-[0.10em] text-ink-500">Correo</p>
+            <p className="text-[13.5px] font-medium text-ink-900 truncate">{usuarioLogueado.email}</p>
+          </>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>

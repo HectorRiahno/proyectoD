@@ -12,10 +12,10 @@ export {
   useUsuarios,
 } from './usePacientes';
 
-export { useCitas, useAgendaHoyMedico } from './useCitas';
+export { useCitas, useAgendaHoyMedico, useSlotsCita } from './useCitas';
 export { useConsultas, useTiposDiagnostico } from './useConsultas';
 export { useFacturas, useMisFacturas } from './useFacturas';
-export { useInventario, useHorarios } from './useInventario';
+export { useInventario, useHorarios, useMiHorarioMedico } from './useInventario';
 export { useAuditoria, usePapelera } from './useAuditoriaPapelera';
 export { useDashboardAdmin, useDashboardMedico, useDashboardCliente } from './useDashboards';
 export { useAdjuntos, useAdjuntosPacienteMedico, useMisAdjuntos } from './useAdjuntos';

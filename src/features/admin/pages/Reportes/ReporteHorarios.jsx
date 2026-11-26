@@ -29,7 +29,7 @@ export default function ReporteHorarios() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReporteHorariosPdf(data);
+    await exportarReporteHorariosPdf(data);
     await reportesService.registrarDescarga('horarios', 'pdf', desde, hasta);
   };
   const onExcel = async () => {

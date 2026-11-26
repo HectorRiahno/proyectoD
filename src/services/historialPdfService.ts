@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import pacienteService from './pacienteService';
 import consultaService from './consultaService';
 import adjuntoService, { type Adjunto } from './adjuntoService';
+import auditoriaService from './auditoriaService';
 
 // Genera un PDF con la historia clínica completa del paciente autenticado.
 // Estructura del documento:
@@ -49,6 +50,7 @@ export async function generarPdfHistorialCliente(centro: CentroMedico = {}): Pro
   }
 
   const idPaciente = Number(perfil.id_paciente);
+  auditoriaService.registrarAccesoHC(idPaciente, 'exportar_pdf', { documento: 'historial_completo' });
   const [consultas, signos, diagnosticos, ordenes, adjuntos] = await Promise.all([
     consultaService.getConsultasPaciente(idPaciente),
     consultaService.getSignosPacienteRecientes(idPaciente, 50),

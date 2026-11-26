@@ -25,7 +25,7 @@ export default function ReporteInventario() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReporteInventarioPdf(data);
+    await exportarReporteInventarioPdf(data);
     await reportesService.registrarDescarga('inventario', 'pdf', hoy(), hoy());
   };
   const onExcel = async () => {

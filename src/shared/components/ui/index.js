@@ -10,6 +10,7 @@ export { Campo, CampoReadOnly }                     from './Campo';
 export { EstadoBadge, estadoLabel, estadoCls }      from './EstadoBadge';
 export { ErrorBox, ErrorBanner, SuccessBanner }     from './Feedback';
 export { BotonesForm }                              from './BotonesForm';
+export { ComboBuscador }                            from './ComboBuscador';
 export { SearchBar }                                from './SearchBar';
 export { LoadingRow, EmptyRow, EmptyState, LoadingState } from './States';
 

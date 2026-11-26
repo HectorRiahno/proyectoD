@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Calendar, Stethoscope, MapPin, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, CalendarPlus, Stethoscope, MapPin, FileText, XCircle } from 'lucide-react';
 import { useCitas } from '../../../hooks';
+import { citaService } from '../../../services';
 import {
-  PageHeader, KPI, ErrorBanner, EmptyState, LoadingState,
-  TabPills, EstadoBadge,
+  PageHeader, KPI, ErrorBanner, SuccessBanner, EmptyState, LoadingState,
+  TabPills, EstadoBadge, AccentButton, Modal, ErrorBox, BotonesForm,
 } from '../../../shared/components/ui';
+import { hoyLocalISO, fechaDesdeISO, yaLlegoLocal } from '../../../shared/utils/fechas';
 
 const FILTROS = [
   { value: 'todas',    label: 'Todas' },
@@ -13,15 +16,22 @@ const FILTROS = [
 ];
 
 export default function MisCitas() {
-  const { citas, loading, error } = useCitas({ role: 'cliente' });
+  const { citas, loading, error, reload } = useCitas({ role: 'cliente' });
+  const navigate = useNavigate();
   const [filtro, setFiltro] = useState('todas');
+  const [cancelando, setCancelando] = useState(null);
+  const [aviso, setAviso]           = useState('');
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyLocalISO();
   // Una cita es "próxima" solo si su estado sigue abierto (programada / confirmada / en_curso)
   // y su fecha es de hoy en adelante. Si ya fue completada/cancelada/no_asistio cuenta como
   // pasada aunque su fecha sea futura — son citas históricas.
   const estaAbierta = (estado) => ['programada', 'confirmada', 'en_curso'].includes(estado);
   const esProxima = (c) => c.fecha >= hoy && estaAbierta(c.estado);
+  // El paciente puede cancelar mientras la cita no haya empezado
+  // (la BD lo valida en fn_cancelar_cita).
+  const puedeCancelar = (c) =>
+    ['programada', 'confirmada'].includes(c.estado) && !yaLlegoLocal(c.fecha, c.hora);
 
   const filtered = citas.filter((c) => {
     if (filtro === 'proximas') return esProxima(c);
@@ -48,13 +58,19 @@ export default function MisCitas() {
       </PageHeader>
 
       <ErrorBanner msg={error} />
+      {aviso && <SuccessBanner msg={aviso} />}
 
-      <TabPills
-        value={filtro}
-        onChange={setFiltro}
-        accent="sky"
-        options={FILTROS.map(f => ({ ...f, count: counts[f.value] }))}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabPills
+          value={filtro}
+          onChange={setFiltro}
+          accent="sky"
+          options={FILTROS.map(f => ({ ...f, count: counts[f.value] }))}
+        />
+        <AccentButton variant="sky" icon={CalendarPlus} onClick={() => navigate('/cliente/agendar')}>
+          Agendar cita
+        </AccentButton>
+      </div>
 
       {loading ? (
         <LoadingState mensaje="Cargando citas…" />
@@ -74,7 +90,7 @@ export default function MisCitas() {
                 <div className="bg-gradient-to-br from-sky-500 to-sky-700 text-white p-5 flex flex-col items-center justify-center min-w-[120px] sm:rounded-l-2xl">
                   <Calendar size={14} className="mb-1.5 opacity-80" strokeWidth={1.75} />
                   <p className="text-[11px] uppercase tracking-[0.10em] opacity-80">
-                    {new Date(c.fecha).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                    {fechaDesdeISO(c.fecha).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
                   </p>
                   <p className="text-[20px] font-semibold tabular-nums mt-1">{c.hora?.slice(0, 5)}</p>
                 </div>
@@ -121,12 +137,77 @@ export default function MisCitas() {
                       <p className="text-[12.5px] text-sky-900">{c.observaciones}</p>
                     </div>
                   )}
+
+                  {puedeCancelar(c) && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => { setAviso(''); setCancelando(c); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded-lg transition-colors"
+                      >
+                        <XCircle size={13} strokeWidth={1.75} /> Cancelar cita
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </article>
           ))}
         </div>
       )}
+
+      {cancelando && (
+        <ModalCancelar
+          cita={cancelando}
+          onClose={() => setCancelando(null)}
+          onDone={() => { setAviso('La cita fue cancelada.'); reload({ silencioso: true }); }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Modal: cancelar una cita propia ──────────────────────────────────────────
+function ModalCancelar({ cita, onClose, onDone }) {
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await citaService.cancelar(cita.id_cita, motivo.trim());
+      onDone();
+      onClose();
+    } catch (err) {
+      setError(err.message ?? 'No se pudo cancelar la cita');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cuando = `${fechaDesdeISO(cita.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} a las ${cita.hora?.slice(0, 5)}`;
+
+  return (
+    <Modal titulo="Cancelar cita" subtitulo={`${cita.medico_nombre ?? 'Médico'} · ${cuando}`} variant="red" size="sm" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-[13px] font-medium text-ink-700 mb-1.5">Motivo de la cancelación *</label>
+          <textarea
+            value={motivo}
+            onChange={e => setMotivo(e.target.value)}
+            required
+            rows={3}
+            maxLength={300}
+            placeholder="Ej: no puedo asistir ese día"
+            className="w-full px-3.5 py-2.5 text-[13.5px] bg-white border border-line rounded-xl text-ink-900 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
+          />
+          <p className="mt-1.5 text-[12px] text-ink-500">La hora quedará libre para otro paciente.</p>
+        </div>
+        {error && <ErrorBox msg={error} />}
+        <BotonesForm onCancel={onClose} saving={saving} labelSave="Cancelar cita" labelCancel="Volver" variant="red" disabled={!motivo.trim()} />
+      </form>
+    </Modal>
   );
 }

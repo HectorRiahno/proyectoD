@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
+import { LoadingState } from '../components/ui/States';
 import { Outlet, useLocation } from "react-router-dom";
 import EmployeeNavbar from "../components/navigation/EmployeeNavbar";
 import EmployeeSidebar from "../components/navigation/EmployeeSidebar";
@@ -44,7 +45,9 @@ export default function EmployeeLayout() {
 
         <div className="lg:ml-64 min-h-[calc(100vh-4rem)]">
           <main className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <Outlet />
+            <Suspense fallback={<LoadingState />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>

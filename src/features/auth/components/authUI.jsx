@@ -1,79 +1,63 @@
 import React from 'react';
-import {
-  Activity, ShieldCheck, Calendar, FileText, Package, ReceiptText,
-  Eye, EyeOff, AlertCircle, CheckCircle2,
-} from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
+import { centroMedico } from '../../../config/centroMedico';
+
+// 'Centro Médico Hospitalis S.A.S.' → 'Centro Médico Hospitalis'
+const CENTRO = centroMedico.razon_social.replace(/\s+S\.A\.S\.?$/i, '');
 
 /* =====================================================================
-   AuthShell — layout split-screen reutilizable por todas las páginas
-   de autenticación. Lado izquierdo: brand row + slot del form + footer.
-   Lado derecho: panel de marca con tagline + módulos + pulso ECG.
+   AuthShell — layout de las páginas de autenticación.
+   Izquierda: marca + formulario + pie. Derecha (≥ lg): panel clínico
+   sobre papel milimetrado de ECG.
    ===================================================================== */
-export function AuthShell({ children, brandPanel, maxFormWidth = 420 }) {
+export function AuthShell({ children, brandPanel, maxFormWidth = 400 }) {
   return (
-    <div className="min-h-screen bg-surface text-ink-900 grid lg:grid-cols-[1fr_1.05fr]">
-      <section className="flex flex-col px-6 sm:px-10 lg:px-14 xl:px-24 py-8 lg:py-12">
-        <header className="flex items-center gap-2.5">
-          <BrandMark />
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-[15px] font-semibold tracking-tight text-ink-900">Hospitalis</span>
-            <span className="text-[10px] uppercase tracking-[0.14em] font-medium text-brand-700 bg-brand-50 border border-brand-100 rounded-md px-1.5 py-[3px]">
-              Pro
-            </span>
-          </div>
+    <div className="min-h-screen bg-white text-ink-900 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <section className="flex flex-col px-6 sm:px-10 lg:px-14 xl:px-20 py-7 lg:py-10">
+        <header>
+          <a href="/" className="inline-flex items-center gap-3" title="Volver al inicio">
+            <BrandMark />
+            <div className="leading-tight">
+              <p className="text-[15px] font-semibold tracking-tight text-ink-900">Hospitalis</p>
+              <p className="text-[11.5px] text-ink-500">Sistema de información clínica</p>
+            </div>
+          </a>
         </header>
 
         <div
-          className="flex-1 flex flex-col justify-center w-full mx-auto lg:mx-0 motion-safe:[animation:hp-fade-up_0.5s_ease-out]"
+          className="flex-1 flex flex-col justify-center w-full mx-auto lg:mx-0 py-10 motion-safe:[animation:hp-fade-up_0.4s_ease-out]"
           style={{ maxWidth: maxFormWidth }}
         >
           {children}
         </div>
 
-        <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-ink-500">
-          <span>© {new Date().getFullYear()} Centro Médico Hospitalis</span>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="relative flex w-1.5 h-1.5">
-                <span className="absolute inset-0 rounded-full bg-emerald-500/60 motion-safe:animate-ping" />
-                <span className="relative w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </span>
-              Sistemas operativos
-            </span>
-            <span className="px-1.5 py-0.5 rounded-md border border-line text-[10.5px] tracking-wide text-ink-500 font-mono">
-              v1.011
-            </span>
-          </div>
+        <footer className="pt-5 border-t border-line flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-[11.5px] text-ink-500">
+          <span>© {new Date().getFullYear()} {CENTRO} · {centroMedico.ciudad}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Lock size={12} strokeWidth={2} /> Conexión cifrada
+          </span>
         </footer>
       </section>
 
-      <aside className="hidden lg:block relative overflow-hidden">
-        <div className="absolute inset-0 bg-brand-900" />
+      <aside className="hidden lg:flex relative overflow-hidden bg-brand-900 text-white">
+        {/* Papel milimetrado: cuadro menor de 8 px, mayor cada 5 (como el papel de ECG) */}
         <div
           aria-hidden
           className="absolute inset-0"
           style={{
             backgroundImage: [
-              'radial-gradient(120% 80% at 85% 12%, rgba(86,133,244,0.55), transparent 60%)',
-              'radial-gradient(90% 70% at 12% 92%, rgba(6,182,164,0.28), transparent 55%)',
-              'radial-gradient(70% 60% at 50% 50%, rgba(30,79,216,0.30), transparent 70%)',
+              'linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)',
+              'linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)',
+              'linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
+              'linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)',
             ].join(', '),
+            backgroundSize: '8px 8px, 8px 8px, 40px 40px, 40px 40px',
           }}
         />
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-[0.10] mix-blend-overlay"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)',
-            backgroundSize: '22px 22px',
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute -top-32 -right-32 w-[420px] h-[420px] rounded-full bg-brand-400/30 blur-3xl motion-safe:[animation:hp-drift_18s_ease-in-out_infinite]"
-        />
+        {/* La cuadrícula se apaga arriba y abajo para que el texto respire */}
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-brand-900 via-brand-900/30 to-brand-900" />
 
-        <div className="relative h-full flex flex-col justify-between p-12 xl:p-16 text-white">
+        <div className="relative flex-1 flex flex-col p-12 xl:p-16">
           {brandPanel ?? <DefaultBrandPanel />}
         </div>
       </aside>
@@ -82,39 +66,51 @@ export function AuthShell({ children, brandPanel, maxFormWidth = 420 }) {
 }
 
 /* ──────────────────── Panel de marca por defecto ──────────────────── */
+const ACCESOS = [
+  { quien: 'Pacientes',      que: 'Aparta tu cita, revisa tus resultados y descarga tus facturas.' },
+  { quien: 'Médicos',        que: 'Agenda del día e historia clínica de tus pacientes.' },
+  { quien: 'Administración', que: 'Citas, inventario, facturación y reportes.' },
+];
+
 export function DefaultBrandPanel({
-  eyebrow = 'Plataforma clínica',
+  eyebrow = CENTRO,
   headline,
-  emphasis = 'cuidan.',
-  description = 'Citas, inventario, facturación electrónica e historia clínica en un único sistema, diseñado para equipos clínicos modernos.',
+  emphasis = 'bien llevada.',
+  description = 'Agenda, historia clínica, resultados y facturación del centro, en un solo lugar.',
 }) {
   const title = headline ?? (
-    <>Cuidamos a quienes <span className="font-display italic font-normal text-white">{emphasis}</span></>
+    <>Cada paciente,<br />una historia <em className="italic text-accent-300">{emphasis}</em></>
   );
   return (
     <>
-      <div className="max-w-md">
-        <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-white/75 border border-white/15 rounded-full px-2.5 py-1 bg-white/[0.04] backdrop-blur-sm">
-          <Activity size={12} strokeWidth={2.25} className="text-accent-300" />
-          {eyebrow}
-        </div>
-        <h2 className="mt-8 text-[44px] xl:text-[52px] leading-[1.05] font-semibold tracking-[-0.025em]">
+      <div className="flex items-baseline justify-between gap-6 text-[11px] font-medium uppercase tracking-[0.16em] text-white/65">
+        <span>{eyebrow}</span>
+        <span className="text-white/40">{centroMedico.ciudad}</span>
+      </div>
+
+      <div className="flex-1 flex flex-col justify-center py-10">
+        <h2 className="font-display text-[52px] xl:text-[64px] leading-[1.03] tracking-[-0.01em] max-w-[580px]">
           {title}
         </h2>
-        <p className="mt-5 text-[15px] leading-relaxed text-white/75 max-w-[440px]">
+        <p className="mt-6 text-[15px] leading-relaxed text-white/70 max-w-[420px]">
           {description}
         </p>
+        <EcgStrip className="mt-12 -mx-12 xl:-mx-16" />
       </div>
 
-      <ModulesList />
+      <dl className="grid grid-cols-3 gap-8 border-t border-white/15 pt-6">
+        {ACCESOS.map(({ quien, que }) => (
+          <div key={quien}>
+            <dt className="text-[13px] font-medium text-white">{quien}</dt>
+            <dd className="mt-1.5 text-[12.5px] leading-snug text-white/60">{que}</dd>
+          </div>
+        ))}
+      </dl>
 
-      <div>
-        <PulseLine />
-        <div className="mt-5 flex items-center gap-2.5 text-[12px] text-white/65">
-          <ShieldCheck size={15} strokeWidth={2} className="text-accent-300" />
-          <span>Cifrado de extremo a extremo · Conforme a Resolución DIAN de facturación electrónica</span>
-        </div>
-      </div>
+      <p className="mt-8 flex items-start gap-2 text-[12px] leading-relaxed text-white/50 max-w-[540px]">
+        <Lock size={13} strokeWidth={2} className="flex-shrink-0 mt-[3px]" />
+        Acceso exclusivo para pacientes y personal del centro. Cada consulta a una historia clínica queda registrada.
+      </p>
     </>
   );
 }
@@ -122,13 +118,10 @@ export function DefaultBrandPanel({
 /* ─────────────────────────── Brand mark ─────────────────────────── */
 export function BrandMark() {
   return (
-    <span
-      className="relative inline-flex w-8 h-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-brand-500 to-brand-700 shadow-[0_4px_14px_-4px_rgba(30,79,216,0.55)] ring-1 ring-inset ring-white/10"
-      aria-hidden
-    >
-      <svg viewBox="0 0 20 20" className="w-[18px] h-[18px] text-white" fill="none">
+    <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-brand-700" aria-hidden>
+      <svg viewBox="0 0 20 20" className="w-5 h-5 text-white" fill="none">
         <path
-          d="M3.5 10h2.7l1.4-3.5L10 14l1.7-7 1.3 3h3.5"
+          d="M2.5 10.5h3l1.5-3.5 2.5 8 2-10 1.5 5.5h4.5"
           stroke="currentColor"
           strokeWidth="1.6"
           strokeLinecap="round"
@@ -139,57 +132,27 @@ export function BrandMark() {
   );
 }
 
-/* ──────────────────────── Lista de módulos ──────────────────────── */
-export function ModulesList() {
-  const items = [
-    { icon: Calendar,    label: 'Agenda y citas',           desc: 'Reservas, confirmaciones y horarios por médico.' },
-    { icon: FileText,    label: 'Historia clínica',         desc: 'Evolución, anexos y resultados de laboratorio.' },
-    { icon: Package,     label: 'Inventario médico',        desc: 'Stock, vencimientos y alertas automáticas.' },
-    { icon: ReceiptText, label: 'Facturación electrónica',  desc: 'Conforme a Resolución DIAN colombiana.' },
-  ];
-  return (
-    <div className="max-w-[460px]">
-      <div className="text-[10.5px] uppercase tracking-[0.18em] text-white/45 mb-5">
-        Todo en un solo sistema
-      </div>
-      <ul className="grid grid-cols-2 gap-x-8 gap-y-5">
-        {items.map(({ icon: Icon, label, desc }) => (
-          <li key={label} className="group flex items-start gap-3">
-            <span className="mt-0.5 inline-flex w-7 h-7 items-center justify-center rounded-md bg-white/[0.05] border border-white/10 backdrop-blur-sm group-hover:bg-white/10 transition-colors">
-              {Icon && <Icon size={13} strokeWidth={1.75} className="text-accent-300" />}
-            </span>
-            <div className="min-w-0">
-              <div className="text-[13.5px] font-medium text-white tracking-tight leading-tight">{label}</div>
-              <div className="text-[12px] text-white/55 leading-snug mt-0.5">{desc}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+/* ─────────────────────────── Tira de ECG ───────────────────────────
+   Un complejo P-QRS-T (160 px de ancho) repetido. La copia tenue queda
+   fija; la brillante se dibuja de izquierda a derecha como el barrido
+   de un monitor (animación hp-ecg en index.css, se detiene con
+   prefers-reduced-motion). */
+const COMPLEJO = 'h18 q8 -8 16 0 h10 l4 5 l6 -42 l6 50 l5 -13 h14 q12 -16 24 0 h57';
+const TRAZO = `M0 50 ${Array(8).fill(COMPLEJO).join(' ')}`;
 
-/* ─────────────────────────── Pulso ECG ─────────────────────────── */
-export function PulseLine() {
+export function EcgStrip({ className = '' }) {
   return (
-    <svg viewBox="0 0 480 40" className="w-full max-w-[460px] h-8 text-accent-300/70" preserveAspectRatio="none" aria-hidden>
-      <defs>
-        <linearGradient id="hp-pulse-fade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor="currentColor" stopOpacity="0" />
-          <stop offset="18%"  stopColor="currentColor" stopOpacity="0.9" />
-          <stop offset="82%"  stopColor="currentColor" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M0 20 L120 20 L140 20 L150 8 L160 32 L170 4 L180 20 L260 20 L275 20 L285 12 L295 28 L305 6 L315 20 L480 20"
-        fill="none"
-        stroke="url(#hp-pulse-fade)"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <div className={className} aria-hidden>
+      <div className="flex items-center justify-between px-12 xl:px-16 mb-1.5 font-mono text-[10.5px] text-white/40">
+        <span>II</span>
+        <span>25 mm/s · 10 mm/mV</span>
+      </div>
+      <svg viewBox="0 0 1280 80" preserveAspectRatio="xMinYMid slice" className="block w-full h-20 text-accent-300">
+        <path d={TRAZO} fill="none" stroke="currentColor" strokeOpacity="0.22" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d={TRAZO} pathLength="1" fill="none" stroke="currentColor" strokeWidth="1.75"
+          strokeLinejoin="round" strokeLinecap="round" className="hp-ecg-trace" />
+      </svg>
+    </div>
   );
 }
 
@@ -198,8 +161,8 @@ export function PulseLine() {
 export function PageTitle({ title, subtitle, className = '' }) {
   return (
     <div className={`mb-9 ${className}`}>
-      <h1 className="text-[28px] leading-[1.15] font-semibold tracking-[-0.022em] text-ink-900">{title}</h1>
-      {subtitle && <p className="text-[14px] text-ink-500 mt-2 leading-relaxed">{subtitle}</p>}
+      <h1 className="font-display text-[40px] leading-[1.05] tracking-[-0.01em] text-ink-900">{title}</h1>
+      {subtitle && <p className="text-[14.5px] text-ink-500 mt-3 leading-relaxed">{subtitle}</p>}
     </div>
   );
 }
@@ -221,13 +184,13 @@ export function Field({ id, label, icon: Icon, rightSlot, hint, error, ...rest }
         <input
           id={id}
           className={[
-            'w-full py-3 text-[14px] bg-white border rounded-xl text-ink-900',
+            'w-full py-3 text-[14px] bg-white border rounded-lg text-ink-900',
             'placeholder:text-ink-300 transition-all duration-150',
             'focus:outline-none focus:ring-4',
             Icon ? 'pl-11 pr-3.5' : 'px-3.5',
             error
               ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10'
-              : 'border-line focus:border-brand-500 focus:ring-brand-500/10',
+              : 'border-ink-100 hover:border-ink-300 focus:border-brand-600 focus:ring-brand-600/15',
           ].join(' ')}
           {...rest}
         />
@@ -259,12 +222,12 @@ export function PasswordField({
           autoComplete={autoComplete}
           placeholder={placeholder}
           className={[
-            'w-full pl-3.5 pr-11 py-3 text-[14px] bg-white border rounded-xl text-ink-900',
+            'w-full pl-3.5 pr-11 py-3 text-[14px] bg-white border rounded-lg text-ink-900',
             'placeholder:text-ink-300 transition-all duration-150',
             'focus:outline-none focus:ring-4',
             error
               ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10'
-              : 'border-line focus:border-brand-500 focus:ring-brand-500/10',
+              : 'border-ink-100 hover:border-ink-300 focus:border-brand-600 focus:ring-brand-600/15',
           ].join(' ')}
         />
         <button
@@ -290,9 +253,9 @@ export function PrimaryButton({ children, loading, loadingText = 'Cargando…', 
       disabled={loading}
       className={[
         'group w-full inline-flex items-center justify-center gap-2',
-        'bg-ink-900 hover:bg-ink-800 active:scale-[0.99] text-white text-[14px] font-medium py-3 rounded-xl',
-        'shadow-[0_1px_2px_rgba(11,18,32,0.10),0_10px_28px_-14px_rgba(11,18,32,0.45)]',
-        'transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed',
+        'bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white text-[14px] font-medium py-3 rounded-lg',
+        'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/25',
+        'transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed',
         className,
       ].join(' ')}
       {...rest}
@@ -317,7 +280,7 @@ export function SecondaryButton({ children, className = '', ...rest }) {
     <button
       className={[
         'inline-flex items-center justify-center gap-2',
-        'bg-white border border-line text-ink-800 text-[13.5px] font-medium px-4 py-2.5 rounded-xl',
+        'bg-white border border-ink-100 text-ink-800 text-[13.5px] font-medium px-4 py-2.5 rounded-lg',
         'hover:bg-surface hover:border-ink-100 active:scale-[0.99] transition-all duration-150',
         className,
       ].join(' ')}

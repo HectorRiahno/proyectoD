@@ -12,7 +12,6 @@ import {
   SuccessBanner, SearchBar, LoadingRow, EmptyRow, EstadoBadge,
   Toolbar, TableShell, Thead, Tbody, Tr, IconButton, ActionGroup,
 } from '../../../shared/components/ui';
-import { generarPdfFactura } from '../../../shared/utils/generarPdfFactura';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 const ESTADOS = [
@@ -89,6 +88,8 @@ export default function Facturacion() {
     setError('');
     try {
       const items = await facturaService.getItems(f.id_factura);
+      // jspdf se descarga al primer PDF, no con la página
+      const { generarPdfFactura } = await import('../../../shared/utils/generarPdfFactura');
       generarPdfFactura(f, items ?? []);
     } catch (err) {
       setError(`No se pudo generar el PDF: ${err.message ?? err}`);

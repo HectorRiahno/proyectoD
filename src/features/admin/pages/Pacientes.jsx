@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Search, Eye, Edit, Trash2, AlertCircle, UserPlus, Heart, User, Users,
+  Search, Eye, Edit, Trash2, AlertCircle, UserPlus, Heart, User, Users, Send, Info,
 } from 'lucide-react';
 import { usePacientes } from '../../../hooks';
 import {
   Modal, PageHeader, KPI, Input, Textarea, Select, Section,
-  Campo, CampoReadOnly, ErrorBox, ErrorBanner, BotonesForm,
+  Campo, CampoReadOnly, ErrorBox, ErrorBanner, SuccessBanner, BotonesForm, Checkbox,
   SearchBar, LoadingRow, EmptyRow,
   Toolbar, AccentButton, TableShell, Thead, Tbody, Tr,
   IconButton, ActionGroup, Avatar,
 } from '../../../shared/components/ui';
 import { pacienteService } from '../../../services';
+import { inviteUser } from '../../../services/adminService';
 
 // ─── Opciones ──────────────────────────────────────────────────────────────────
-const TIPOS_SANGRE   = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const ESTADOS_CIVILES = ['Soltero/a', 'Casado/a', 'Divorciado/a', 'Viudo/a', 'Unión libre'];
 const GENEROS        = ['Masculino', 'Femenino', 'Otro', 'Prefiero no decir'];
 
@@ -30,8 +30,36 @@ export default function Pacientes() {
   const [detalle, setDetalle]       = useState(null);
   const [editando, setEditando]     = useState(null);
   const [creando, setCreando]       = useState(false);
+  const [aviso, setAviso]           = useState('');
+  const [portal, setPortal]         = useState({});   // id_paciente → estado del portal
 
-  const cargar = reload;
+  const cargarPortal = () =>
+    pacienteService.getEstadoPortal().then(setPortal).catch(err => console.warn('[estado portal]', err.message));
+  useEffect(() => { cargarPortal(); }, []);
+
+  const cargar = () => { reload(); cargarPortal(); };
+
+  const resultado = ({ ok, error: err }) => {
+    setAviso(ok ?? '');
+    setError(err ?? '');
+  };
+
+  const invitar = async (p) => {
+    const reenviar = portal[p.id_paciente]?.estado === 'pendiente';
+    if (!window.confirm(
+      `¿${reenviar ? 'Reenviar' : 'Enviar'} la invitación al portal a ${p.nombre_completo}?\n\n` +
+      `Llegará a ${p.email}. Ingresará con su documento ${p.documento}.`
+    )) return;
+    setAviso('');
+    setError('');
+    try {
+      await enviarInvitacion({ email: p.email, nombre: p.nombre_completo, documento: p.documento });
+      setAviso(`Invitación enviada a ${p.email}.`);
+      cargarPortal();
+    } catch (err) {
+      setError(`No se pudo enviar la invitación a ${p.email}: ${err.message}`);
+    }
+  };
 
   const filtered = pacientes.filter(p => {
     const term = search.toLowerCase();
@@ -76,6 +104,7 @@ export default function Pacientes() {
       </PageHeader>
 
       <ErrorBanner msg={error} onDismiss={() => setError('')} />
+      <SuccessBanner msg={aviso} />
 
       <Toolbar>
         <SearchBar
@@ -92,13 +121,14 @@ export default function Pacientes() {
         <Thead columnas={[
           'Paciente', 'Documento', 'Edad', 'Contacto', 'Historia',
           { label: 'Citas', align: 'center' },
+          { label: 'Portal', align: 'center' },
           { label: 'Acciones', align: 'center' },
         ]} />
         <Tbody>
           {loading ? (
-            <LoadingRow colSpan={7} mensaje="Cargando pacientes…" color="emerald" />
+            <LoadingRow colSpan={8} mensaje="Cargando pacientes…" color="emerald" />
           ) : filtered.length === 0 ? (
-            <EmptyRow colSpan={7} icon={Search} mensaje="No se encontraron pacientes" />
+            <EmptyRow colSpan={8} icon={Search} mensaje="No se encontraron pacientes" />
           ) : filtered.map((p) => (
             <Tr key={p.id_paciente}>
               <td className="px-5 py-3.5">
@@ -134,10 +164,26 @@ export default function Pacientes() {
               <td className="px-5 py-3.5 text-center text-[14px] font-semibold text-ink-900 tabular-nums">
                 {p.total_citas ?? 0}
               </td>
+              <td className="px-5 py-3.5 text-center">
+                <EstadoPortalBadge estado={portal[p.id_paciente]} />
+              </td>
               <td className="px-5 py-3.5">
                 <ActionGroup>
                   <IconButton icon={Eye}    tone="brand"  title="Ver detalles" onClick={() => setDetalle(p)}  />
                   <IconButton icon={Edit}   tone="indigo" title="Editar"       onClick={() => setEditando(p)} />
+                  {portal[p.id_paciente] && portal[p.id_paciente].estado !== 'activa' && (
+                    <IconButton
+                      icon={Send}
+                      tone="emerald"
+                      disabled={!p.email || esDocumentoSintetico(p.documento)}
+                      title={!p.email
+                        ? 'Agrega un email (Editar) para poder invitarlo'
+                        : esDocumentoSintetico(p.documento)
+                          ? 'Completa su documento (Editar) para poder invitarlo'
+                          : portal[p.id_paciente].estado === 'pendiente' ? 'Reenviar invitación al portal' : 'Invitar al portal'}
+                      onClick={() => invitar(p)}
+                    />
+                  )}
                   <IconButton icon={Trash2} tone="red"    title="Eliminar"     onClick={() => eliminar(p)}    />
                 </ActionGroup>
               </td>
@@ -148,7 +194,7 @@ export default function Pacientes() {
 
       {detalle  && <ModalDetalle  paciente={detalle}  onClose={() => setDetalle(null)} />}
       {editando && <ModalEditar   paciente={editando} onClose={() => { setEditando(null); cargar(); }} />}
-      {creando  && <ModalCrear    onClose={() => { setCreando(false); cargar(); }} />}
+      {creando  && <ModalCrear    onClose={() => { setCreando(false); cargar(); }} onResultado={resultado} />}
     </div>
   );
 }
@@ -195,18 +241,45 @@ function ModalDetalle({ paciente: p, onClose }) {
   );
 }
 
+// ─── Invitación al portal ──────────────────────────────────────────────────────
+// Edge Function create-user: crea la cuenta (rol cliente), la enlaza a la
+// persona por email y envía el correo para definir la contraseña.
+function enviarInvitacion({ email, nombre, documento }) {
+  return inviteUser({ email, nombre, rol: 'cliente', documento });
+}
+
+const PORTAL = {
+  sin_cuenta: { label: 'Sin cuenta',  cls: 'bg-surface text-ink-500 border-line' },
+  pendiente:  { label: 'Invitado',    cls: 'bg-amber-50 text-amber-700 border-amber-100' },
+  activa:     { label: 'Activa',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+};
+
+function EstadoPortalBadge({ estado }) {
+  if (!estado) return <span className="text-[12px] text-ink-300">—</span>;
+  const e = PORTAL[estado.estado] ?? PORTAL.sin_cuenta;
+  const title = estado.estado === 'pendiente' && estado.invitado_at
+    ? `Invitado el ${estado.invitado_at.slice(0, 10)} · aún no crea su contraseña`
+    : estado.estado === 'activa' && estado.ultimo_ingreso
+      ? `Último ingreso: ${estado.ultimo_ingreso.slice(0, 16).replace('T', ' ')}`
+      : undefined;
+  return (
+    <span title={title} className={`inline-flex text-[11px] px-2 py-0.5 rounded-md border font-medium ${e.cls}`}>
+      {e.label}
+    </span>
+  );
+}
+
 // ─── Modal: Crear ──────────────────────────────────────────────────────────────
-function ModalCrear({ onClose }) {
+function ModalCrear({ onClose, onResultado }) {
   const INIT = {
     // persona
     documento: '', tipo_documento: 'CC', nombres: '', apellidos: '',
     fecha_nacimiento: '', genero: '', telefono: '', direccion: '', email: '',
-    // paciente
-    numero_historia: '', tipo_sangre: '', alergias: '',
-    enfermedades_cronicas: '', contacto_emergencia: '',
-    telefono_emergencia: '', ocupacion: '', estado_civil: '',
+    // paciente (el N° de historia se genera solo)
+    contacto_emergencia: '', telefono_emergencia: '', ocupacion: '', estado_civil: '',
   };
   const [form, setForm]   = useState(INIT);
+  const [invitar, setInvitar] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
@@ -214,17 +287,36 @@ function ModalCrear({ onClose }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
+    if (invitar && !form.email.trim()) {
+      setError('Para enviar la invitación el paciente necesita un email.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       await pacienteService.createCompleto(form);
-      onClose();
     } catch (err) {
       console.error('[ModalCrear Paciente]', err);
       setError(err.message ?? 'Error desconocido');
-    } finally {
       setSaving(false);
+      return;
     }
+
+    // La ficha ya quedó creada: si la invitación falla se informa, pero no
+    // se pierde el registro (se puede reintentar desde la lista).
+    const nombre = `${form.nombres} ${form.apellidos}`.trim();
+    if (invitar) {
+      try {
+        await enviarInvitacion({ email: form.email, nombre, documento: form.documento });
+        onResultado({ ok: `${nombre} quedó registrado. Se envió la invitación a ${form.email.trim()}; ingresará con su documento ${form.documento.trim()}.` });
+      } catch (err) {
+        onResultado({ error: `${nombre} quedó registrado, pero no se pudo enviar la invitación: ${err.message}. Reinténtalo con el botón de invitar en la lista.` });
+      }
+    } else {
+      onResultado({ ok: `${nombre} quedó registrado.` });
+    }
+    setSaving(false);
+    onClose();
   };
 
   return (
@@ -244,7 +336,8 @@ function ModalCrear({ onClose }) {
               </select>
             </div>
             <Input label="Número de documento *" name="documento" value={form.documento} onChange={handleChange} required placeholder="Ej: 1090123456" />
-            <Input label="Fecha de nacimiento"   name="fecha_nacimiento" type="date" value={form.fecha_nacimiento} onChange={handleChange} />
+            <Input label="Fecha de nacimiento *" name="fecha_nacimiento" type="date" value={form.fecha_nacimiento} onChange={handleChange} required
+              max={new Date().toISOString().slice(0, 10)} />
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">Género</label>
               <select name="genero" value={form.genero} onChange={handleChange}
@@ -254,41 +347,41 @@ function ModalCrear({ onClose }) {
               </select>
             </div>
             <Input label="Teléfono"  name="telefono"  value={form.telefono}  onChange={handleChange} placeholder="+57 300..." />
-            <Input label="Email"     name="email"     type="email" value={form.email} onChange={handleChange} placeholder="paciente@correo.com" />
+            <Input label={invitar ? 'Email *' : 'Email'} name="email" type="email" value={form.email} onChange={handleChange}
+              required={invitar} placeholder="paciente@correo.com" />
             <Input label="Dirección" name="direccion" value={form.direccion} onChange={handleChange} placeholder="Dirección de residencia" className="col-span-2" />
           </div>
         </Section>
 
-        {/* Datos clínicos */}
-        <Section titulo="Datos clínicos" icon={<Heart size={14} />}>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="N° Historia (auto si vacío)" name="numero_historia" value={form.numero_historia} onChange={handleChange} placeholder="HC-0001" />
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Tipo de sangre</label>
-              <select name="tipo_sangre" value={form.tipo_sangre} onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Desconocido</option>
-                {TIPOS_SANGRE.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Estado civil</label>
-              <select name="estado_civil" value={form.estado_civil} onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Sin especificar</option>
-                {ESTADOS_CIVILES.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-            <Input label="Ocupación" name="ocupacion" value={form.ocupacion} onChange={handleChange} />
-            <Input label="Contacto emergencia"  name="contacto_emergencia"  value={form.contacto_emergencia}  onChange={handleChange} className="col-span-1" />
-            <Input label="Teléfono emergencia"  name="telefono_emergencia"  value={form.telefono_emergencia}  onChange={handleChange} className="col-span-1" />
-            <Textarea label="Alergias"             name="alergias"             value={form.alergias}             onChange={handleChange} className="col-span-2" />
-            <Textarea label="Enfermedades crónicas" name="enfermedades_cronicas" value={form.enfermedades_cronicas} onChange={handleChange} className="col-span-2" />
-          </div>
+        {/* Cuenta del portal */}
+        <Section titulo="Acceso al portal del paciente" icon={<Send size={14} />}>
+          <Checkbox
+            name="invitar"
+            checked={invitar}
+            onChange={e => setInvitar(e.target.checked)}
+            label="Enviar invitación por correo para que active su cuenta"
+          />
+          <p className="text-[12px] text-ink-500 mt-2 leading-relaxed">
+            {invitar ? (
+              <>
+                Le llegará un correo a <strong className="font-medium text-ink-700">{form.email || 'su email'}</strong> con
+                un enlace para crear su contraseña. Después ingresará con su
+                número de documento <strong className="font-medium text-ink-700">{form.documento || '—'}</strong>.
+              </>
+            ) : 'No se envía ningún correo. Puedes invitarlo más tarde desde la lista de pacientes.'}
+          </p>
+          <p className="text-[12px] text-ink-500 mt-2 leading-relaxed">
+            Sin correo ni contraseña, el paciente también puede entrar al portal en la pestaña
+            {' '}<strong className="font-medium text-ink-700">"Soy paciente"</strong> con su documento
+            {' '}<strong className="font-medium text-ink-700">{form.documento || '—'}</strong> y su fecha de nacimiento.
+          </p>
         </Section>
 
+        <SeccionComplementaria form={form} onChange={handleChange} />
+
         {error && <ErrorBox msg={error} />}
-        <BotonesForm onCancel={onClose} saving={saving} labelSave="Registrar paciente" />
+        <BotonesForm onCancel={onClose} saving={saving}
+          labelSave={invitar ? 'Registrar e invitar' : 'Registrar paciente'} />
       </form>
     </Modal>
   );
@@ -304,10 +397,7 @@ function ModalEditar({ paciente, onClose }) {
     genero:          paciente.genero    ?? '',
     telefono:        paciente.telefono  ?? '',
     direccion:       paciente.direccion ?? '',
-    // paciente
-    tipo_sangre:          paciente.tipo_sangre          ?? '',
-    alergias:             paciente.alergias             ?? '',
-    enfermedades_cronicas: paciente.enfermedades_cronicas ?? '',
+    // paciente (sin datos clínicos: esos los registra el médico)
     contacto_emergencia:  paciente.contacto_emergencia  ?? '',
     telefono_emergencia:  paciente.telefono_emergencia  ?? '',
     ocupacion:            paciente.ocupacion            ?? '',
@@ -364,36 +454,41 @@ function ModalEditar({ paciente, onClose }) {
           <p className="text-xs text-gray-400 mt-1">* Email, documento e historia son solo lectura.</p>
         </Section>
 
-        <Section titulo="Datos clínicos" icon={<Heart size={14} />}>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Tipo de sangre</label>
-              <select name="tipo_sangre" value={form.tipo_sangre} onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Desconocido</option>
-                {TIPOS_SANGRE.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Estado civil</label>
-              <select name="estado_civil" value={form.estado_civil} onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Sin especificar</option>
-                {ESTADOS_CIVILES.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-            <Input label="Ocupación"            name="ocupacion"           value={form.ocupacion}           onChange={handleChange} />
-            <Input label="Contacto emergencia"  name="contacto_emergencia" value={form.contacto_emergencia} onChange={handleChange} />
-            <Input label="Teléfono emergencia"  name="telefono_emergencia" value={form.telefono_emergencia} onChange={handleChange} />
-            <Textarea label="Alergias"              name="alergias"              value={form.alergias}              onChange={handleChange} className="col-span-2" />
-            <Textarea label="Enfermedades crónicas" name="enfermedades_cronicas" value={form.enfermedades_cronicas} onChange={handleChange} className="col-span-2" />
-          </div>
-        </Section>
+        <SeccionComplementaria form={form} onChange={handleChange} />
 
         {error && <ErrorBox msg={error} />}
         <BotonesForm onCancel={onClose} saving={saving} labelSave="Guardar cambios" />
       </form>
     </Modal>
+  );
+}
+
+// ─── Responsable y datos sociodemográficos (crear y editar) ────────────────────
+// Recepción sólo registra datos de identificación y contacto. Lo clínico
+// (tipo de sangre, alergias, antecedentes, peso, talla…) lo registra el
+// médico en la consulta, desde Atender cita → pestaña Antecedentes.
+function SeccionComplementaria({ form, onChange }) {
+  return (
+    <Section titulo="Responsable y datos complementarios" icon={<Users size={14} />}>
+      <div className="grid grid-cols-2 gap-4">
+        <Input label="Contacto de emergencia / acompañante" name="contacto_emergencia" value={form.contacto_emergencia} onChange={onChange} />
+        <Input label="Teléfono del contacto" name="telefono_emergencia" value={form.telefono_emergencia} onChange={onChange} />
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-2 block">Estado civil</label>
+          <select name="estado_civil" value={form.estado_civil} onChange={onChange}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">Sin especificar</option>
+            {ESTADOS_CIVILES.map(e => <option key={e} value={e}>{e}</option>)}
+          </select>
+        </div>
+        <Input label="Ocupación" name="ocupacion" value={form.ocupacion} onChange={onChange} />
+      </div>
+      <p className="mt-3 flex items-start gap-1.5 text-[12px] text-ink-500 leading-relaxed">
+        <Info size={13} className="flex-shrink-0 mt-0.5" />
+        Los datos clínicos (tipo de sangre, alergias, antecedentes, peso y talla) los registra
+        el médico en la primera consulta.
+      </p>
+    </Section>
   );
 }
 

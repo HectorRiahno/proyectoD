@@ -2,7 +2,10 @@ import { supabase } from '../lib/supabase';
 import { ServiceError } from './pacienteService';
 
 // Log inmutable de cambios. Vista vw_audit_log + vw_audit_usuarios (resolver actor).
-export type OperacionAudit = 'INSERT' | 'UPDATE' | 'DELETE';
+export type OperacionAudit = 'INSERT' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LECTURA' | 'EXPORTACION';
+
+export type AccionAccesoHC =
+  'ver_historial' | 'ver_consulta' | 'atender_cita' | 'ver_antecedentes' | 'exportar_pdf';
 
 export interface AuditLog {
   id_audit: number;
@@ -53,6 +56,24 @@ export const auditoriaService = {
       ((data ?? []) as Array<{ uuid: string; nombre_completo: string; rol_nombre: string }>)
         .map(a => [a.uuid, { nombre_completo: a.nombre_completo, rol_nombre: a.rol_nombre }]),
     );
+  },
+
+  /**
+   * Deja constancia de que el usuario abrió/exportó la historia clínica de
+   * un paciente (migration-acceso-historia-clinica.sql). No bloquea la
+   * pantalla: si el registro falla sólo se avisa en consola.
+   */
+  async registrarAccesoHC(
+    idPaciente: number | string,
+    accion: AccionAccesoHC,
+    detalle: Record<string, unknown> = {},
+  ): Promise<void> {
+    const { error } = await supabase.rpc('fn_registrar_acceso_hc', {
+      p_id_paciente: Number(idPaciente),
+      p_accion:      accion,
+      p_detalle:     detalle,
+    });
+    if (error) console.warn('[auditoria] no se registró el acceso a la HC:', error.message);
   },
 };
 

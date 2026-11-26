@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ServiceError } from './pacienteService';
+import { hoyLocalISO } from '../shared/utils/fechas';
 
 // Tabla: cita; Vistas por rol: vw_admin_citas, vw_medico_*, vw_paciente_*
 const TABLE = 'cita';
@@ -51,15 +52,53 @@ export interface CrearCitaPayload {
 }
 
 export interface EditarCitaPayload {
+  id_medico: number;
   fecha: string;
   hora: string;
   estado: EstadoCita;
   motivo?: string;
   observaciones?: string;
+  motivo_cancelacion?: string;
   id_tipo_consulta?: number | null;
 }
 
+export interface SlotCita {
+  hora: string;             // HH:MM
+  disponible: boolean;
+}
+
+export interface MedicoAgendable {
+  id_medico: number;
+  nombre: string;
+  especialidad: string;
+  consultorio: string | null;
+  dias: string[];           // 'lunes' … 'domingo' (sin tildes)
+}
+
+export interface AgendarMiCitaPayload {
+  id_medico: number;
+  id_tipo_consulta?: number | null;
+  fecha: string;            // YYYY-MM-DD
+  hora: string;             // HH:MM
+  motivo?: string;
+}
+
 const norm = (v?: string | null) => (v && v.trim()) || null;
+
+// Traduce errores de las RPCs de agendamiento. Los RAISE EXCEPTION de la
+// BD ya traen mensajes en español; aquí sólo se cubren los casos de
+// infraestructura (migración sin ejecutar, permisos).
+const errorAgendamiento = (error: { message: string; code?: string }) => {
+  if (error.code === 'PGRST202') {
+    return new ServiceError(
+      'Falta ejecutar en Supabase supabase/migration-agendamiento-citas.sql ' +
+      '(o migration-autoagendamiento-paciente.sql para el portal del paciente).', error.code);
+  }
+  if (error.code === '42501' && /permission denied/i.test(error.message)) {
+    return new ServiceError('Sin permisos para agendar. Ejecuta supabase/migration-agendamiento-citas.sql.', error.code);
+  }
+  return new ServiceError(error.message, error.code === '23P01' ? 'CONFLICT' : error.code);
+};
 
 export const citaService = {
   async getAll(): Promise<Cita[]> {
@@ -93,10 +132,9 @@ export const citaService = {
   },
 
   async getProximas(): Promise<Cita[]> {
-    const hoy = new Date().toISOString();
     const { data, error } = await supabase
       .from(VIEW).select('*')
-      .gte('fecha_cita', hoy)
+      .gte('fecha', hoyLocalISO())
       .order('fecha_cita', { ascending: true }).limit(10);
     if (error) throw new ServiceError(error.message, error.code);
     return (data ?? []) as Cita[];
@@ -107,11 +145,10 @@ export const citaService = {
    * solo columnas esenciales.
    */
   async getProximasResumen(limite = 5): Promise<Cita[]> {
-    const hoy = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
       .from(VIEW)
       .select('id_cita, fecha, hora, estado, paciente_nombre, medico_nombre, medico_especialidad')
-      .gte('fecha', hoy)
+      .gte('fecha', hoyLocalISO())
       .order('fecha_cita', { ascending: true })
       .limit(limite);
     if (error) throw new ServiceError(error.message, error.code);
@@ -140,11 +177,10 @@ export const citaService = {
    * Próximas citas del médico (programadas, para días siguientes a hoy).
    */
   async getProximasCitasMedico(limite = 5): Promise<Cita[]> {
-    const hoyISO = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
       .from('vw_medico_mis_citas')
       .select('id_cita, fecha, hora, estado, paciente_nombre, motivo, tipo_consulta')
-      .gt('fecha', hoyISO)
+      .gt('fecha', hoyLocalISO())
       .eq('estado', 'programada')
       .order('fecha_cita', { ascending: true })
       .limit(limite);
@@ -197,97 +233,101 @@ export const citaService = {
     return (data ?? []) as Cita[];
   },
 
-  // ─── Validación de disponibilidad ────────────────────────────────────────
+  // ─── Disponibilidad y agendamiento (RPCs de migration-agendamiento-citas.sql) ──
   /**
-   * Devuelve los id_medico que YA tienen una cita activa en la fecha+hora dadas.
-   * Útil para deshabilitar médicos al agendar.
+   * Slots de 15 min del médico en la fecha, ya calculados en BD según la
+   * duración del tipo de consulta. `disponible=false` si está ocupado o en
+   * el pasado. `excluirCita` permite reprogramar una cita sin chocar consigo
+   * misma.
    */
-  async getMedicosOcupados(fecha: string, hora: string): Promise<number[]> {
-    const { data, error } = await supabase
-      .from(VIEW)
-      .select('id_medico, hora, estado')
-      .eq('fecha', fecha);
-    if (error) throw new ServiceError(error.message, error.code);
-    return ((data ?? []) as Array<{ id_medico: number; hora: string; estado: string }>)
-      .filter(c => (c.hora ?? '').slice(0, 5) === hora && c.estado !== 'cancelada')
-      .map(c => c.id_medico);
-  },
-
-  /**
-   * Devuelve las horas (HH:mm) que un médico ya tiene ocupadas en una fecha
-   * dada. Excluye canceladas. Útil para pintar el SlotPicker.
-   */
-  async getHorasOcupadasMedico(idMedico: number, fecha: string): Promise<string[]> {
-    const { data, error } = await supabase
-      .from(VIEW)
-      .select('hora, estado')
-      .eq('fecha', fecha)
-      .eq('id_medico', idMedico);
-    if (error) throw new ServiceError(error.message, error.code);
-    return ((data ?? []) as Array<{ hora: string; estado: string }>)
-      .filter(c => c.estado !== 'cancelada')
-      .map(c => (c.hora ?? '').slice(0, 5));
-  },
-
-  /**
-   * Verifica si un médico específico tiene conflicto en fecha+hora.
-   * Re-consulta justo antes del INSERT para mitigar race conditions.
-   */
-  async medicoTieneConflicto(idMedico: number, fecha: string, hora: string): Promise<boolean> {
-    const { data, error } = await supabase
-      .from(VIEW)
-      .select('id_cita, hora, estado')
-      .eq('fecha', fecha)
-      .eq('id_medico', idMedico);
-    if (error) throw new ServiceError(error.message, error.code);
-    return ((data ?? []) as Array<{ hora: string; estado: string }>)
-      .some(c => (c.hora ?? '').slice(0, 5) === hora && c.estado !== 'cancelada');
-  },
-
-  // ─── Mutaciones ──────────────────────────────────────────────────────────
-  /**
-   * Crea una cita. Re-verifica el conflicto justo antes del INSERT y lanza
-   * ServiceError con código 'CONFLICT' si ya hay otra cita ocupando ese slot.
-   */
-  async crear(payload: CrearCitaPayload): Promise<void> {
-    const choca = await this.medicoTieneConflicto(payload.id_medico, payload.fecha, payload.hora);
-    if (choca) {
-      throw new ServiceError(
-        'Ese médico ya tiene una cita a esa fecha y hora. Elige otro o cambia el horario.',
-        'CONFLICT',
-      );
-    }
-
-    const fecha_cita = `${payload.fecha}T${payload.hora}:00`;
-    const { error } = await supabase.from(TABLE).insert({
-      id_paciente:      Number(payload.id_paciente),
-      id_medico:        Number(payload.id_medico),
-      id_tipo_consulta: payload.id_tipo_consulta ? Number(payload.id_tipo_consulta) : null,
-      fecha_cita,
-      estado:           payload.estado,
-      motivo:           norm(payload.motivo),
-      observaciones:    norm(payload.observaciones),
+  async getSlotsDisponibles(
+    idMedico: number, fecha: string,
+    idTipoConsulta?: number | null, excluirCita?: number | null,
+  ): Promise<SlotCita[]> {
+    const { data, error } = await supabase.rpc('fn_slots_disponibles', {
+      p_id_medico:        idMedico,
+      p_fecha:            fecha,
+      p_id_tipo_consulta: idTipoConsulta ?? null,
+      p_excluir_cita:     excluirCita ?? null,
     });
-    if (error) {
-      if (error.code === '42501') throw new ServiceError('Sin permisos. Ejecuta supabase/rls-admin.sql primero.', error.code);
-      if (error.code === '23503') throw new ServiceError('El paciente o médico seleccionado no existe.', error.code);
-      throw new ServiceError(error.message, error.code);
-    }
+    if (error) throw errorAgendamiento(error);
+    return ((data ?? []) as SlotCita[]).map(s => ({ ...s, hora: s.hora.slice(0, 5) }));
   },
 
+  /**
+   * Crea una cita vía fn_agendar_cita: la BD valida horario del médico,
+   * fecha futura y solapes (de médico y paciente). Devuelve el id creado.
+   */
+  async crear(payload: CrearCitaPayload): Promise<number> {
+    const { data, error } = await supabase.rpc('fn_agendar_cita', {
+      p_id_paciente:      Number(payload.id_paciente),
+      p_id_medico:        Number(payload.id_medico),
+      p_fecha:            payload.fecha,
+      p_hora:             payload.hora,
+      p_id_tipo_consulta: payload.id_tipo_consulta ? Number(payload.id_tipo_consulta) : null,
+      p_estado:           payload.estado,
+      p_motivo:           norm(payload.motivo),
+      p_observaciones:    norm(payload.observaciones),
+    });
+    if (error) throw errorAgendamiento(error);
+    return data as number;
+  },
+
+  // ─── Autoagendamiento del paciente (migration-autoagendamiento-paciente.sql) ──
+  /** Médicos activos con horario configurado: lo que el paciente puede elegir. */
+  async getMedicosAgendables(): Promise<MedicoAgendable[]> {
+    const { data, error } = await supabase.rpc('fn_medicos_agendables');
+    if (error) throw errorAgendamiento(error);
+    return (data ?? []) as MedicoAgendable[];
+  },
+
+  /**
+   * El paciente autenticado aparta una cita para sí mismo. La BD valida
+   * horario del médico, solapes y los límites del autoagendamiento.
+   */
+  async agendarMiCita(payload: AgendarMiCitaPayload): Promise<number> {
+    const { data, error } = await supabase.rpc('fn_agendar_mi_cita', {
+      p_id_medico:        Number(payload.id_medico),
+      p_fecha:            payload.fecha,
+      p_hora:             payload.hora,
+      p_id_tipo_consulta: payload.id_tipo_consulta ? Number(payload.id_tipo_consulta) : null,
+      p_motivo:           norm(payload.motivo),
+    });
+    if (error) throw errorAgendamiento(error);
+    return data as number;
+  },
+
+  /**
+   * Reprograma y/o cambia estado vía fn_editar_cita (valida transiciones,
+   * slot y motivo de cancelación).
+   */
   async editar(idCita: number | string, payload: EditarCitaPayload): Promise<void> {
-    const fecha_cita = `${payload.fecha}T${payload.hora}:00`;
-    const { error } = await supabase.from(TABLE).update({
-      fecha_cita,
-      estado:           payload.estado,
-      motivo:           norm(payload.motivo),
-      observaciones:    norm(payload.observaciones),
-      id_tipo_consulta: payload.id_tipo_consulta ? Number(payload.id_tipo_consulta) : null,
-    }).eq('id_cita', idCita);
-    if (error) {
-      if (error.code === '42501') throw new ServiceError('Sin permisos. Ejecuta supabase/rls-admin.sql primero.', error.code);
-      throw new ServiceError(error.message, error.code);
-    }
+    const { error } = await supabase.rpc('fn_editar_cita', {
+      p_id_cita:            Number(idCita),
+      p_id_medico:          Number(payload.id_medico),
+      p_fecha:              payload.fecha,
+      p_hora:               payload.hora,
+      p_id_tipo_consulta:   payload.id_tipo_consulta ? Number(payload.id_tipo_consulta) : null,
+      p_estado:             payload.estado,
+      p_motivo:             norm(payload.motivo),
+      p_observaciones:      norm(payload.observaciones),
+      p_motivo_cancelacion: norm(payload.motivo_cancelacion),
+    });
+    if (error) throw errorAgendamiento(error);
+  },
+
+  /** Admin/asistente o el médico de la cita; sólo si la hora ya llegó. */
+  async marcarNoAsistio(idCita: number | string): Promise<void> {
+    const { error } = await supabase.rpc('fn_marcar_no_asistio', { p_id_cita: Number(idCita) });
+    if (error) throw errorAgendamiento(error);
+  },
+
+  async cancelar(idCita: number | string, motivo: string): Promise<void> {
+    const { error } = await supabase.rpc('fn_cancelar_cita', {
+      p_id_cita: Number(idCita),
+      p_motivo:  motivo,
+    });
+    if (error) throw errorAgendamiento(error);
   },
 
   /**

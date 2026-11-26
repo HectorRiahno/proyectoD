@@ -77,6 +77,19 @@ export const horarioService = {
     }
   },
 
+  /**
+   * Franjas del médico autenticado: las mismas que el admin ve en Horarios,
+   * filtradas por el id_medico de la sesión (RPC mi_id_medico).
+   */
+  async getMiHorarioMedico(): Promise<HorarioMedico[]> {
+    const { data: idMedico, error: errId } = await supabase.rpc('mi_id_medico');
+    if (errId) throw new ServiceError(errId.message, errId.code);
+    if (!idMedico) {
+      throw new ServiceError('Tu usuario no está vinculado a un médico. Contacta a la administración.', 'NO_MEDICO');
+    }
+    return this.getByMedico(idMedico as number);
+  },
+
   async getByMedico(idMedico: number | string): Promise<HorarioMedico[]> {
     const { data, error } = await supabase
       .from(TABLE).select('*').eq('id_medico', idMedico).order('hora_inicio');
@@ -112,6 +125,37 @@ export const tipoConsultaService = {
       duracion_min: number | null;
     }>;
   },
+
+  /**
+   * Tipos que se pueden elegir al AGENDAR una cita: sólo "Consulta general"
+   * y "Control" (columna `agendable`, migration-tipos-cita-agendables.sql).
+   * El resto del catálogo sigue existiendo para citas antiguas y facturación.
+   */
+  async getAgendables() {
+    const { data, error } = await supabase
+      .from('tipo_consulta')
+      .select('id_tipo_consulta, nombre, descripcion, costo, duracion_min')
+      .eq('agendable', true)
+      .order('nombre');
+    if (!error) return (data ?? []) as TipoConsultaItem[];
+
+    // Migración aún sin ejecutar (no existe la columna): filtrar por nombre.
+    if (error.code === '42703') {
+      const todos = await this.getCatalogo();
+      return todos.filter(t => TIPOS_AGENDABLES.includes(t.nombre));
+    }
+    throw new ServiceError(error.message, error.code);
+  },
+};
+
+const TIPOS_AGENDABLES = ['Consulta general', 'Control'];
+
+type TipoConsultaItem = {
+  id_tipo_consulta: number;
+  nombre: string;
+  descripcion: string | null;
+  costo: number;
+  duracion_min: number | null;
 };
 
 export default horarioService;

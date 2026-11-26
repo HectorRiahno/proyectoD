@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+/* Las fuentes (Inter + Instrument Serif) se cargan con <link> en index.html:
+   un @import url() después de "tailwindcss" queda fuera de lugar y el build lo descarta. */
 
 /* =====================================================================
    Sistema de diseño — Hospitalis Pro
@@ -55,9 +56,19 @@
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes hp-drift {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(-24px, 28px) scale(1.06); }
+/* Barrido del trazo de ECG del panel de autenticación (pathLength = 1) */
+@keyframes hp-ecg {
+  0%   { stroke-dashoffset: 1; opacity: 1; }
+  82%  { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.hp-ecg-trace {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: hp-ecg 6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hp-ecg-trace { animation: none; stroke-dashoffset: 0; }
 }
 @keyframes hp-shimmer {
   0%   { background-position: -200% 0; }

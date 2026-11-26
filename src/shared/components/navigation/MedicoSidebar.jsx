@@ -1,11 +1,19 @@
 import { Link, useLocation } from "react-router-dom";
-import * as Icons from "lucide-react";
+// Sólo los iconos del menú: `import * as Icons` metía los ~1500 de lucide en el bundle.
+import {
+  Calendar, CalendarClock, Clock, LayoutDashboard, Stethoscope, Users,
+} from 'lucide-react';
+
+const Icons = {
+  Calendar, CalendarClock, Clock, LayoutDashboard, Stethoscope, Users,
+};
 import { useAuth } from "../../../hooks/useAuth";
 
 const medicoSidebarItems = [
   { id: 0, title: "Dashboard",     icon: "LayoutDashboard", path: "/medico" },
   { id: 1, title: "Agenda de hoy", icon: "CalendarClock",   path: "/medico/agenda" },
   { id: 2, title: "Mis citas",     icon: "Calendar",        path: "/medico/citas" },
+  { id: 5, title: "Mi horario",    icon: "Clock",           path: "/medico/horario" },
   { id: 3, title: "Mis pacientes", icon: "Users",           path: "/medico/pacientes" },
   { id: 4, title: "Consultas",     icon: "Stethoscope",     path: "/medico/consultas" },
 ];

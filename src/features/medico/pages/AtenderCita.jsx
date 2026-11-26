@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, AlertCircle, Loader2, User, Calendar, Clock,
   Stethoscope, ClipboardList, Pill, Activity, Heart,
   CheckCircle, FileText, Brain, BookOpen, PlusCircle, MinusCircle,
   Star, ChevronDown, ChevronUp, Search, Paperclip, ChevronRight,
-  FlaskConical, Printer,
+  FlaskConical, Printer, Mic, Square,
 } from 'lucide-react';
-import { citaService, consultaService, adjuntoService, medicoService, ordenExamenService } from '../../../services';
+import { useDictado, unirDictado } from '../../../hooks/useDictado';
+import { citaService, consultaService, adjuntoService, medicoService, ordenExamenService, auditoriaService, pacienteService } from '../../../services';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAdjuntosPacienteMedico } from '../../../hooks';
 import { FileUpload, AdjuntoListPorConsulta, AdjuntoViewer, Modal } from '../../../shared/components/ui';
-import { generarPdfOrdenExamenes } from '../utils/generarPdfOrdenExamenes';
 
 // ─── Constantes médicas ────────────────────────────────────────────────────────
 const SISTEMAS = [
@@ -31,6 +31,14 @@ const TIPOS_DX = [
   { v: 'confirmado_nuevo',    l: 'Confirmado nuevo' },
   { v: 'confirmado_repetido', l: 'Confirmado repetido' },
 ];
+
+const TIPOS_SANGRE = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+const ANTECEDENTES_VACIOS = {
+  tipo_sangre: '', alergias: '', enfermedades_cronicas: '',
+  antecedentes_familiares: '', antecedentes_quirurgicos: '',
+  medicamentos_permanentes: '', habitos: '', notas_generales: '',
+};
 
 const calcEdad = (fecha) => {
   if (!fecha) return null;
@@ -69,6 +77,11 @@ export default function AtenderCita() {
     presion_sistolica: '', presion_diastolica: '', frecuencia_cardiaca: '',
     frecuencia_respiratoria: '', temperatura: '', saturacion_oxigeno: '', peso: '', talla: '',
   });
+  // Historia clínica (antecedentes): se precarga con lo que ya exista y se
+  // guarda junto con la consulta. En la primera consulta del paciente está
+  // vacía y el médico la registra.
+  const [antecedentes, setAntecedentes] = useState(ANTECEDENTES_VACIOS);
+  const [antecedentesOrig, setAntecedentesOrig] = useState(ANTECEDENTES_VACIOS);
   const [diagnosticos, setDiag] = useState([{
     codigo_cie10: '', descripcion: '', tipo_dx: 'impresion',
     prioridad: 1, id_tipo_diagnostico: '', es_principal: true,
@@ -100,6 +113,13 @@ export default function AtenderCita() {
       const pac = citaData.paciente;
       const per = pac?.persona;
       setCita(citaData);
+      // PostgREST devuelve la relación 1:1 como objeto (o arreglo en esquemas viejos)
+      const hist = Array.isArray(pac?.historial) ? pac.historial[0] : pac?.historial;
+      const ant = Object.fromEntries(
+        Object.keys(ANTECEDENTES_VACIOS).map(k => [k, hist?.[k] ?? '']),
+      );
+      setAntecedentes(ant);
+      setAntecedentesOrig(ant);
       setPaciente({
         id_paciente:           pac?.id_paciente,
         numero_historia:       pac?.numero_historia,
@@ -123,6 +143,7 @@ export default function AtenderCita() {
       // 2. Historia clínica completa
       const pacId = pac?.id_paciente;
       if (pacId) {
+        auditoriaService.registrarAccesoHC(pacId, 'atender_cita', { id_cita: Number(citaId) });
         const [consultas, signos, tipos] = await Promise.all([
           consultaService.getConsultasPaciente(pacId),
           consultaService.getSignosPacienteRecientes(pacId, 10),
@@ -158,6 +179,7 @@ export default function AtenderCita() {
   // ─── Handlers de formulario ─────────────────────────────────────────────────
   const handleForm   = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
   const handleSignos = e => setSignos(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleAnt    = e => setAntecedentes(p => ({ ...p, [e.target.name]: e.target.value }));
   const handleDx     = (idx, field, val) =>
     setDiag(p => p.map((d, i) => i === idx ? { ...d, [field]: val } : d));
   const addDx    = () => setDiag(p => [...p, {
@@ -175,6 +197,14 @@ export default function AtenderCita() {
     try {
       const idMedico = await consultaService.resolveIdMedico(usuarioLogueado?.id_persona);
       if (!idMedico) throw new Error('No se encontró tu perfil de médico.');
+
+      // Antes de la consulta: mientras la cita está activa el médico tiene
+      // permiso de escritura, y si falla no queda una consulta a medias.
+      const cambioAntecedentes = Object.keys(ANTECEDENTES_VACIOS)
+        .some(k => (antecedentes[k] ?? '').trim() !== (antecedentesOrig[k] ?? '').trim());
+      if (cambioAntecedentes) {
+        await pacienteService.guardarHistorial(Number(paciente.id_paciente), antecedentes);
+      }
 
       const idConsulta = await consultaService.crearConsultaCompleta(idMedico, {
         consulta: {
@@ -255,16 +285,20 @@ export default function AtenderCita() {
   const fecha = cita?.fecha_cita?.slice(0, 10);
   const hora  = cita?.fecha_cita?.slice(11, 16);
 
+  // Sin ningún antecedente registrado = primera vez en el centro.
+  const primeraVez = Object.values(antecedentesOrig).every(v => !(v ?? '').trim());
+
   const TABS = [
     { id: 0, label: 'Anamnesis',   icon: <BookOpen size={15} /> },
-    { id: 1, label: 'Examen',      icon: <Stethoscope size={15} /> },
-    { id: 2, label: 'Diagnóstico', icon: <ClipboardList size={15} /> },
-    { id: 3, label: 'Plan',        icon: <Brain size={15} /> },
-    { id: 4, label: 'Adjuntos',    icon: <Paperclip size={15} /> },
-    { id: 5, label: 'Exámenes',    icon: <FlaskConical size={15} /> },
+    { id: 1, label: 'Antecedentes', icon: <Heart size={15} />, alerta: primeraVez },
+    { id: 2, label: 'Examen',      icon: <Stethoscope size={15} /> },
+    { id: 3, label: 'Diagnóstico', icon: <ClipboardList size={15} /> },
+    { id: 4, label: 'Plan',        icon: <Brain size={15} /> },
+    { id: 5, label: 'Adjuntos',    icon: <Paperclip size={15} /> },
+    { id: 6, label: 'Exámenes',    icon: <FlaskConical size={15} /> },
   ];
 
-  // ─── Handlers de la orden de exámenes (Tab 5) ────────────────────────
+  // ─── Handlers de la orden de exámenes (Tab 6) ────────────────────────
   const addExamen = () => setOrdenExamenes(p => ({
     ...p, items: [...p.items, { nombre: '', observaciones: '' }],
   }));
@@ -296,6 +330,8 @@ export default function AtenderCita() {
       } catch (err) {
         console.warn('[orden examenes] no se pudo cargar perfil médico:', err.message);
       }
+      // jspdf se descarga al primer PDF, no con la página
+      const { generarPdfOrdenExamenes } = await import('../utils/generarPdfOrdenExamenes');
       generarPdfOrdenExamenes({
         paciente,
         medico: medicoData,
@@ -360,6 +396,7 @@ export default function AtenderCita() {
                   }`}
                 >
                   {t.icon} {t.label}
+                  {t.alerta && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Sin historia clínica" />}
                 </button>
               ))}
             </div>
@@ -406,8 +443,68 @@ export default function AtenderCita() {
                 </div>
               )}
 
-              {/* ── TAB 1: EXAMEN ─────────────────────────────────────────── */}
+              {/* ── TAB 1: ANTECEDENTES (historia clínica) ─────────────────── */}
               {tab === 1 && (
+                <div className="space-y-4">
+                  {primeraVez && (
+                    <div className="flex items-start gap-2.5 text-[13px] text-amber-800 bg-amber-50 border-l-2 border-amber-500 pl-3 pr-3 py-2.5 rounded-r-md">
+                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="font-medium">Primera consulta:</strong> el paciente aún no tiene historia
+                        clínica. Registra sus antecedentes; quedarán para las próximas atenciones.
+                        El peso y la talla se registran en <em>Examen → Signos vitales</em>.
+                      </span>
+                    </div>
+                  )}
+
+                  <Seccion titulo="Datos básicos" color="red">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[13px] font-medium text-ink-700 mb-1.5 block">Edad</label>
+                        <p className="px-3.5 py-2.5 text-[13.5px] rounded-xl bg-surface border border-line text-ink-700">
+                          {paciente?.edad != null ? `${paciente.edad} años` : 'Sin fecha de nacimiento'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-[13px] font-medium text-ink-700 mb-1.5 block">Tipo de sangre</label>
+                        <select name="tipo_sangre" value={antecedentes.tipo_sangre} onChange={handleAnt}
+                          className="w-full px-3.5 py-2.5 text-[13.5px] rounded-xl bg-white border border-line focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10">
+                          <option value="">Sin dato</option>
+                          {TIPOS_SANGRE.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <Textarea label="Alergias" name="alergias" value={antecedentes.alergias} onChange={handleAnt}
+                        placeholder="Medicamentos, alimentos… o 'Niega'" rows={1} highlight={!!antecedentes.alergias} />
+                    </div>
+                  </Seccion>
+
+                  <Seccion titulo="Antecedentes" color="orange">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Textarea label="Patológicos / enfermedades crónicas" name="enfermedades_cronicas"
+                        value={antecedentes.enfermedades_cronicas} onChange={handleAnt}
+                        placeholder="Hipertensión, diabetes, asma…" rows={3} />
+                      <Textarea label="Quirúrgicos" name="antecedentes_quirurgicos"
+                        value={antecedentes.antecedentes_quirurgicos} onChange={handleAnt}
+                        placeholder="Cirugías y año" rows={3} />
+                      <Textarea label="Familiares" name="antecedentes_familiares"
+                        value={antecedentes.antecedentes_familiares} onChange={handleAnt}
+                        placeholder="Padre, madre, hermanos…" rows={3} />
+                      <Textarea label="Medicamentos de uso permanente" name="medicamentos_permanentes"
+                        value={antecedentes.medicamentos_permanentes} onChange={handleAnt}
+                        placeholder="Nombre, dosis y frecuencia" rows={3} />
+                      <Textarea label="Hábitos" name="habitos"
+                        value={antecedentes.habitos} onChange={handleAnt}
+                        placeholder="Tabaco, alcohol, actividad física, alimentación…" rows={3} />
+                      <Textarea label="Notas generales" name="notas_generales"
+                        value={antecedentes.notas_generales} onChange={handleAnt}
+                        placeholder="Gineco-obstétricos, vacunas, otros…" rows={3} />
+                    </div>
+                  </Seccion>
+                </div>
+              )}
+
+              {/* ── TAB 2: EXAMEN ─────────────────────────────────────────── */}
+              {tab === 2 && (
                 <div className="space-y-4">
                   <Seccion titulo="Signos vitales" color="red">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -445,8 +542,8 @@ export default function AtenderCita() {
                 </div>
               )}
 
-              {/* ── TAB 2: DIAGNÓSTICO ────────────────────────────────────── */}
-              {tab === 2 && (
+              {/* ── TAB 3: DIAGNÓSTICO ────────────────────────────────────── */}
+              {tab === 3 && (
                 <div className="space-y-4">
                   <Seccion titulo="Diagnósticos" color="purple">
                     <div className="space-y-3">
@@ -508,8 +605,8 @@ export default function AtenderCita() {
                 </div>
               )}
 
-              {/* ── TAB 3: PLAN ───────────────────────────────────────────── */}
-              {tab === 3 && (
+              {/* ── TAB 4: PLAN ───────────────────────────────────────────── */}
+              {tab === 4 && (
                 <div className="space-y-4">
                   <Seccion titulo="Análisis clínico" color="blue">
                     <Textarea name="analisis_clinico" value={form.analisis_clinico} onChange={handleForm}
@@ -526,8 +623,8 @@ export default function AtenderCita() {
                 </div>
               )}
 
-              {/* ── TAB 4: ADJUNTOS ──────────────────────────────────────── */}
-              {tab === 4 && (
+              {/* ── TAB 5: ADJUNTOS ──────────────────────────────────────── */}
+              {tab === 5 && (
                 <div className="space-y-4">
                   <Seccion titulo="Resultados, radiografías y otros archivos" color="purple">
                     <p className="text-xs text-gray-500 mb-3">
@@ -548,8 +645,8 @@ export default function AtenderCita() {
                 </div>
               )}
 
-              {/* ── TAB 5: ORDEN DE EXÁMENES PARAMÉDICOS ────────────────── */}
-              {tab === 5 && (
+              {/* ── TAB 6: ORDEN DE EXÁMENES PARAMÉDICOS ────────────────── */}
+              {tab === 6 && (
                 <div className="space-y-4">
                   <Seccion titulo="Solicitud de exámenes" color="purple">
                     <p className="text-[12px] text-ink-500 mb-3">
@@ -1227,21 +1324,65 @@ function Seccion({ titulo, color = 'gray', children }) {
   );
 }
 
+// Campo de texto libre con dictado por voz: el médico puede escribir, dictar
+// con el micrófono, o ambas cosas (lo dictado se agrega al final del texto).
 function Textarea({ label, name, value, onChange, rows = 2, required = false, placeholder = '', highlight = false }) {
+  // El dictado llega de forma asíncrona: usar siempre el valor más reciente.
+  const valorRef = useRef(value);
+  valorRef.current = value;
+  const { soportado, escuchando, parcial, error, alternar } = useDictado((frase) => {
+    const nuevo = unirDictado(valorRef.current, frase);
+    valorRef.current = nuevo;
+    onChange({ target: { name, value: nuevo } });
+  });
+
   return (
     <div>
-      {label && <label className="text-[13px] font-medium text-ink-700 mb-1.5 block">{label}</label>}
-      <textarea
-        name={name} value={value} onChange={onChange} rows={rows} required={required} placeholder={placeholder}
-        className={[
-          'w-full px-3.5 py-2.5 text-[13.5px] rounded-xl resize-none transition-all duration-150',
-          'placeholder:text-ink-300 text-ink-900',
-          'focus:outline-none focus:ring-4',
-          highlight
-            ? 'bg-emerald-50/50 border border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/10'
-            : 'bg-white border border-line focus:border-brand-500 focus:ring-brand-500/10',
-        ].join(' ')}
-      />
+      {label && <label htmlFor={`ta-${name}`} className="text-[13px] font-medium text-ink-700 mb-1.5 block">{label}</label>}
+      <div className="relative">
+        <textarea
+          id={`ta-${name}`}
+          name={name} value={value} onChange={onChange} rows={rows} required={required} placeholder={placeholder}
+          className={[
+            'w-full px-3.5 py-2.5 text-[13.5px] rounded-xl resize-none transition-all duration-150',
+            'placeholder:text-ink-300 text-ink-900',
+            'focus:outline-none focus:ring-4',
+            soportado ? 'pr-12' : '',
+            escuchando
+              ? 'bg-white border border-red-300 ring-4 ring-red-500/10'
+              : highlight
+                ? 'bg-emerald-50/50 border border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/10'
+                : 'bg-white border border-line focus:border-brand-500 focus:ring-brand-500/10',
+          ].join(' ')}
+        />
+        {soportado && (
+          <button
+            type="button"
+            onClick={alternar}
+            aria-pressed={escuchando}
+            aria-label={escuchando ? 'Detener dictado' : 'Dictar con el micrófono'}
+            title={escuchando ? 'Detener dictado' : 'Dictar con el micrófono'}
+            className={[
+              'absolute right-2 top-2 w-8 h-8 inline-flex items-center justify-center rounded-lg transition-colors',
+              escuchando
+                ? 'bg-red-600 text-white hover:bg-red-700 animate-pulse'
+                : 'text-ink-500 hover:text-brand-700 hover:bg-brand-50',
+            ].join(' ')}
+          >
+            {escuchando ? <Square size={13} fill="currentColor" /> : <Mic size={16} strokeWidth={1.75} />}
+          </button>
+        )}
+      </div>
+      {escuchando && (
+        <p className="mt-1.5 text-[11.5px] text-red-700 flex items-start gap-1.5" aria-live="polite">
+          <span className="mt-1 w-1.5 h-1.5 flex-shrink-0 rounded-full bg-red-500 animate-pulse" />
+          <span>
+            {parcial ? <span className="italic text-ink-500">{parcial}…</span> : 'Escuchando… habla con normalidad.'}
+            <span className="text-ink-300"> · di «punto y aparte» para un salto de línea</span>
+          </span>
+        </p>
+      )}
+      {error && <p className="mt-1.5 text-[11.5px] text-red-700">{error}</p>}
     </div>
   );
 }

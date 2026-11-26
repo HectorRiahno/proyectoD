@@ -33,7 +33,7 @@ export default function ReporteFinanciero() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReporteFinancieroPdf(data);
+    await exportarReporteFinancieroPdf(data);
     await reportesService.registrarDescarga('financiero', 'pdf', desde, hasta);
   };
   const onExcel = async () => {

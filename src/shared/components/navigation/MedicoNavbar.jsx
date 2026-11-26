@@ -1,12 +1,9 @@
 import React, { useRef, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Stethoscope, Menu } from "lucide-react";
-import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../hooks/useAuth";
 
 function MedicoNavbar({ onMenuClick }) {
-  const navigate = useNavigate();
-  const { usuarioLogueado } = useAuth();
+  const { usuarioLogueado, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
@@ -20,13 +17,8 @@ function MedicoNavbar({ onMenuClick }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      navigate('/login');
-    }
-  };
+  // Cierra la sesión y borra las credenciales (ver logout en AuthContext)
+  const handleLogout = () => logout();
 
   const nombreFull = usuarioLogueado?.nombre_completo ?? usuarioLogueado?.nombres ?? 'Médico';
   const nombreCorto = nombreFull.split(' ')[0];
