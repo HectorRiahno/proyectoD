@@ -1,12 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Activity, User, LogOut, Menu } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function ClientNavbar({ onMenuClick }) {
-  const navigate = useNavigate();
-  const { usuarioLogueado } = useAuth();
+  const { usuarioLogueado, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
@@ -20,13 +17,8 @@ export default function ClientNavbar({ onMenuClick }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      navigate('/login');
-    }
-  };
+  // Cierra la sesión y borra las credenciales (ver logout en AuthContext)
+  const handleLogout = () => logout();
 
   const nombreFull = usuarioLogueado?.nombre_completo
     ?? usuarioLogueado?.nombres
@@ -77,7 +69,10 @@ export default function ClientNavbar({ onMenuClick }) {
           {userMenuOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
               <div className="p-3 border-b">
-                <p className="text-sm font-semibold text-gray-900 truncate">{usuarioLogueado?.email}</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {/* Las cuentas sin correo real (ingreso con documento + fecha) usan uno interno */}
+                  {usuarioLogueado?.email?.endsWith('@pacientes.his.local') ? nombreFull : usuarioLogueado?.email}
+                </p>
                 <p className="text-xs text-gray-500">{usuarioLogueado?.rol_nombre ?? 'cliente'}</p>
               </div>
               <button

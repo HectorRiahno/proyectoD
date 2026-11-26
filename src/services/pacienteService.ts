@@ -33,6 +33,13 @@ export interface Paciente {
   [key: string]: unknown;
 }
 
+export interface EstadoPortal {
+  id_paciente:    number;
+  estado:         'sin_cuenta' | 'pendiente' | 'activa';
+  invitado_at:    string | null;
+  ultimo_ingreso: string | null;
+}
+
 export interface CrearPacientePayload {
   documento: string;
   tipo_documento: string;
@@ -44,9 +51,6 @@ export interface CrearPacientePayload {
   direccion?: string;
   email?: string;
   numero_historia?: string;
-  tipo_sangre?: string;
-  alergias?: string;
-  enfermedades_cronicas?: string;
   contacto_emergencia?: string;
   telefono_emergencia?: string;
   ocupacion?: string;
@@ -66,10 +70,18 @@ export interface EditarPacientePayload {
   telefono_emergencia?: string;
   ocupacion?: string;
   estado_civil?: string;
-  // historial
-  tipo_sangre?: string;
-  alergias?: string;
-  enfermedades_cronicas?: string;
+}
+
+/** Historia clínica (antecedentes): la registra el médico al atender. */
+export interface HistorialClinicoPayload {
+  tipo_sangre?: string | null;
+  alergias?: string | null;
+  enfermedades_cronicas?: string | null;
+  antecedentes_familiares?: string | null;
+  antecedentes_quirurgicos?: string | null;
+  medicamentos_permanentes?: string | null;
+  habitos?: string | null;
+  notas_generales?: string | null;
 }
 
 // Error con código original de Postgres (42501 = sin permisos, 23505 = duplicado, ...)
@@ -253,26 +265,14 @@ export const pacienteService = {
       throw new ServiceError(rPac.error.message, rPac.error.code);
     }
 
-    const id_paciente = rPac.data?.id_paciente as number;
-
-    // 5. Historial clínico opcional
-    const tieneHist = payload.tipo_sangre || payload.alergias || payload.enfermedades_cronicas;
-    if (tieneHist && id_paciente) {
-      const { error: eHist } = await supabase.rpc('upsert_historial_clinico', {
-        p_id_paciente:           id_paciente,
-        p_tipo_sangre:           norm(payload.tipo_sangre),
-        p_alergias:              norm(payload.alergias),
-        p_enfermedades_cronicas: norm(payload.enfermedades_cronicas),
-      });
-      // No se aborta — el paciente quedó creado.
-      if (eHist) console.warn('[pacienteService.createCompleto] historial:', eHist.message);
-    }
-
-    return id_paciente;
+    // La historia clínica (tipo de sangre, alergias, antecedentes) NO se
+    // llena aquí: la registra el médico en la primera consulta.
+    return rPac.data?.id_paciente as number;
   },
 
   /**
-   * Actualiza persona + paciente + historial clínico. Devuelve true si todo OK.
+   * Actualiza los datos de identificación y contacto (persona + paciente).
+   * No toca la historia clínica: eso es del médico (guardarHistorial).
    * Lanza ServiceError con código de Postgres en caso de fallo.
    */
   async updateCompleto(p: { id_persona: number; id_paciente: number }, payload: EditarPacientePayload): Promise<void> {
@@ -301,20 +301,47 @@ export const pacienteService = {
       if (r2.error.code === '42501') throw new ServiceError('Sin permisos. Ejecuta supabase/rls-admin.sql.', r2.error.code);
       throw new ServiceError(r2.error.message, r2.error.code);
     }
+  },
 
-    // 3. historial clínico
-    const { error: eHist } = await supabase.rpc('upsert_historial_clinico', {
-      p_id_paciente:           p.id_paciente,
-      p_tipo_sangre:           norm(payload.tipo_sangre),
-      p_alergias:              norm(payload.alergias),
-      p_enfermedades_cronicas: norm(payload.enfermedades_cronicas),
+  /**
+   * Historia clínica del paciente (antecedentes). La usa el médico al
+   * atender. upsert_historial_clinico reemplaza TODOS los campos, así que
+   * siempre se envían los 8 (los que no se tocaron, con su valor actual).
+   */
+  async guardarHistorial(idPaciente: number, h: HistorialClinicoPayload): Promise<void> {
+    const { error } = await supabase.rpc('upsert_historial_clinico', {
+      p_id_paciente:              idPaciente,
+      p_tipo_sangre:              norm(h.tipo_sangre),
+      p_alergias:                 norm(h.alergias),
+      p_enfermedades_cronicas:    norm(h.enfermedades_cronicas),
+      p_antecedentes_familiares:  norm(h.antecedentes_familiares),
+      p_antecedentes_quirurgicos: norm(h.antecedentes_quirurgicos),
+      p_medicamentos_permanentes: norm(h.medicamentos_permanentes),
+      p_habitos:                  norm(h.habitos),
+      p_notas_generales:          norm(h.notas_generales),
     });
-    if (eHist) {
-      if (eHist.code === '42501') {
-        throw new ServiceError('Sin permisos sobre historial_clinico. Ejecuta supabase/migration-historial-clinico.sql.', eHist.code);
+    if (error) {
+      if (error.code === '42501') {
+        throw new ServiceError('No tienes permiso para registrar la historia clínica de este paciente.', error.code);
       }
-      throw new ServiceError(`Datos guardados, pero falló el historial: ${eHist.message}`, eHist.code);
+      throw new ServiceError(`No se pudo guardar la historia clínica: ${error.message}`, error.code);
     }
+  },
+
+  /**
+   * Estado del portal por paciente (fn_estado_portal_pacientes):
+   * 'sin_cuenta' | 'pendiente' (invitado sin contraseña) | 'activa'.
+   * Devuelve {} si la migración aún no se ejecutó, para no romper la página.
+   */
+  async getEstadoPortal(): Promise<Record<number, EstadoPortal>> {
+    const { data, error } = await supabase.rpc('fn_estado_portal_pacientes');
+    if (error) {
+      if (error.code === 'PGRST202') return {};
+      throw new ServiceError(error.message, error.code);
+    }
+    return Object.fromEntries(
+      ((data ?? []) as EstadoPortal[]).map(e => [e.id_paciente, e]),
+    );
   },
 
   /**

@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Calendar, Clock, Stethoscope, CheckCircle2, ClipboardList, Hourglass, Search,
+  Calendar, Clock, Stethoscope, CheckCircle2, ClipboardList, Hourglass, Search, UserX,
 } from 'lucide-react';
 import { useCitas } from '../../../hooks';
 import {
   PageHeader, KPI, ErrorBanner, SearchBar, EstadoBadge,
   EmptyState, LoadingState, Avatar,
 } from '../../../shared/components/ui';
+import { yaLlegoLocal } from '../../../shared/utils/fechas';
 
 export default function MisCitas() {
   const navigate = useNavigate();
   const {
-    citas, loading, error, setError, marcarEnCurso,
+    citas, loading, error, setError, marcarEnCurso, marcarNoAsistio,
   } = useCitas({ role: 'medico', realtime: true });
   const [search, setSearch] = useState('');
   // Filtro adicional solo para la columna de confirmadas. Permite al médico
@@ -27,6 +28,13 @@ export default function MisCitas() {
       catch (err) { setError(err.message); return; }
     }
     navigate(`/medico/atender/${cita.id_cita}`);
+  };
+
+  const noAsistio = async (cita) => {
+    if (!window.confirm(`¿Marcar que ${cita.paciente_nombre} no asistió a la cita de las ${cita.hora?.slice(0, 5)}?`)) return;
+    setError('');
+    try { await marcarNoAsistio(cita.id_cita); }
+    catch (err) { setError(err.message); }
   };
 
   const matchSearch = (c) => {
@@ -89,10 +97,14 @@ export default function MisCitas() {
           loading={loading}
           citas={programadas}
           vacioMsg="No hay citas programadas"
-          renderAccion={() => (
-            <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-500 italic">
-              <Hourglass size={11} strokeWidth={1.75} /> Esperando confirmación
-            </span>
+          renderAccion={(c) => (
+            yaLlegoLocal(c.fecha, c.hora) ? (
+              <BotonNoAsistio onClick={() => noAsistio(c)} />
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-500 italic">
+                <Hourglass size={11} strokeWidth={1.75} /> Esperando confirmación
+              </span>
+            )
           )}
         />
 
@@ -122,14 +134,19 @@ export default function MisCitas() {
             </div>
           )}
           renderAccion={(c) => (
-            <button
-              onClick={() => tomarCita(c)}
-              title="Iniciar consulta médica para esta cita"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[12px] font-medium shadow-[0_4px_14px_-6px_rgba(11,18,32,0.45)] active:scale-[0.99] transition-all duration-150"
-            >
-              <Stethoscope size={13} strokeWidth={1.75} />
-              {c.estado === 'en_curso' ? 'Continuar' : 'Tomar cita'}
-            </button>
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                onClick={() => tomarCita(c)}
+                title="Iniciar consulta médica para esta cita"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[12px] font-medium shadow-[0_4px_14px_-6px_rgba(11,18,32,0.45)] active:scale-[0.99] transition-all duration-150"
+              >
+                <Stethoscope size={13} strokeWidth={1.75} />
+                {c.estado === 'en_curso' ? 'Continuar' : 'Tomar cita'}
+              </button>
+              {c.estado === 'confirmada' && yaLlegoLocal(c.fecha, c.hora) && (
+                <BotonNoAsistio onClick={() => noAsistio(c)} />
+              )}
+            </div>
           )}
         />
       </div>
@@ -206,5 +223,18 @@ function CuadroCitas({ titulo, subtitulo, icono: Icono, tono, loading, citas, va
         )}
       </div>
     </section>
+  );
+}
+
+// ─── Botón "No asistió" (sólo cuando la hora de la cita ya llegó) ─────────────
+function BotonNoAsistio({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Marcar que el paciente no asistió"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg text-[11.5px] font-medium transition-colors"
+    >
+      <UserX size={12} strokeWidth={1.75} /> No asistió
+    </button>
   );
 }

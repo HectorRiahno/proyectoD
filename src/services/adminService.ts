@@ -9,9 +9,14 @@ export interface InviteUserPayload {
   email:           string;
   nombre:          string;
   rol:             'admin' | 'medico' | 'asistente' | 'cliente';
+  documento?:      string;          // persona.documento + metadata (plantilla de correo)
+  nombres?:        string;          // si llegan, se guardan tal cual en persona
+  apellidos?:      string;
+  telefono?:       string;
   especialidad?:   string;
   numero_licencia?: string;
   consultorio?:    string;
+  anios_experiencia?: number;
 }
 
 /**
@@ -61,9 +66,14 @@ export async function inviteUser(payload: InviteUserPayload) {
       email:           payload.email.toLowerCase().trim(),
       nombre:          payload.nombre.trim(),
       rol:             payload.rol,
+      documento:       payload.documento?.trim() || undefined,
+      nombres:         payload.nombres?.trim() || undefined,
+      apellidos:       payload.apellidos?.trim() || undefined,
+      telefono:        payload.telefono?.trim() || undefined,
       especialidad:    payload.especialidad,
       numero_licencia: payload.numero_licencia,
       consultorio:     payload.consultorio,
+      anios_experiencia: payload.anios_experiencia,
       redirectTo,
     }),
   });

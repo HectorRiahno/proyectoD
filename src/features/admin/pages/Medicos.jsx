@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
-  Search, Plus, Edit, Trash2, Eye,
+  Search, Edit, Trash2, Eye,
   Stethoscope, Phone, Mail, ToggleLeft, ToggleRight,
-  User, Info,
+  User, Info, Send,
 } from 'lucide-react';
-import { medicoService } from '../../../services';
+import { medicoService, inviteUser } from '../../../services';
 import { useMedicos } from '../../../hooks';
 import {
-  Modal, PageHeader, KPI, Input, Campo, ErrorBox, ErrorBanner,
+  Modal, PageHeader, KPI, Input, Campo, ErrorBox, ErrorBanner, SuccessBanner,
   BotonesForm, SearchBar, LoadingRow, EmptyRow,
   Toolbar, AccentButton, TableShell, Thead, Tbody, Tr,
   IconButton, ActionGroup, Avatar,
@@ -112,8 +112,8 @@ export default function Medicos() {
 
         <div className="flex-1" />
 
-        <AccentButton variant="violet" icon={Plus} onClick={() => setCreando(true)}>
-          Nuevo médico
+        <AccentButton variant="violet" icon={Send} onClick={() => setCreando(true)}>
+          Invitar médico
         </AccentButton>
       </Toolbar>
 
@@ -296,7 +296,9 @@ function ModalEditar({ medico, onClose }) {
   );
 }
 
-// ─── Modal: Crear ──────────────────────────────────────────────────────────────
+// ─── Modal: Invitar médico ─────────────────────────────────────────────────────
+// Crea la ficha del médico Y su cuenta de acceso en un solo paso (Edge
+// Function create-user): el médico recibe un correo y define su contraseña.
 function ModalCrear({ onClose }) {
   const [form, setForm] = useState({
     nombres: '', apellidos: '', documento: '', telefono: '', email: '',
@@ -304,33 +306,51 @@ function ModalCrear({ onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
+  const [ok, setOk]         = useState('');
 
   const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (!form.nombres || !form.documento || !form.especialidad) return;
+    if (!form.nombres || !form.documento || !form.email || !form.especialidad) return;
 
     setSaving(true);
-    setError('');
+    setError(''); setOk('');
     try {
-      await medicoService.crearCompleto(form);
-      onClose();
+      const res = await inviteUser({
+        rol:               'medico',
+        email:             form.email,
+        nombre:            `${form.nombres} ${form.apellidos}`.trim(),
+        nombres:           form.nombres,
+        apellidos:         form.apellidos,
+        documento:         form.documento,
+        telefono:          form.telefono,
+        especialidad:      form.especialidad,
+        numero_licencia:   form.numero_licencia.trim() || undefined,
+        consultorio:       form.consultorio,
+        anios_experiencia: Number(form.anios_experiencia) || 0,
+      });
+      setOk(res.message ?? `Invitación enviada a ${form.email}.`);
+      // Cierra automáticamente tras 1.5s para que el admin alcance a leer el mensaje
+      setTimeout(onClose, 1500);
     } catch (err) {
       console.error('[ModalCrear] Error:', err);
-      setError(err.message ?? 'Error desconocido. Revisa la consola.');
+      setError(err.message ?? 'No se pudo enviar la invitación');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal titulo="Registrar médico" subtitulo="Se crea el perfil médico en la base de datos" variant="violet" onClose={onClose}>
+    <Modal titulo="Invitar médico" subtitulo="Se crea su perfil y su cuenta de acceso" variant="violet" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Aviso */}
         <div className="flex items-start gap-2.5 text-[13px] text-violet-800 bg-violet-50/70 border-l-2 border-violet-500 pl-3 pr-3 py-2.5 rounded-r-md">
           <Info size={15} className="flex-shrink-0 mt-0.5" strokeWidth={2} />
-          <p>Se registra el perfil del médico. Para darle acceso al sistema, crea la cuenta en la sección <strong className="font-medium">Usuarios</strong>.</p>
+          <p>
+            Se registra el perfil del médico y se le envía un correo con un enlace para que
+            <strong className="font-medium"> defina su propia contraseña</strong>. El admin nunca conoce la clave.
+          </p>
         </div>
 
         {/* Datos personales */}
@@ -343,7 +363,7 @@ function ModalCrear({ onClose }) {
             <Input label="Apellidos *"  name="apellidos"  value={form.apellidos}  onChange={handleChange} required placeholder="Ej: Gómez Pérez" />
             <Input label="Documento *"  name="documento"  value={form.documento}  onChange={handleChange} required placeholder="Ej: 1090123456" />
             <Input label="Teléfono"     name="telefono"   value={form.telefono}   onChange={handleChange} placeholder="+57 300..." />
-            <Input label="Email"        name="email"      type="email" value={form.email} onChange={handleChange} placeholder="medico@hospital.com" className="col-span-2" />
+            <Input label="Correo electrónico *" name="email" type="email" value={form.email} onChange={handleChange} required placeholder="medico@hospital.com" className="col-span-2" />
           </div>
         </div>
 
@@ -368,7 +388,8 @@ function ModalCrear({ onClose }) {
         </div>
 
         {error && <ErrorBox msg={error} />}
-        <BotonesForm onCancel={onClose} saving={saving} labelSave="Registrar médico" />
+        {ok && <SuccessBanner msg={ok} />}
+        <BotonesForm onCancel={onClose} saving={saving} labelSave="Enviar invitación" />
       </form>
     </Modal>
   );

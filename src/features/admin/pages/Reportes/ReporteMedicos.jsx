@@ -30,7 +30,7 @@ export default function ReporteMedicos() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReporteMedicosPdf(data);
+    await exportarReporteMedicosPdf(data);
     await reportesService.registrarDescarga('medicos', 'pdf', desde, hasta);
   };
   const onExcel = async () => {

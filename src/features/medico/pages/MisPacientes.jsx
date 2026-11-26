@@ -5,7 +5,7 @@ import {
   Calendar, ChevronDown, ChevronUp, ChevronRight, Stethoscope, Paperclip,
   BookOpen, Brain, FlaskConical, Star,
 } from 'lucide-react';
-import { consultaService, ordenExamenService } from '../../../services';
+import { consultaService, ordenExamenService, auditoriaService } from '../../../services';
 import { useMisPacientesMedico, useAdjuntosPacienteMedico } from '../../../hooks';
 import {
   AdjuntoListPorConsulta, AdjuntoViewer,
@@ -199,6 +199,7 @@ function ModalHistorial({ paciente, onClose }) {
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
+      auditoriaService.registrarAccesoHC(paciente.id_paciente, 'ver_historial');
       try {
         const [c, s, d, o, oe] = await Promise.all([
           consultaService.getConsultasPacienteFichaMedico(paciente.id_paciente),

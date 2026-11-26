@@ -22,14 +22,13 @@ export { default as historialService,   type HistorialMedico } from './historial
 export { default as inventarioService,  type MedicamentoInventario, type CategoriaMedicamento } from './inventarioService';
 
 // Administración / observabilidad
-export { default as auditoriaService,   type AuditLog, type OperacionAudit } from './auditoriaService';
+export { default as auditoriaService,   type AuditLog, type OperacionAudit, type AccionAccesoHC } from './auditoriaService';
 export { default as papeleraService,    type ItemPapelera, type TablaPapelera } from './papeleraService';
 export { default as dashboardService,   type EstadisticasAdmin } from './dashboardService';
 export { default as alertaService,      type Alerta, type SeveridadAlerta, type EstadoAlerta } from './alertaService';
 
 // Adjuntos clínicos + PDFs
 export { default as adjuntoService, type Adjunto, TIPOS_PERMITIDOS, TAMANIO_MAX_BYTES } from './adjuntoService';
-export { generarPdfHistorialCliente } from './historialPdfService';
 
 // Órdenes de exámenes paramédicos
 export {
@@ -50,19 +49,19 @@ export {
   fmtMoney, fmtNumber, fmtPercent, compararValores,
 } from './reportesService';
 
+// Exportadores PDF / Excel (jspdf + exceljs ≈ 1.5 MB): se descargan al
+// primer clic en "Exportar", no con la app. Todos son async → usar await.
 export {
+  generarPdfHistorialCliente,
   exportarReportePacientesPdf, exportarReporteMedicosPdf,
   exportarReporteHorariosPdf, exportarReporteFinancieroPdf,
   exportarReporteInventarioPdf, exportarReporteAuditoriaPdf,
   exportarReporteUsuariosPdf,
-} from './reportePdfService';
-
-export {
   exportarReportePacientesExcel, exportarReporteMedicosExcel,
   exportarReporteHorariosExcel, exportarReporteFinancieroExcel,
   exportarReporteInventarioExcel, exportarReporteAuditoriaExcel,
   exportarReporteUsuariosExcel,
-} from './reporteExcelService';
+} from './exportadores';
 
 // Onboarding / invitaciones
 export { inviteUser, validarPasswordSegura, createUserAccount, createDoctorAccount,

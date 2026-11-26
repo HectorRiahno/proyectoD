@@ -49,7 +49,7 @@ export default function ReportePacientes() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReportePacientesPdf(data);
+    await exportarReportePacientesPdf(data);
     await reportesService.registrarDescarga('pacientes', 'pdf', desde, hasta);
   };
   const onExcel = async () => {

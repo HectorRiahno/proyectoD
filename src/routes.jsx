@@ -1,46 +1,50 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { roleHomePath, normalizeRoleName } from './config/roles';
 import { supabase } from './lib/supabase';
 
-import EmployeeLayout from './shared/layouts/EmployeeLayout';
-import ClientLayout from './shared/layouts/ClientLayout';
-import MedicoLayout from './shared/layouts/MedicoLayout';
+// Code-splitting por ruta: sólo Landing y Login viajan en el bundle inicial. El resto
+// de páginas (y sus librerías: gráficas, PDF, Excel) se descargan al visitarlas.
+const EmployeeLayout = lazy(() => import('./shared/layouts/EmployeeLayout'));
+const ClientLayout = lazy(() => import('./shared/layouts/ClientLayout'));
+const MedicoLayout = lazy(() => import('./shared/layouts/MedicoLayout'));
 
+import Landing from './features/landing/pages/Landing';
 import Login from './features/auth/pages/Login';
-import Register from './features/auth/pages/Register';
-import SetPassword from './features/auth/pages/SetPassword';
-import ForgotPassword from './features/auth/pages/ForgotPassword';
+const Register = lazy(() => import('./features/auth/pages/Register'));
+const SetPassword = lazy(() => import('./features/auth/pages/SetPassword'));
+const ForgotPassword = lazy(() => import('./features/auth/pages/ForgotPassword'));
 
-import AdminHome from './features/admin/pages/Home';
-import AdminCitas from './features/admin/pages/Citas';
-import AdminInventario from './features/admin/pages/Inventario';
-import AdminPacientes from './features/admin/pages/Pacientes';
-import AdminReportes from './features/admin/pages/Reportes';
-import AdminConfiguracion from './features/admin/pages/Configuracion';
-import AdminUsuarios from './features/admin/pages/Usuarios';
-import AdminMedicos  from './features/admin/pages/Medicos';
-import AdminHorarios from './features/admin/pages/Horarios';
-import AdminAuditoria from './features/admin/pages/Auditoria';
-import AdminPapelera from './features/admin/pages/Papelera';
-import AdminFacturacion from './features/admin/pages/Facturacion';
-import CreateDoctor from './features/admin/components/CreateDoctor';
+const AdminHome = lazy(() => import('./features/admin/pages/Home'));
+const AdminCitas = lazy(() => import('./features/admin/pages/Citas'));
+const AdminInventario = lazy(() => import('./features/admin/pages/Inventario'));
+const AdminPacientes = lazy(() => import('./features/admin/pages/Pacientes'));
+const AdminReportes = lazy(() => import('./features/admin/pages/Reportes'));
+const AdminConfiguracion = lazy(() => import('./features/admin/pages/Configuracion'));
+const AdminUsuarios = lazy(() => import('./features/admin/pages/Usuarios'));
+const AdminMedicos = lazy(() => import('./features/admin/pages/Medicos'));
+const AdminHorarios = lazy(() => import('./features/admin/pages/Horarios'));
+const AdminAuditoria = lazy(() => import('./features/admin/pages/Auditoria'));
+const AdminPapelera = lazy(() => import('./features/admin/pages/Papelera'));
+const AdminFacturacion = lazy(() => import('./features/admin/pages/Facturacion'));
 
-import MedicoDashboard from './features/medico/pages/MedicoDashboard';
-import MedicoAgenda from './features/medico/pages/Agenda';
-import MedicoMisCitas from './features/medico/pages/MisCitas';
-import MedicoMisPacientes from './features/medico/pages/MisPacientes';
-import MedicoConsultas from './features/medico/pages/Consultas';
-import MedicoAtenderCita from './features/medico/pages/AtenderCita';
+const MedicoDashboard = lazy(() => import('./features/medico/pages/MedicoDashboard'));
+const MedicoAgenda = lazy(() => import('./features/medico/pages/Agenda'));
+const MedicoMisCitas = lazy(() => import('./features/medico/pages/MisCitas'));
+const MedicoMiHorario = lazy(() => import('./features/medico/pages/MiHorario'));
+const MedicoMisPacientes = lazy(() => import('./features/medico/pages/MisPacientes'));
+const MedicoConsultas = lazy(() => import('./features/medico/pages/Consultas'));
+const MedicoAtenderCita = lazy(() => import('./features/medico/pages/AtenderCita'));
 
-import ClientDashboard from './features/clients/pages/ClientDashboard';
-import MiPerfil from './features/clients/pages/MiPerfil';
-import MisCitas from './features/clients/pages/MisCitas';
-import Resultados from './features/clients/pages/Resultados';
-import MiHistorial from './features/clients/pages/MiHistorial';
-import Documentos from './features/clients/pages/Documentos';
-import MisFacturas from './features/clients/pages/MisFacturas';
+const ClientDashboard = lazy(() => import('./features/clients/pages/ClientDashboard'));
+const MiPerfil = lazy(() => import('./features/clients/pages/MiPerfil'));
+const MisCitas = lazy(() => import('./features/clients/pages/MisCitas'));
+const AgendarCita = lazy(() => import('./features/clients/pages/AgendarCita'));
+const Resultados = lazy(() => import('./features/clients/pages/Resultados'));
+const MiHistorial = lazy(() => import('./features/clients/pages/MiHistorial'));
+const Documentos = lazy(() => import('./features/clients/pages/Documentos'));
+const MisFacturas = lazy(() => import('./features/clients/pages/MisFacturas'));
 
 // ─── Loading screen ────────────────────────────────────────────────────────────
 // Tras 5 segundos cargando, muestra una vía de escape para casos donde la
@@ -151,6 +155,7 @@ export default function AppRoutes() {
   const home = roleHomePath(usuarioLogueado?.rol_nombre);
 
   return (
+    <Suspense fallback={<LoadingScreen />}>
     <Routes>
       {/* Rutas públicas */}
       <Route path="/login"    element={!estaLogueado ? <Login />    : <Navigate to={home} replace />} />
@@ -176,7 +181,6 @@ export default function AppRoutes() {
         <Route path="usuarios"     element={<AdminUsuarios />} />
         <Route path="medicos"      element={<AdminMedicos />} />
         <Route path="horarios"     element={<AdminHorarios />} />
-        <Route path="crear-medico" element={<CreateDoctor />} />
         <Route path="reportes"     element={<AdminReportes />} />
         <Route path="facturacion"  element={<AdminFacturacion />} />
         <Route path="auditoria"    element={<AdminAuditoria />} />
@@ -189,6 +193,7 @@ export default function AppRoutes() {
         <Route index element={<MedicoDashboard />} />
         <Route path="agenda"       element={<MedicoAgenda />} />
         <Route path="citas"        element={<MedicoMisCitas />} />
+        <Route path="horario"      element={<MedicoMiHorario />} />
         <Route path="pacientes"    element={<MedicoMisPacientes />} />
         <Route path="consultas"    element={<MedicoConsultas />} />
         <Route path="atender/:citaId" element={<MedicoAtenderCita />} />
@@ -199,15 +204,17 @@ export default function AppRoutes() {
         <Route index element={<ClientDashboard />} />
         <Route path="perfil"        element={<MiPerfil />} />
         <Route path="citas"         element={<MisCitas />} />
+        <Route path="agendar"       element={<AgendarCita />} />
         <Route path="resultados"    element={<Resultados />} />
         <Route path="historial"     element={<MiHistorial />} />
         <Route path="documentos"    element={<Documentos />} />
         <Route path="facturas"      element={<MisFacturas />} />
       </Route>
 
-      {/* Raíz y wildcard */}
-      <Route path="/" element={<Navigate to={estaLogueado ? home : '/login'} replace />} />
-      <Route path="*" element={<Navigate to={estaLogueado ? home : '/login'} replace />} />
+      {/* Raíz: página de inicio pública; con sesión, directo al panel del rol */}
+      <Route path="/" element={estaLogueado ? <Navigate to={home} replace /> : <Landing />} />
+      <Route path="*" element={<Navigate to={estaLogueado ? home : '/'} replace />} />
     </Routes>
+    </Suspense>
   );
 }

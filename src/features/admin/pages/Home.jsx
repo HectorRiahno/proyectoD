@@ -5,7 +5,7 @@ import {
   UserPlus, TrendingUp, Pill, FileCheck2,
 } from 'lucide-react';
 import { useAuth, useDashboardAdmin } from '../../../hooks';
-import NuevaCitaModal from '../components/NuevaCitaModal';
+import AgendarCitaModal from '../components/AgendarCitaModal';
 import {
   PageHero, LiveTimeBadge, StatCard, Panel, PanelLink,
   StatusPill, EmptyState, ListRow, ActionList, ErrorBlock,
@@ -124,11 +124,12 @@ function Home() {
         ))}
       </div>
 
-      <NuevaCitaModal
-        isOpen={showCitaModal}
-        onClose={() => setShowCitaModal(false)}
-        onSave={() => { setShowCitaModal(false); navigate('/dashboard/citas'); }}
-      />
+      {showCitaModal && (
+        <AgendarCitaModal
+          onClose={() => setShowCitaModal(false)}
+          onSaved={() => navigate('/dashboard/citas')}
+        />
+      )}
     </div>
   );
 }

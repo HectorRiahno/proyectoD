@@ -1,42 +1,39 @@
-import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import usuarioService from '../services/usuarioService';
 import { ROLE_CLIENTE, normalizeRoleName } from '../config/roles';
 
 export const AuthContext = createContext(null);
 
-// ─── Construir usuario mínimo desde metadata de sesión (fallback) ──────────────
+// ─── Borra del navegador todo rastro de la sesión ──────────────────────────────
+// Token de Supabase (storageKey 'hospitalis-session' y cualquier clave sb-*),
+// y sessionStorage. Lo usan el logout, la sesión expirada y la sesión zombi.
+const borrarCredencialesLocales = () => {
+  try {
+    localStorage.removeItem('hospitalis-session');
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith('sb-') || k.includes('supabase')) localStorage.removeItem(k);
+    });
+    sessionStorage.clear();
+  } catch { /* almacenamiento bloqueado: nada que borrar */ }
+};
+
+// ─── Usuario mínimo para una cuenta sin fila en `usuario` ───────────────────────
 const buildUserFromSession = (session) => {
   const user = session?.user;
   if (!user) return null;
   const metadata = user.user_metadata || {};
+  // user_metadata lo puede editar el propio usuario (auth.updateUser): sirve
+  // para mostrar el nombre, nunca para decidir el rol. Sin perfil en BD no
+  // hay rol → la app lo manda a /sin-rol.
   return {
-    id: user.id,
     nombre: metadata.nombre || metadata.name || user.email?.split('@')[0] || '',
+    id: user.id,
     correo: user.email,
     email:  user.email,
-    id_rol: metadata.id_rol || null,
-    rol_nombre: normalizeRoleName(metadata.role || metadata.rol || metadata.id_rol),
-    ...metadata,
+    id_rol: null,
+    rol_nombre: null,
   };
-};
-
-// ─── Detectar si el error indica JWT expirado / inválido ─────────────────────
-// IMPORTANTE: NO incluir status 400 genérico — muchos errores devuelven 400
-// sin ser de sesión (RLS, queries, etc.) y activarían el modal incorrectamente.
-const esErrorSesion = (err) => {
-  if (!err) return false;
-  const msg  = (err.message ?? '').toLowerCase();
-  const code = (err.code    ?? '');
-  return (
-    err.status === 401              ||
-    code === 'PGRST301'             ||   // JWT expired (PostgREST)
-    code === 'invalid_jwt'          ||
-    msg.includes('jwt expired')     ||
-    msg.includes('jwt invalid')     ||
-    msg.includes('token is expired')||
-    msg.includes('not authenticated')
-  );
 };
 
 export function AuthProvider({ children }) {
@@ -55,192 +52,125 @@ export function AuthProvider({ children }) {
     if (usuarioLogueado) wasLoggedInRef.current = true;
   }, [usuarioLogueado]);
 
-  // Función para cerrar sesión sin marcarla como expirada (uso interno)
-  const cerrarSesionLocal = useCallback(() => {
-    setUsuarioLogueado(null);
-  }, []);
-
-  // ─── Cargar perfil del usuario desde la BD ───────────────────────────────────
-  // Nunca lanza — siempre hace fallback al buildUserFromSession.
-  // La detección de sesión expirada ocurre en onAuthStateChange, no aquí.
-  const fetchUsuario = useCallback(async (session) => {
-    const authUid = session?.user?.id;
-    if (!authUid) return buildUserFromSession(session);
-
-    try {
-      const usuario = await usuarioService.getByAuthUserId(authUid);
-      return usuario ?? buildUserFromSession(session);
-    } catch (err) {
-      console.warn('fetchUsuario falló, usando metadata de sesión:', err.message ?? err);
-      return buildUserFromSession(session);
-    }
-  }, []);
-
   // ─── Inicialización y listener de cambios de sesión ─────────────────────────
+  //
+  // ⚠️ El callback de onAuthStateChange NO puede hacer `await` de llamadas a
+  // Supabase: supabase-js entrega el evento mientras tiene tomado su candado
+  // interno de auth, y cualquier consulta (que necesita leer el token) se
+  // queda esperando ese mismo candado → bloqueo mutuo. Era lo que pasaba al
+  // recargar la página: INITIAL_SESSION consultaba el perfil, todo se
+  // congelaba 6 s y un timeout terminaba borrando la sesión.
+  //
+  // Por eso el callback es síncrono y la carga del perfil se agenda fuera de
+  // él con setTimeout(0). Y un perfil que tarda o falla NUNCA cierra la
+  // sesión: se reintenta. La sesión sólo termina con SIGNED_OUT real.
   useEffect(() => {
     let mounted = true;
-    // Flag para indicar que la sesión está rota y debemos ignorar eventos
-    // residuales del listener (evita race con SIGNED_IN tras un timeout).
-    let sesionRota = false;
+    let reintento = null;
 
-    // Helper: race contra un timeout. Devuelve `Promise.race`.
-    const withTimeout = (promise, ms, label) => Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(
-        () => reject(new Error(`Timeout en ${label} tras ${ms}ms`)),
-        ms
-      )),
-    ]);
-
-    // Limpieza nuclear + redirección dura. Al detectar sesión zombi tras
-    // AFK largo (token vencido, supabase client wedged, etc.) borramos
-    // todas las claves de auth y forzamos navegación a /login, lo que
-    // remonta toda la app con un cliente Supabase fresco.
-    const limpiarYRedirigir = async () => {
-      if (sesionRota) return;
-      sesionRota = true;
-      try { await supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
+    // Perfil (con rol) desde la BD. Reintenta con espera creciente ante
+    // errores de red / BD; mientras tanto la app muestra "Cargando…" (y tras
+    // 5 s, la pantalla de carga ofrece volver al login como vía de escape).
+    const cargarPerfil = async (session, intento = 0) => {
+      clearTimeout(reintento);
+      const authUid = session.user.id;
       try {
-        localStorage.removeItem('hospitalis-session');
-        Object.keys(localStorage).forEach(k => {
-          if (k.startsWith('sb-') || k.includes('supabase')) localStorage.removeItem(k);
-        });
-        sessionStorage.clear();
-      } catch (_) {}
-      // replace evita que el usuario vuelva con back a la pantalla zombi
-      window.location.replace('/login');
-    };
-
-    // Carga el perfil con timeout; si falla, intenta el fallback de metadata
-    // de sesión. Si TODO falla → limpiar.
-    const cargarUsuarioConTimeout = async (session, label) => {
-      try {
-        return await withTimeout(fetchUsuario(session), 6000, label);
-      } catch (eFetch) {
-        console.warn(`${label} timeout/fallo; usando metadata:`, eFetch.message);
-        return buildUserFromSession(session);
-      }
-    };
-
-    const loadSession = async () => {
-      try {
-        setLoading(true);
+        const usuario = await usuarioService.getByAuthUserId(authUid);
+        if (!mounted || currentAuthUidRef.current !== authUid) return;   // ya cambió la sesión
+        // Sin fila en `usuario` → cuenta sin perfil: la app lo manda a /sin-rol
+        setUsuarioLogueado(usuario ?? buildUserFromSession(session));
         setError(null);
-
-        const { data: { session }, error: sessErr } =
-          await withTimeout(supabase.auth.getSession(), 6000, 'getSession');
-        if (sessErr) throw sessErr;
-
-        if (session?.user) {
-          currentAuthUidRef.current = session.user.id;
-          const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(loadSession)');
-          if (mounted && !sesionRota) setUsuarioLogueado(usuario);
-        }
+        setLoading(false);
       } catch (err) {
-        console.error('Error verificando sesión:', err);
-        const esTimeout = (err?.message ?? '').toLowerCase().includes('timeout');
-        if (esTimeout) {
-          await limpiarYRedirigir();
-          return; // ya se va a recargar; no tocar más estado
-        }
-        if (mounted) setError(err.message ?? 'Error verificando sesión');
-      } finally {
-        if (mounted && !sesionRota) setLoading(false);
+        if (!mounted || currentAuthUidRef.current !== authUid) return;
+        const espera = Math.min(1000 * 2 ** intento, 10000);   // 1, 2, 4, 8, 10, 10… s
+        console.warn(`No se pudo cargar el perfil (intento ${intento + 1}); reintento en ${espera / 1000}s:`,
+          err.message ?? err);
+        reintento = setTimeout(() => cargarPerfil(session, intento + 1), espera);
       }
     };
 
-    loadSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
 
-    // ── Escuchar eventos de Auth ──────────────────────────────────────────────
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted || sesionRota) return;
-        console.info('[Auth event]', event, '— wasLoggedIn:', wasLoggedInRef.current,
-          '— explicitLogout:', explicitLogoutRef.current);
-
-        // ── INITIAL_SESSION: carga inicial, no cuenta como cambio de estado ──
-        if (event === 'INITIAL_SESSION') {
-          if (session?.user && currentAuthUidRef.current !== session.user.id) {
-            currentAuthUidRef.current = session.user.id;
-            const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(INITIAL_SESSION)');
-            if (mounted && !sesionRota) setUsuarioLogueado(usuario);
-          }
-          if (mounted && !sesionRota) setLoading(false);
-          return;
-        }
-
-        // ── Nuevo login (o re-emisión al recuperar foco) ──────────────────────
-        if (event === 'SIGNED_IN' && session?.user) {
+      // ── Hay sesión: carga inicial (recarga de página), login o refresco ────
+      if (session?.user) {
+        if (event === 'SIGNED_IN') {
           setSesionExpirada(false);
           explicitLogoutRef.current = false;
-
-          // Mismo UID ya cargado → ignorar (Supabase v2 emite duplicados).
-          if (currentAuthUidRef.current === session.user.id) {
-            if (mounted) setLoading(false);
-            return;
-          }
-
-          currentAuthUidRef.current = session.user.id;
-          const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(SIGNED_IN)');
-          if (mounted && !sesionRota) {
-            setUsuarioLogueado(usuario);
-            setLoading(false);
-          }
-          return;
         }
+        if (event === 'TOKEN_REFRESHED') setSesionExpirada(false);
 
-        // ── Token renovado silenciosamente ────────────────────────────────────
-        if (event === 'TOKEN_REFRESHED' && session?.user) {
-          setSesionExpirada(false);
-          if (currentAuthUidRef.current === session.user.id) return;
-          currentAuthUidRef.current = session.user.id;
-          const usuario = await cargarUsuarioConTimeout(session, 'fetchUsuario(TOKEN_REFRESHED)');
-          if (mounted && !sesionRota) setUsuarioLogueado(usuario);
-          return;
-        }
-
-        // ── Sesión terminada ──────────────────────────────────────────────────
-        if (event === 'SIGNED_OUT' || !session?.user) {
-          if (!mounted) return;
-          currentAuthUidRef.current = null;
-          setUsuarioLogueado(null);
+        // Mismo usuario ya cargado (SIGNED_IN se re-emite al volver a la
+        // pestaña; TOKEN_REFRESHED cada hora) → nada que recargar.
+        if (currentAuthUidRef.current === session.user.id) {
           setLoading(false);
-
-          if (wasLoggedInRef.current && !explicitLogoutRef.current) {
-            setSesionExpirada(true);
-          } else {
-            setSesionExpirada(false);
-          }
-          wasLoggedInRef.current    = false;
-          explicitLogoutRef.current = false;
           return;
         }
+        currentAuthUidRef.current = session.user.id;
+        setLoading(true);
+        setTimeout(() => cargarPerfil(session), 0);   // fuera del candado de auth
+        return;
       }
-    );
+
+      // ── Sin sesión ──────────────────────────────────────────────────────────
+      // INITIAL_SESSION sin usuario = nadie había iniciado sesión.
+      clearTimeout(reintento);
+      currentAuthUidRef.current = null;
+      setUsuarioLogueado(null);
+      setLoading(false);
+
+      if (event === 'SIGNED_OUT') {
+        // Sólo es "expirada" si había alguien dentro y no pulsó "Cerrar sesión"
+        setSesionExpirada(wasLoggedInRef.current && !explicitLogoutRef.current);
+        wasLoggedInRef.current    = false;
+        explicitLogoutRef.current = false;
+      }
+    });
 
     return () => {
       mounted = false;
+      clearTimeout(reintento);
       subscription.unsubscribe();
     };
-  }, [fetchUsuario, cerrarSesionLocal]);
+  }, []);
 
   // ─── Login ───────────────────────────────────────────────────────────────────
-  const login = async (email, password) => {
+  // `identificador` puede ser el correo o el número de documento. Con
+  // documento, fn_login_documento verifica la clave y sólo entonces
+  // devuelve el correo de la cuenta para el signIn normal de Supabase.
+  const login = async (identificador, password) => {
     try {
       setLoading(true);
       setError(null);
       setSesionExpirada(false);
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email:    email.toLowerCase().trim(),
-        password,
-      });
+      let email = identificador.toLowerCase().trim();
+      if (!email.includes('@')) {
+        const { data: res, error: rpcError } = await supabase.rpc('fn_login_documento', {
+          p_documento: identificador,
+          p_password:  password,
+        });
+        if (rpcError) {
+          throw new Error(rpcError.code === 'PGRST202'
+            ? 'El ingreso con documento no está habilitado. Ejecuta supabase/migration-login-documento.sql.'
+            : rpcError.message);
+        }
+        if (res?.bloqueado_hasta) {
+          const hora = new Date(res.bloqueado_hasta).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+          throw new Error(`Demasiados intentos fallidos. Intenta de nuevo después de las ${hora}.`);
+        }
+        if (!res?.ok) throw new Error('Invalid login credentials');
+        email = res.email;
+      }
+
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
       return data;
     } catch (err) {
       const msg = err.message ?? '';
       if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
-        setError('Email o contraseña incorrectos.');
+        setError('Documento/correo o contraseña incorrectos.');
       } else if (msg.includes('Email not confirmed')) {
         setError('Correo no confirmado. Pide al administrador que confirme la cuenta.');
       } else {
@@ -252,21 +182,70 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // ─── Logout ──────────────────────────────────────────────────────────────────
-  const logout = async () => {
-    explicitLogoutRef.current = true;   // marca para que SIGNED_OUT no active el modal
-    currentAuthUidRef.current = null;
+  // ─── Login del paciente: documento + fecha de nacimiento ─────────────────────
+  // Sin correo ni contraseña. La Edge Function `login-paciente` valida los
+  // datos (con bloqueo por intentos) y devuelve una sesión normal de
+  // Supabase; desde ahí todo sigue igual que un login con contraseña.
+  const loginPaciente = async (documento, fechaNacimiento) => {
     try {
       setLoading(true);
       setError(null);
-      await supabase.auth.signOut();
-      setUsuarioLogueado(null);
       setSesionExpirada(false);
+
+      const { data, error: fnError } = await supabase.functions.invoke('login-paciente', {
+        body: { documento, fecha_nacimiento: fechaNacimiento },
+      });
+
+      if (fnError) {
+        let info = {};
+        try { info = await fnError.context?.json?.() ?? {}; } catch { /* sin cuerpo */ }
+        if (info.bloqueado_hasta) {
+          const hora = new Date(info.bloqueado_hasta).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+          throw new Error(`Demasiados intentos fallidos. Intenta de nuevo después de las ${hora}.`);
+        }
+        if (fnError.name === 'FunctionsFetchError' || fnError.name === 'FunctionsRelayError') {
+          throw new Error('El ingreso de pacientes no está disponible. Comunícate con recepción.');
+        }
+        throw new Error(info.error || 'No pudimos iniciar tu sesión. Intenta de nuevo.');
+      }
+
+      const { error: sesError } = await supabase.auth.setSession({
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      if (sesError) throw sesError;
+      return data;
     } catch (err) {
-      setError(err.message ?? 'Error al cerrar sesión');
+      setError(err.message || 'Error al iniciar sesión.');
       throw err;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ─── Logout ──────────────────────────────────────────────────────────────────
+  // Cierre voluntario (botón "Cerrar sesión"):
+  //   1. Marca el cierre como explícito ANTES de signOut, para que el evento
+  //      SIGNED_OUT no lo confunda con una expiración y no muestre el modal.
+  //   2. Revoca en el servidor el refresh token de ESTA sesión (scope 'local':
+  //      las sesiones del mismo usuario en otros equipos siguen abiertas).
+  //   3. Borra el token y cualquier dato de sesión del navegador, aunque el
+  //      paso 2 falle (sin red, token ya vencido).
+  //   4. Recarga en /login: no queda en memoria nada del usuario anterior
+  //      (importante en equipos compartidos de recepción o consultorio).
+  const logout = async () => {
+    explicitLogoutRef.current = true;
+    wasLoggedInRef.current    = false;
+    currentAuthUidRef.current = null;
+    setSesionExpirada(false);
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (err) {
+      console.warn('signOut remoto falló; se cierra igual en este equipo:', err.message ?? err);
+    } finally {
+      borrarCredencialesLocales();
+      setUsuarioLogueado(null);
+      window.location.replace('/login');   // replace: "atrás" no vuelve al panel
     }
   };
 
@@ -333,6 +312,7 @@ export function AuthProvider({ children }) {
     error,
     sesionExpirada,
     login,
+    loginPaciente,
     registro,
     logout,
     actualizarUsuario,
@@ -357,17 +337,10 @@ function ModalSesionExpirada({ onLogin }) {
     try {
       // Limpiar token viejo de localStorage y Supabase antes de redirigir
       await supabase.auth.signOut({ scope: 'local' });
-    } catch (_) {
+    } catch {
       // Si falla el signOut remoto, igual limpiamos localmente
     } finally {
-      // Limpiar la clave de sesión en localStorage manualmente como respaldo
-      try {
-        localStorage.removeItem('hospitalis-session');
-        // También limpiar cualquier clave supabase residual
-        Object.keys(localStorage).forEach(k => {
-          if (k.startsWith('sb-') || k.includes('supabase')) localStorage.removeItem(k);
-        });
-      } catch (_) {}
+      borrarCredencialesLocales();
 
       onLogin();
       window.location.replace('/login'); // replace evita volver con el botón atrás

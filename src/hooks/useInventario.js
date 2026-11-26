@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { inventarioService, horarioService, medicoService } from '../services';
-import { useParallelResources } from './useAsyncResource';
+import { useParallelResources, useAsyncResource } from './useAsyncResource';
 
 /**
  * Catálogo de medicamentos + categorías para la página Inventario.
@@ -55,4 +55,14 @@ export function useHorarios() {
     horarios: res.data?.horarios ?? [],
     toggleDisponible, eliminar,
   };
+}
+
+/** Franjas de atención del médico autenticado (página Mi horario). */
+export function useMiHorarioMedico() {
+  const res = useAsyncResource(
+    () => horarioService.getMiHorarioMedico(),
+    [],
+    { initialData: [] },
+  );
+  return { ...res, horarios: res.data };
 }

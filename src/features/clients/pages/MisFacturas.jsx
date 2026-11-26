@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { facturaService } from '../../../services';
 import { useMisFacturas } from '../../../hooks';
-import { generarPdfFactura } from '../utils/generarPdfFactura';
 import {
   PageHeader, KPI, ErrorBanner, EmptyState, LoadingState,
   SearchBar, EstadoBadge,
@@ -58,6 +57,8 @@ export default function MisFacturas() {
     setError('');
     try {
       const items = await facturaService.getItems(factura.id_factura);
+      // jspdf se descarga al primer PDF, no con la página
+      const { generarPdfFactura } = await import('../../../shared/utils/generarPdfFactura');
       generarPdfFactura(factura, items ?? []);
     } catch (err) {
       setError(`No se pudo generar el PDF: ${err.message ?? err}`);

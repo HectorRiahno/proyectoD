@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   consultaService, citaService, pacienteService,
-  medicoService, ordenExamenService,
+  medicoService, ordenExamenService, auditoriaService,
 } from '../../../services';
 import { useAuth, useConsultas, useAdjuntos } from '../../../hooks';
 import {
@@ -17,7 +17,6 @@ import {
   PageHeader, KPI, ErrorBanner, SearchBar,
   EmptyState, LoadingState, IconButton, ActionGroup,
 } from '../../../shared/components/ui';
-import { generarPdfOrdenExamenes } from '../utils/generarPdfOrdenExamenes';
 
 // Una consulta es "de exámenes" si el tipo asociado (vía cita) menciona
 // la palabra "examen". Cubre 'Toma de exámenes', 'Revisión de exámenes',
@@ -206,6 +205,7 @@ function ModalDetalle({ consulta: c, onClose }) {
   const [ordenes, setOrdenes]           = useState([]);
 
   useEffect(() => {
+    auditoriaService.registrarAccesoHC(c.id_paciente, 'ver_consulta', { id_consulta: c.id_consulta });
     Promise.all([
       pacienteService.getDatosCompletos(c.id_paciente),
       consultaService.getDiagnosticosConsulta(c.id_consulta),
@@ -575,7 +575,10 @@ function ModalCrear({ citaInicial = null, onClose }) {
         if (citaExtra) citasList = [citaExtra, ...citasList];
       }
 
-      setPacientes(pacs ?? []);
+      // Sólo se registran consultas de pacientes asignados con cita
+      // (regla de BD: migration-restriccion-clinica.sql).
+      const asignados = new Set(citasList.map(c => String(c.id_paciente)));
+      setPacientes((pacs ?? []).filter(p => asignados.has(String(p.id_paciente))));
       setCitas(citasList);
       setTiposDx(tipos ?? []);
 
@@ -615,6 +618,7 @@ function ModalCrear({ citaInicial = null, onClose }) {
 
   const toggleHistorial = async () => {
     if (!historialOpen && historial.length === 0 && form.id_paciente) {
+      auditoriaService.registrarAccesoHC(form.id_paciente, 'ver_historial', { origen: 'nueva_consulta' });
       setLoadingHist(true);
       try {
         const data = await consultaService.getConsultasPacienteResumen(Number(form.id_paciente), 5);
@@ -767,6 +771,9 @@ function ModalCrear({ citaInicial = null, onClose }) {
                   <option key={p.id_paciente} value={p.id_paciente}>{p.nombre_completo} · {p.documento}</option>
                 ))}
               </select>
+              <p className="mt-1.5 text-xs text-gray-500">
+                Solo aparecen pacientes con una cita asignada a ti.
+              </p>
             </Seccion>
 
             {/* Antecedentes del paciente (auto-carga) */}
@@ -1186,6 +1193,8 @@ function ModalEditar({ consulta, onClose }) {
         telefono:        consulta.paciente_telefono,
         numero_historia: consulta.numero_historia,
       };
+      // jspdf se descarga al primer PDF, no con la página
+      const { generarPdfOrdenExamenes } = await import('../utils/generarPdfOrdenExamenes');
       generarPdfOrdenExamenes({
         paciente: pacienteCtx,
         medico:   medicoData,

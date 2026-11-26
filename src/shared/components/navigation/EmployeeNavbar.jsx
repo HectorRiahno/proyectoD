@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { User, Activity, LogOut, Menu } from "lucide-react";
-import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../hooks";
 import NotificacionesBell from "./NotificacionesBell";
 
@@ -13,8 +11,7 @@ const ROLE_LABEL = {
 };
 
 function EmployeeNavbar({ onMenuClick }) {
-  const navigate = useNavigate();
-  const { usuarioLogueado, esAdmin } = useAuth();
+  const { usuarioLogueado, esAdmin, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
@@ -38,15 +35,8 @@ function EmployeeNavbar({ onMenuClick }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-      navigate('/login');
-    }
-  };
+  // Cierra la sesión y borra las credenciales (ver logout en AuthContext)
+  const handleLogout = () => logout();
 
   return (
     <header className="w-full bg-gradient-to-r from-white via-blue-50 to-indigo-50 shadow-md border-b border-blue-100 fixed top-0 left-0 right-0 z-50 h-16">

@@ -27,7 +27,7 @@ export default function ReporteUsuarios() {
 
   const onPdf = async () => {
     if (!data) return;
-    exportarReporteUsuariosPdf(data);
+    await exportarReporteUsuariosPdf(data);
     await reportesService.registrarDescarga('usuarios', 'pdf', hoy(), hoy());
   };
   const onExcel = async () => {

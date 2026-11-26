@@ -23,7 +23,10 @@
 //
 // Variables de entorno (Supabase Dashboard → Project Settings → Edge Functions):
 //   SUPABASE_URL                  (auto-disponible)
-//   SUPABASE_SERVICE_ROLE_KEY     (auto-disponible)
+//   SUPABASE_SERVICE_ROLE_KEY     (auto-disponible; sólo para validar al
+//                                  caller y enviar la invitación)
+//   SUPABASE_ANON_KEY             (auto-disponible; el resto de escrituras
+//                                  van con el JWT del admin → audit_log)
 //   ALLOWED_ORIGINS  (opcional)   ej: "https://tudominio.com,http://localhost:5173"
 //                                  Por defecto acepta '*' (DEV). En producción
 //                                  setearlo con la lista exacta de dominios.
@@ -51,9 +54,14 @@ interface Payload {
   email: string;
   nombre?: string;
   rol?: "admin" | "medico" | "asistente" | "cliente";
+  documento?: string;           // persona.documento + metadata ({{ .Data.documento }} en el correo)
+  nombres?: string;             // si llegan, reemplazan el corte automático de `nombre`
+  apellidos?: string;
+  telefono?: string;
   especialidad?: string;
   numero_licencia?: string;
   consultorio?: string;
+  anios_experiencia?: number;
   redirectTo?: string;          // URL absoluta a la página /set-password
 }
 
@@ -107,12 +115,33 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Especialidad requerida para médicos" }, 400, CORS);
     }
 
+    // Todo lo que no sea validar al caller o enviar la invitación se hace
+    // con el JWT del admin que invita, no con service_role: aplica el RLS
+    // de admin y el audit_log registra a ese admin como actor del cambio
+    // de rol y de las filas persona/medico/paciente.
+    const supabaseCaller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth:   { persistSession: false, autoRefreshToken: false },
+    });
+
+    // El documento es único: validar ANTES de crear la cuenta, para no
+    // dejar una invitación enviada con la ficha a medias.
+    const documento = body.documento?.trim() || null;
+    if (documento) {
+      const { data: dup } = await supabaseCaller
+        .from("persona").select("id_persona, email").eq("documento", documento).maybeSingle();
+      if (dup && (dup.email ?? "").toLowerCase() !== email) {
+        return json({ error: `Ya existe una persona con el documento ${documento}.` }, 409, CORS);
+      }
+    }
+
     // 3. Invitar por email — el usuario pondrá su propia contraseña al aceptar
     const { data: invited, error: inviteErr } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         data: {
           nombre: body.nombre,
           rol,
+          ...(documento ? { documento } : {}),
         },
         redirectTo: body.redirectTo,
       });
@@ -126,12 +155,12 @@ Deno.serve(async (req: Request) => {
 
     // 4. Esperar a que el trigger provision_user_from_auth termine.
     //    El trigger SIEMPRE crea asignacion_rol con 'cliente' (por seguridad).
-    //    Esta función — con service_role — hace el override si pidieron un
-    //    rol elevado, y luego inserta la fila específica (medico / paciente).
+    //    Esta función hace el override si pidieron un rol elevado, y luego
+    //    inserta la fila específica (medico / paciente).
     let attempts = 0;
     let usr: { id_usuario: number; id_persona: number } | null = null;
     while (attempts < 8 && !usr) {
-      const { data } = await supabaseAdmin
+      const { data } = await supabaseCaller
         .from("usuario")
         .select("id_usuario, id_persona")
         .eq("auth_user_id", newAuthUserId)
@@ -153,7 +182,7 @@ Deno.serve(async (req: Request) => {
     // 4a. Si el rol pedido NO es 'cliente', sobreescribir asignacion_rol.
     //     (El trigger dejó 'cliente' por defecto, sin importar metadata.rol).
     if (rol !== "cliente") {
-      const { data: targetRol } = await supabaseAdmin
+      const { data: targetRol } = await supabaseCaller
         .from("rol").select("id_rol").eq("nombre", rol).maybeSingle();
 
       if (!targetRol?.id_rol) {
@@ -162,38 +191,85 @@ Deno.serve(async (req: Request) => {
         }, 500, CORS);
       }
 
-      // Borra la asignación 'cliente' que dejó el trigger, e inserta la real.
-      const { error: delErr } = await supabaseAdmin
-        .from("asignacion_rol").delete().eq("id_usuario", usr.id_usuario);
-      if (delErr) console.error("Error borrando asignacion previa:", delErr.message);
-
-      const { error: insErr } = await supabaseAdmin
+      // Cambia la asignación 'cliente' que dejó el trigger en un solo UPDATE
+      // (atómico, y queda en el log con el antes/después). Si el trigger no
+      // la creó, se inserta.
+      const { data: updated, error: updErr } = await supabaseCaller
         .from("asignacion_rol")
-        .insert({ id_usuario: usr.id_usuario, id_rol: targetRol.id_rol });
-      if (insErr) {
+        .update({ id_rol: targetRol.id_rol })
+        .eq("id_usuario", usr.id_usuario)
+        .select("id_asignacion");
+
+      let rolErr = updErr;
+      if (!updErr && !updated?.length) {
+        const { error: insErr } = await supabaseCaller
+          .from("asignacion_rol")
+          .insert({ id_usuario: usr.id_usuario, id_rol: targetRol.id_rol });
+        rolErr = insErr;
+      }
+      if (rolErr) {
         return json({
-          error: `Cuenta creada pero no se pudo asignar el rol '${rol}': ${insErr.message}`,
+          error: `Cuenta creada pero no se pudo asignar el rol '${rol}': ${rolErr.message}`,
         }, 500, CORS);
       }
     }
 
-    // 4b. Insertar fila en la tabla específica del rol.
+    // 4b. Completar la persona con los datos del formulario (el trigger sólo
+    //     conoce el email y un nombre sin separar, y pone un documento
+    //     sintético 'AUTH-…').
+    const personaUpd: Record<string, string> = {};
+    if (body.nombres?.trim())   personaUpd.nombres   = body.nombres.trim();
+    if (body.apellidos?.trim()) personaUpd.apellidos = body.apellidos.trim();
+    if (body.telefono?.trim())  personaUpd.telefono  = body.telefono.trim();
+    if (documento)              personaUpd.documento = documento;
+    if (Object.keys(personaUpd).length > 0) {
+      const { error: perErr } = await supabaseCaller
+        .from("persona").update(personaUpd).eq("id_persona", usr.id_persona);
+      if (perErr) {
+        return json({
+          error: `Invitación enviada, pero no se pudieron guardar los datos personales: ${perErr.message}`,
+        }, 500, CORS);
+      }
+    }
+
+    // 4c. Fila en la tabla específica del rol.
     if (rol === "medico") {
-      const { error: medErr } = await supabaseAdmin.from("medico").insert({
-        id_persona:      usr.id_persona,
-        numero_licencia: body.numero_licencia ?? `LIC-${Date.now()}`,
-        especialidad:    body.especialidad,
-        consultorio:     body.consultorio,
-        activo:          true,
-      });
-      if (medErr) console.error("Error insertando médico:", medErr.message);
+      const fichaMedico = {
+        especialidad:      body.especialidad!.trim(),
+        consultorio:       body.consultorio?.trim() || null,
+        anios_experiencia: Number(body.anios_experiencia) || 0,
+        activo:            true,
+      };
+      // Si la persona ya tenía ficha de médico (registrado antes sin
+      // cuenta), se actualiza en vez de duplicarla.
+      const { data: medExistente } = await supabaseCaller
+        .from("medico").select("id_medico").eq("id_persona", usr.id_persona).maybeSingle();
+
+      const { error: medErr } = medExistente
+        ? await supabaseCaller.from("medico").update({
+            ...fichaMedico,
+            ...(body.numero_licencia?.trim() ? { numero_licencia: body.numero_licencia.trim() } : {}),
+          }).eq("id_medico", medExistente.id_medico)
+        : await supabaseCaller.from("medico").insert({
+            ...fichaMedico,
+            id_persona:      usr.id_persona,
+            numero_licencia: body.numero_licencia?.trim() || `LIC-${Date.now()}`,
+          });
+      if (medErr) {
+        const msg = medErr.code === "23505"
+          ? "ya existe un médico con ese número de licencia"
+          : medErr.message;
+        return json({
+          error: `Invitación enviada, pero no se pudo guardar la ficha del médico: ${msg}`,
+        }, 500, CORS);
+      }
     }
 
     if (rol === "cliente") {
-      const { data: existing } = await supabaseAdmin
+      const { data: existing } = await supabaseCaller
         .from("paciente").select("id_paciente").eq("id_persona", usr.id_persona).maybeSingle();
       if (!existing) {
-        const { error: pacErr } = await supabaseAdmin.from("paciente").insert({
+        const { error: pacErr } = await supabaseCaller.from("paciente").insert({
           id_persona:      usr.id_persona,
           numero_historia: `HC-${usr.id_persona}-${Date.now().toString(36)}`,
         });
@@ -206,6 +282,7 @@ Deno.serve(async (req: Request) => {
     return json({
       ok: true,
       auth_user_id: newAuthUserId,
+      id_persona: usr.id_persona,
       email,
       rol,
       invited: true,

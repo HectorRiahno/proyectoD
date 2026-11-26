@@ -1,5 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import * as Icons from "lucide-react";
+// Sólo los iconos del menú: `import * as Icons` metía los ~1500 de lucide en el bundle.
+import {
+  BarChart3, Calendar, Clock, LayoutDashboard, Package, Receipt, Settings, ShieldCheck, Stethoscope, Trash2, UserPlus, Users,
+} from 'lucide-react';
+
+const Icons = {
+  BarChart3, Calendar, Clock, LayoutDashboard, Package, Receipt, Settings, ShieldCheck, Stethoscope, Trash2, UserPlus, Users,
+};
 import { useAuth } from "../../../hooks/useAuth";
 
 // Sidebar para EMPLEADOS - agrupado por dominio funcional.

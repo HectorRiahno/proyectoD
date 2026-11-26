@@ -20,9 +20,10 @@ const esDocumentoSintetico = (doc) =>
   typeof doc === 'string' && /^AUTH-[0-9a-f]{1,12}$/i.test(doc);
 
 // ─── Roles disponibles ─────────────────────────────────────────────────────────
+// Los médicos no se gestionan aquí: se invitan y editan en "Médicos", donde
+// se crea su cuenta junto con su ficha (especialidad, licencia, consultorio).
 const ROLES = [
   { value: 'admin',     label: 'Administrador' },
-  { value: 'medico',    label: 'Médico' },
   { value: 'asistente', label: 'Asistente' },
   { value: 'cliente',   label: 'Cliente / Paciente' },
 ];
@@ -44,9 +45,10 @@ const rolAvatarTone = (rol) => ({
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Usuarios() {
   const {
-    usuarios, loading, error, setError,
+    usuarios: todos, loading, error, setError,
     reload: cargar, toggleActivo: toggleActivoHook, eliminar: eliminarHook,
   } = useUsuarios();
+  const usuarios = todos.filter(u => normalizeRoleName(u.rol_nombre) !== 'medico');
   const [search, setSearch]       = useState('');
   const [filterRol, setFilterRol] = useState('todos');
   const [creando, setCreando]     = useState(false);
@@ -93,7 +95,7 @@ export default function Usuarios() {
     <div className="space-y-6">
       <PageHeader
         titulo="Gestión de Usuarios"
-        descripcion="Cuentas de acceso al sistema"
+        descripcion="Cuentas de administradores, asistentes y pacientes. Los médicos se gestionan en Médicos."
         eyebrow="Usuarios"
         icon={<ShieldCheck size={11} strokeWidth={2.25} />}
         variant="fuchsia"
@@ -106,7 +108,7 @@ export default function Usuarios() {
       <ErrorBanner msg={error} onDismiss={() => setError('')} />
 
       {/* Resumen por rol — segmented colorido */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[{ value: 'todos', label: 'Todos', tone: 'ink' }, ...ROLES.map(r => ({ ...r, tone: rolAvatarTone(r.value) }))].map(r => {
           const active = filterRol === r.value;
           // NOTA: el fondo lo controla toneAccent (no hardcodeamos bg-white)
@@ -218,7 +220,6 @@ export default function Usuarios() {
 function ModalCrear({ onClose }) {
   const [form, setForm] = useState({
     email: '', nombre: '', rol: 'cliente',
-    especialidad: '', numero_licencia: '', consultorio: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState('');
@@ -232,12 +233,9 @@ function ModalCrear({ onClose }) {
     setSubmitting(true);
     try {
       const res = await inviteUser({
-        email:           form.email,
-        nombre:          form.nombre,
-        rol:             form.rol,
-        especialidad:    form.rol === 'medico' ? form.especialidad    : undefined,
-        numero_licencia: form.rol === 'medico' ? form.numero_licencia : undefined,
-        consultorio:     form.rol === 'medico' ? form.consultorio     : undefined,
+        email:  form.email,
+        nombre: form.nombre,
+        rol:    form.rol,
       });
       setOk(res.message ?? `Invitación enviada a ${form.email}.`);
       // Cierra automáticamente tras 1.5s para que el admin alcance a leer el mensaje
@@ -274,14 +272,6 @@ function ModalCrear({ onClose }) {
             {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>
-
-        {form.rol === 'medico' && (
-          <>
-            <Input label="Especialidad *"  name="especialidad"    value={form.especialidad}    onChange={handleChange} required placeholder="Ej: Cardiología" />
-            <Input label="N° de licencia"   name="numero_licencia" value={form.numero_licencia} onChange={handleChange} placeholder="Opcional — se autogenera si lo dejas vacío" />
-            <Input label="Consultorio"      name="consultorio"     value={form.consultorio}     onChange={handleChange} placeholder="Ej: Consultorio 301" />
-          </>
-        )}
 
         {error && <ErrorBox msg={error} />}
         {ok && <SuccessBanner msg={ok} />}
