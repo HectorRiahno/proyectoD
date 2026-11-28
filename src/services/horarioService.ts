@@ -134,7 +134,7 @@ export const tipoConsultaService = {
   async getAgendables() {
     const { data, error } = await supabase
       .from('tipo_consulta')
-      .select('id_tipo_consulta, nombre, descripcion, costo, duracion_min')
+      .select('id_tipo_consulta, nombre, descripcion, costo, duracion_min, es_teleconsulta')
       .eq('agendable', true)
       .order('nombre');
     if (!error) return (data ?? []) as TipoConsultaItem[];
@@ -156,6 +156,7 @@ type TipoConsultaItem = {
   descripcion: string | null;
   costo: number;
   duracion_min: number | null;
+  es_teleconsulta?: boolean;      // migration-teleconsulta-whatsapp.sql
 };
 
 export default horarioService;

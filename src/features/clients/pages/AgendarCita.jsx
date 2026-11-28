@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarPlus, Clock, Stethoscope, MapPin, AlertCircle, CheckCircle,
+  CalendarPlus, Clock, Stethoscope, MapPin, AlertCircle, CheckCircle, Video, MessageCircle,
 } from 'lucide-react';
-import { citaService, tipoConsultaService } from '../../../services';
+import { citaService, tipoConsultaService, dashboardService } from '../../../services';
+import { OpcionWhatsapp, BotonTeleconsulta } from '../../../shared/components/Teleconsulta';
+import { telefonoWhatsappValido } from '../../../shared/utils/whatsapp';
 import { useSlotsCita } from '../../../hooks';
 import { PageHeader, ErrorBox, LoadingState, AccentButton } from '../../../shared/components/ui';
 import { hoyLocalISO, fechaDesdeISO, sumarDiasISO } from '../../../shared/utils/fechas';
@@ -46,6 +48,9 @@ export default function AgendarCita() {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
   const [apartada, setApartada] = useState(null);   // resumen de la cita recién creada
+  // Avisos por WhatsApp: se propone el teléfono del perfil
+  const [whatsapp, setWhatsapp]     = useState(false);
+  const [telefonoWa, setTelefonoWa] = useState('');
 
   useEffect(() => {
     Promise.all([citaService.getMedicosAgendables(), tipoConsultaService.getAgendables()])
@@ -56,6 +61,13 @@ export default function AgendarCita() {
       })
       .catch(err => setErrorData(err.message ?? 'No se pudo cargar la agenda'))
       .finally(() => setLoadingData(false));
+    dashboardService.getMiPerfilCliente()
+      .then(p => {
+        const tel = p?.telefono ?? '';
+        setTelefonoWa(tel);
+        setWhatsapp(telefonoWhatsappValido(tel));
+      })
+      .catch(() => {});
   }, []);
 
   const especialidades = useMemo(
@@ -65,6 +77,7 @@ export default function AgendarCita() {
   const medicosDeEspecialidad = medicos.filter(m => m.especialidad === especialidad);
   const medico = medicos.find(m => String(m.id_medico) === idMedico) ?? null;
   const tipo   = tipos.find(t => String(t.id_tipo_consulta) === idTipo) ?? null;
+  const esTele = !!tipo?.es_teleconsulta;
   // El paso "Tipo de cita" sólo se muestra si hay más de uno para elegir
   const off    = tipos.length > 1 ? 0 : -1;
 
@@ -96,15 +109,38 @@ export default function AgendarCita() {
       setError('Elige médico, día y hora.');
       return;
     }
+    if (whatsapp && !telefonoWhatsappValido(telefonoWa)) {
+      setError('Revisa tu número de WhatsApp o desmarca los avisos por WhatsApp.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
-      await citaService.agendarMiCita({
+      const idCita = await citaService.agendarMiCita({
         id_medico:        Number(idMedico),
         id_tipo_consulta: idTipo ? Number(idTipo) : null,
         fecha, hora, motivo,
       });
-      setApartada({ especialidad, medico: medico.nombre, consultorio: medico.consultorio, fecha, hora });
+
+      // La cita ya quedó: si WhatsApp falla, se avisa pero no se deshace.
+      let avisoWa = '';
+      if (whatsapp) {
+        try {
+          await citaService.configurarWhatsapp(idCita, telefonoWa, true);
+          citaService.notificarWhatsapp(idCita);
+        } catch (errWa) {
+          avisoWa = `No se activaron los avisos por WhatsApp: ${errWa.message}`;
+        }
+      }
+      let enlace = null;
+      if (esTele) {
+        const datos = await citaService.getDatosTeleconsulta([idCita]);
+        enlace = datos[idCita]?.enlace_teleconsulta ?? null;
+      }
+      setApartada({
+        especialidad, medico: medico.nombre, consultorio: medico.consultorio, fecha, hora,
+        teleconsulta: esTele, enlace, whatsapp: whatsapp && !avisoWa, avisoWa,
+      });
     } catch (err) {
       setError(err.message ?? 'No se pudo agendar la cita');
       // Si otra persona tomó la hora mientras tanto, hay que elegir otra
@@ -148,8 +184,26 @@ export default function AgendarCita() {
             <p className="mt-2 text-[13.5px] text-ink-700">
               {apartada.especialidad} con Dr(a). {apartada.medico} — {fechaLarga(apartada.fecha)} a las{' '}
               <strong className="font-semibold">{apartada.hora}</strong>
-              {apartada.consultorio ? `, consultorio ${apartada.consultorio}` : ''}.
+              {apartada.teleconsulta
+                ? ', por videollamada'
+                : apartada.consultorio ? `, consultorio ${apartada.consultorio}` : ''}.
             </p>
+            {apartada.teleconsulta && (
+              <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/60 p-4 text-left text-[12.5px] text-violet-900 space-y-2">
+                <p className="flex items-start gap-2">
+                  <Video size={15} className="flex-shrink-0 mt-0.5" />
+                  <span>El día de la cita entra con el enlace de la videollamada desde tu celular o computador y permite el uso de cámara y micrófono.</span>
+                </p>
+                {apartada.enlace && <BotonTeleconsulta enlace={apartada.enlace}>Probar el enlace</BotonTeleconsulta>}
+              </div>
+            )}
+            {apartada.whatsapp && (
+              <p className="mt-3 text-[12.5px] text-emerald-700 flex items-center justify-center gap-1.5">
+                <MessageCircle size={14} />
+                Te enviaremos la confirmación{apartada.teleconsulta ? ' y el enlace' : ''} por WhatsApp.
+              </p>
+            )}
+            {apartada.avisoWa && <p className="mt-3 text-[12px] text-amber-700">{apartada.avisoWa}</p>}
             <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
               <button onClick={() => navigate('/cliente/citas')}
                 className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-[13.5px] font-medium transition-colors">
@@ -226,6 +280,11 @@ export default function AgendarCita() {
                   ))}
                 </select>
                 {tipo?.descripcion && <p className="mt-1.5 text-[12px] text-ink-500">{tipo.descripcion}</p>}
+                {esTele && (
+                  <p className="mt-1.5 text-[12px] text-violet-700 flex items-center gap-1.5">
+                    <Video size={13} /> Te atenderán por videollamada; no tienes que ir a la clínica.
+                  </p>
+                )}
               </Paso>
             )}
 
@@ -308,10 +367,16 @@ export default function AgendarCita() {
                     <p className="font-semibold">Vas a apartar esta cita</p>
                     <p className="mt-0.5">
                       {especialidad} con Dr(a). {medico.nombre} — {fechaLarga(fecha)} a las <strong className="font-semibold">{hora}</strong>
-                      {medico.consultorio ? `, consultorio ${medico.consultorio}` : ''}.
+                      {esTele ? ', por videollamada' : medico.consultorio ? `, consultorio ${medico.consultorio}` : ''}.
                     </p>
                   </div>
                 </div>
+
+                <OpcionWhatsapp
+                  activo={whatsapp} onActivo={setWhatsapp}
+                  telefono={telefonoWa} onTelefono={setTelefonoWa}
+                  teleconsulta={esTele} paraPaciente color="sky"
+                />
               </>
             )}
 

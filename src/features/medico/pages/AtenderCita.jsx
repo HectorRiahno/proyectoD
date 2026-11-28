@@ -8,6 +8,8 @@ import {
   FlaskConical, Printer, Mic, Square,
 } from 'lucide-react';
 import { useDictado, unirDictado } from '../../../hooks/useDictado';
+import { BotonTeleconsulta, BotonEnviarWhatsapp } from '../../../shared/components/Teleconsulta';
+import { mensajeTeleconsulta } from '../../../shared/utils/whatsapp';
 import { citaService, consultaService, adjuntoService, medicoService, ordenExamenService, auditoriaService, pacienteService } from '../../../services';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAdjuntosPacienteMedico } from '../../../hooks';
@@ -57,6 +59,7 @@ export default function AtenderCita() {
   const { usuarioLogueado } = useAuth();
 
   const [cita, setCita]           = useState(null);
+  const [tele, setTele]           = useState(null);   // { enlace_teleconsulta, whatsapp_telefono } si es teleconsulta
   const [paciente, setPaciente]   = useState(null);
   const [historia, setHistoria]   = useState({
     consultas: [], diagnosticos: [], signos: [], ordenes: [], ordenesExamen: [],
@@ -113,6 +116,8 @@ export default function AtenderCita() {
       const pac = citaData.paciente;
       const per = pac?.persona;
       setCita(citaData);
+      citaService.getDatosTeleconsulta([Number(citaId)])
+        .then(d => setTele(d[Number(citaId)]?.enlace_teleconsulta ? d[Number(citaId)] : null));
       // PostgREST devuelve la relación 1:1 como objeto (o arreglo en esquemas viejos)
       const hist = Array.isArray(pac?.historial) ? pac.historial[0] : pac?.historial;
       const ant = Object.fromEntries(
@@ -349,7 +354,7 @@ export default function AtenderCita() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => navigate('/medico/citas')}
           className="inline-flex w-9 h-9 items-center justify-center text-ink-700 hover:bg-surface hover:text-ink-900 border border-line rounded-lg transition-colors" title="Volver">
           <ArrowLeft size={16} strokeWidth={1.75} />
@@ -360,6 +365,19 @@ export default function AtenderCita() {
             {paciente?.nombre_completo} · <span className="tabular-nums">{fecha} {hora}</span> · Cita #{cita?.id_cita}
           </p>
         </div>
+        {tele && (
+          <div className="order-last sm:order-none w-full sm:w-auto flex flex-wrap items-center gap-2">
+            <BotonEnviarWhatsapp
+              telefono={tele.whatsapp_telefono}
+              mensaje={mensajeTeleconsulta({
+                paciente: paciente?.nombre_completo, fecha, hora, enlace: tele.enlace_teleconsulta,
+              })}
+            >
+              Reenviar enlace
+            </BotonEnviarWhatsapp>
+            <BotonTeleconsulta enlace={tele.enlace_teleconsulta}>Abrir videollamada</BotonTeleconsulta>
+          </div>
+        )}
         <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md font-medium border bg-amber-50 text-amber-700 border-amber-100">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
           {cita?.estado === 'en_curso' ? 'En curso' : cita?.estado}

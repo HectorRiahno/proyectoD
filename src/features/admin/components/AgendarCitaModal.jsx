@@ -3,7 +3,9 @@ import {
   Calendar, Clock, AlertCircle, Loader2, User, Stethoscope,
   CheckCircle, FileText,
 } from 'lucide-react';
-import { citaService, tipoConsultaService } from '../../../services';
+import { citaService, tipoConsultaService, pacienteService } from '../../../services';
+import { OpcionWhatsapp } from '../../../shared/components/Teleconsulta';
+import { telefonoWhatsappValido } from '../../../shared/utils/whatsapp';
 import { usePacientesCatalogo, useMedicosActivos, useSlotsCita } from '../../../hooks';
 import { Modal, ErrorBox, BotonesForm, ComboBuscador, estadoLabel } from '../../../shared/components/ui';
 import { hoyLocalISO, fechaDesdeISO } from '../../../shared/utils/fechas';
@@ -29,6 +31,10 @@ export default function AgendarCitaModal({ onClose, onSaved }) {
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState('');
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
+  // Avisos por WhatsApp (confirmación, recordatorios y enlace de teleconsulta)
+  const [whatsapp, setWhatsapp]   = useState(false);
+  const [telefonoWa, setTelefonoWa] = useState('');
+  const [aviso, setAviso]         = useState('');
 
   const { slots, loading: loadingSlots, error: errorSlots } =
     useSlotsCita(form.id_medico, form.fecha, form.id_tipo_consulta);
@@ -48,16 +54,36 @@ export default function AgendarCitaModal({ onClose, onSaved }) {
   }));
   const handleChange = e => setCampo(e.target.name, e.target.value);
 
+  // Al elegir paciente, proponer su teléfono registrado para WhatsApp.
+  useEffect(() => {
+    if (!form.id_paciente) return;
+    let vigente = true;
+    pacienteService.getById(form.id_paciente)
+      .then(p => {
+        if (!vigente) return;
+        const tel = p?.telefono ?? '';
+        setTelefonoWa(tel);
+        setWhatsapp(telefonoWhatsappValido(tel));
+      })
+      .catch(() => {});
+    return () => { vigente = false; };
+  }, [form.id_paciente]);
+
   const handleSubmit = async e => {
     e.preventDefault();
     if (!form.id_paciente || !form.id_medico || !form.fecha || !form.hora) {
       setError('Completa paciente, médico, fecha y hora.');
       return;
     }
+    if (whatsapp && !telefonoWhatsappValido(telefonoWa)) {
+      setError('Revisa el número de WhatsApp o desmarca los avisos por WhatsApp.');
+      return;
+    }
     setSaving(true);
     setError('');
+    let idCita;
     try {
-      await citaService.crear({
+      idCita = await citaService.crear({
         id_paciente:      Number(form.id_paciente),
         id_medico:        Number(form.id_medico),
         id_tipo_consulta: form.id_tipo_consulta ? Number(form.id_tipo_consulta) : null,
@@ -67,16 +93,30 @@ export default function AgendarCitaModal({ onClose, onSaved }) {
         motivo:           form.motivo,
         observaciones:    form.observaciones,
       });
-      onSaved?.();
-      onClose();
     } catch (err) {
       console.error('[AgendarCitaModal]', err);
       // Si alguien tomó el slot entretanto, se limpia la hora para que se re-elija.
       if (err.code === 'CONFLICT') setForm(p => ({ ...p, hora: '' }));
       setError(err.message ?? 'Error al agendar la cita');
-    } finally {
       setSaving(false);
+      return;
     }
+
+    // La cita ya existe: un problema con WhatsApp no la deshace.
+    if (whatsapp) {
+      try {
+        await citaService.configurarWhatsapp(idCita, telefonoWa, true);
+        citaService.notificarWhatsapp(idCita);       // sin esperar
+      } catch (err) {
+        setSaving(false);
+        onSaved?.();
+        setAviso(`La cita quedó agendada, pero no se activaron los avisos por WhatsApp: ${err.message}`);
+        return;
+      }
+    }
+    setSaving(false);
+    onSaved?.();
+    onClose();
   };
 
   const opcionesPaciente = pacientes.map(p => ({
@@ -87,6 +127,8 @@ export default function AgendarCitaModal({ onClose, onSaved }) {
   }));
 
   const medicoSel = medicos.find(m => String(m.id_medico) === String(form.id_medico)) ?? null;
+  const tipoSel   = tiposConsulta.find(t => String(t.id_tipo_consulta) === String(form.id_tipo_consulta)) ?? null;
+  const esTele    = !!tipoSel?.es_teleconsulta;
 
   if (loadingData) {
     return (
@@ -134,6 +176,11 @@ export default function AgendarCitaModal({ onClose, onSaved }) {
                 </option>
               ))}
             </select>
+            {esTele && (
+              <p className="text-[11.5px] text-violet-700 mt-1.5">
+                Videollamada: el sistema crea el enlace automáticamente al agendar.
+              </p>
+            )}
           </div>
 
           {/* Médico */}
@@ -201,8 +248,27 @@ export default function AgendarCitaModal({ onClose, onSaved }) {
             />
           </div>
 
-          {error && <ErrorBox msg={error} />}
-          <BotonesForm onCancel={onClose} saving={saving} labelSave="Agendar cita" />
+          {/* Avisos por WhatsApp */}
+          <OpcionWhatsapp
+            activo={whatsapp} onActivo={setWhatsapp}
+            telefono={telefonoWa} onTelefono={setTelefonoWa}
+            teleconsulta={esTele}
+          />
+
+          {aviso ? (
+            <div className="space-y-3">
+              <div role="alert" className="text-[13px] text-amber-800 bg-amber-50/70 border-l-2 border-amber-500 pl-3 pr-3 py-2.5 rounded-r-md">{aviso}</div>
+              <div className="flex justify-end">
+                <button type="button" onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-[13.5px] font-medium bg-brand-700 hover:bg-brand-800 text-white">Cerrar</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {error && <ErrorBox msg={error} />}
+              <BotonesForm onCancel={onClose} saving={saving} labelSave="Agendar cita" />
+            </>
+          )}
         </form>
       </Modal>
 

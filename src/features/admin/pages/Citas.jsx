@@ -13,6 +13,8 @@ import {
   IconButton, ActionGroup, Avatar,
 } from '../../../shared/components/ui';
 import AgendarCitaModal, { CampoHora, SlotPickerModal } from '../components/AgendarCitaModal';
+import { OpcionWhatsapp, BotonTeleconsulta, BotonEnviarWhatsapp } from '../../../shared/components/Teleconsulta';
+import { telefonoWhatsappValido, mensajeTeleconsulta } from '../../../shared/utils/whatsapp';
 import { hoyLocalISO, yaLlegoLocal, fechaDesdeISO, sumarDiasISO } from '../../../shared/utils/fechas';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
@@ -322,9 +324,22 @@ function ModalEditar({ cita, onClose }) {
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
+  // Teleconsulta y avisos por WhatsApp de esta cita
+  const [tele, setTele]             = useState(null);
+  const [whatsapp, setWhatsapp]     = useState(false);
+  const [telefonoWa, setTelefonoWa] = useState('');
 
   const { slots, loading: loadingSlots, error: errorSlots } =
     useSlotsCita(form.id_medico, form.fecha, form.id_tipo_consulta, cita.id_cita);
+
+  useEffect(() => {
+    citaService.getDatosTeleconsulta([cita.id_cita]).then(d => {
+      const t = d[cita.id_cita] ?? null;
+      setTele(t);
+      setWhatsapp(!!t?.whatsapp_autorizado);
+      setTelefonoWa(t?.whatsapp_telefono ?? '');
+    });
+  }, [cita.id_cita]);
 
   useEffect(() => {
     tipoConsultaService.getAgendables().then(setTiposConsulta).catch(() => setTiposConsulta([]));
@@ -365,6 +380,10 @@ function ModalEditar({ cita, onClose }) {
       setError('Indica el motivo de la cancelación.');
       return;
     }
+    if (whatsapp && !telefonoWhatsappValido(telefonoWa)) {
+      setError('Revisa el número de WhatsApp o desmarca los avisos por WhatsApp.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -378,6 +397,12 @@ function ModalEditar({ cita, onClose }) {
         motivo_cancelacion: form.motivo_cancelacion,
         id_tipo_consulta:   form.id_tipo_consulta ? Number(form.id_tipo_consulta) : null,
       });
+      // Avisos por WhatsApp: sólo si cambiaron (y la migración ya existe: tele !== null)
+      const antes = { activo: !!tele?.whatsapp_autorizado, tel: tele?.whatsapp_telefono ?? '' };
+      if (tele && (whatsapp !== antes.activo || (whatsapp && telefonoWa !== antes.tel))) {
+        await citaService.configurarWhatsapp(cita.id_cita, telefonoWa, whatsapp);
+        if (whatsapp && !antes.activo) citaService.notificarWhatsapp(cita.id_cita);
+      }
       onClose();
     } catch (err) {
       console.error('[ModalEditar Cita]', err);
@@ -396,6 +421,25 @@ function ModalEditar({ cita, onClose }) {
           <div className="p-4 bg-surface rounded-xl border border-line">
             <CampoReadOnly label="Paciente" value={cita.paciente_nombre} />
           </div>
+
+          {tele?.enlace_teleconsulta && (
+            <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-4 space-y-2.5">
+              <p className="text-[11px] uppercase tracking-[0.10em] font-medium text-violet-700">Teleconsulta</p>
+              <p className="text-[12.5px] font-mono text-violet-900 break-all">{tele.enlace_teleconsulta}</p>
+              <div className="flex flex-wrap gap-2">
+                <BotonTeleconsulta enlace={tele.enlace_teleconsulta}>Abrir videollamada</BotonTeleconsulta>
+                <BotonEnviarWhatsapp
+                  telefono={tele.whatsapp_telefono || (telefonoWhatsappValido(telefonoWa) ? telefonoWa : '')}
+                  mensaje={mensajeTeleconsulta({
+                    paciente: cita.paciente_nombre, medico: cita.medico_nombre,
+                    fecha: fechaOrig, hora: horaOrig, enlace: tele.enlace_teleconsulta,
+                  })}
+                >
+                  Enviar enlace por WhatsApp
+                </BotonEnviarWhatsapp>
+              </div>
+            </div>
+          )}
 
           {!agendaEditable && (
             <div className="flex items-start gap-2.5 text-[12.5px] text-ink-700 bg-surface border-l-2 border-ink-300 pl-3 pr-3 py-2.5 rounded-r-md">
@@ -512,6 +556,14 @@ function ModalEditar({ cita, onClose }) {
               placeholder="Notas adicionales de la cita…"
               className={`${INPUT_CLS} placeholder:text-ink-300 resize-none`} />
           </div>
+
+          {tele && agendaEditable && (
+            <OpcionWhatsapp
+              activo={whatsapp} onActivo={setWhatsapp}
+              telefono={telefonoWa} onTelefono={setTelefonoWa}
+              teleconsulta={!!tele.enlace_teleconsulta}
+            />
+          )}
 
           {form.estado !== cita.estado && (
             <div className={`flex items-center gap-2 p-3 rounded-xl text-sm border ${estadoCls('cita', form.estado)}`}>

@@ -25,3 +25,4 @@ export {
   useReporteFinanciero, useReporteInventario, useReporteAuditoria,
   useReporteUsuarios,
 } from './useReportes';
+export { useDatosTeleconsulta } from './useDatosTeleconsulta';

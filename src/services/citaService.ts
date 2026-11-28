@@ -100,6 +100,13 @@ const errorAgendamiento = (error: { message: string; code?: string }) => {
   return new ServiceError(error.message, error.code === '23P01' ? 'CONFLICT' : error.code);
 };
 
+export type DatosTeleconsulta = {
+  id_cita: number;
+  enlace_teleconsulta: string | null;
+  whatsapp_telefono: string | null;
+  whatsapp_autorizado: boolean;
+};
+
 export const citaService = {
   async getAll(): Promise<Cita[]> {
     const { data, error } = await supabase
@@ -295,6 +302,46 @@ export const citaService = {
     });
     if (error) throw errorAgendamiento(error);
     return data as number;
+  },
+
+  // ─── Teleconsulta y WhatsApp (migration-teleconsulta-whatsapp.sql) ──────────
+  /**
+   * Guarda el WhatsApp de la cita y si el paciente autoriza recibir mensajes.
+   * Devuelve el número normalizado (ej: '573001234567').
+   */
+  async configurarWhatsapp(idCita: number, telefono: string, autorizado: boolean): Promise<string | null> {
+    const { data, error } = await supabase.rpc('fn_cita_configurar_whatsapp', {
+      p_id_cita:    Number(idCita),
+      p_telefono:   telefono ?? '',
+      p_autorizado: autorizado,
+    });
+    if (error) throw errorAgendamiento(error);
+    return (data as string | null) ?? null;
+  },
+
+  /**
+   * Pide enviar ya la confirmación por WhatsApp (sin esperar al envío
+   * programado). Nunca lanza: si WhatsApp no está configurado o falla, la
+   * cita ya quedó creada y el envío programado lo reintenta.
+   */
+  async notificarWhatsapp(idCita: number): Promise<void> {
+    try {
+      await supabase.functions.invoke('whatsapp-notificar', { body: { id_cita: Number(idCita) } });
+    } catch (e) {
+      console.warn('[whatsapp] no se pudo pedir el envío:', e);
+    }
+  },
+
+  /** Enlace de teleconsulta y WhatsApp de varias citas (las que el usuario puede ver). */
+  async getDatosTeleconsulta(ids: number[]): Promise<Record<number, DatosTeleconsulta>> {
+    const unicos = [...new Set(ids.filter(Boolean).map(Number))];
+    if (unicos.length === 0) return {};
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('id_cita, enlace_teleconsulta, whatsapp_telefono, whatsapp_autorizado')
+      .in('id_cita', unicos);
+    if (error) return {};   // migración aún no ejecutada: sin teleconsultas
+    return Object.fromEntries((data ?? []).map(d => [d.id_cita, d as DatosTeleconsulta]));
   },
 
   /**

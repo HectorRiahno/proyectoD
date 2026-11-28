@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Calendar, Clock, Stethoscope, CheckCircle2, ClipboardList, Hourglass, Search, UserX,
+  Calendar, Clock, Stethoscope, CheckCircle2, ClipboardList, Hourglass, Search, UserX, Video,
 } from 'lucide-react';
-import { useCitas } from '../../../hooks';
+import { useCitas, useDatosTeleconsulta } from '../../../hooks';
+import { BotonEnviarWhatsapp, EtiquetaTeleconsulta } from '../../../shared/components/Teleconsulta';
+import { mensajeTeleconsulta } from '../../../shared/utils/whatsapp';
 import {
   PageHeader, KPI, ErrorBanner, SearchBar, EstadoBadge,
   EmptyState, LoadingState, Avatar,
@@ -20,6 +22,15 @@ export default function MisCitas() {
   // localizar rápido un paciente entre los que ya están confirmados, sin
   // afectar la lista de programadas.
   const [searchConfirmadas, setSearchConfirmadas] = useState('');
+  const tele = useDatosTeleconsulta(citas);
+
+  // Teleconsulta: el paciente no "llega" a la clínica, así que se puede
+  // iniciar también desde Programadas. La videollamada se abre en otra
+  // pestaña (antes del await, para que el navegador no la bloquee).
+  const iniciarTeleconsulta = (cita) => {
+    window.open(tele[cita.id_cita].enlace_teleconsulta, '_blank', 'noopener');
+    tomarCita(cita);
+  };
 
   const tomarCita = async (cita) => {
     setError('');
@@ -96,9 +107,12 @@ export default function MisCitas() {
           tono="brand"
           loading={loading}
           citas={programadas}
+          tele={tele}
           vacioMsg="No hay citas programadas"
           renderAccion={(c) => (
-            yaLlegoLocal(c.fecha, c.hora) ? (
+            tele[c.id_cita]?.enlace_teleconsulta ? (
+              <AccionesTeleconsulta cita={c} datos={tele[c.id_cita]} onIniciar={() => iniciarTeleconsulta(c)} />
+            ) : yaLlegoLocal(c.fecha, c.hora) ? (
               <BotonNoAsistio onClick={() => noAsistio(c)} />
             ) : (
               <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-500 italic">
@@ -115,6 +129,7 @@ export default function MisCitas() {
           tono="emerald"
           loading={loading}
           citas={confirmadas}
+          tele={tele}
           vacioMsg={searchConfirmadas ? 'Ningún paciente coincide con la búsqueda' : 'No hay citas confirmadas'}
           toolbar={(
             <div className="px-4 py-2.5 border-b border-line/70 bg-surface/30">
@@ -133,7 +148,9 @@ export default function MisCitas() {
               </div>
             </div>
           )}
-          renderAccion={(c) => (
+          renderAccion={(c) => tele[c.id_cita]?.enlace_teleconsulta ? (
+            <AccionesTeleconsulta cita={c} datos={tele[c.id_cita]} onIniciar={() => iniciarTeleconsulta(c)} />
+          ) : (
             <div className="flex flex-col items-end gap-1.5">
               <button
                 onClick={() => tomarCita(c)}
@@ -155,7 +172,7 @@ export default function MisCitas() {
 }
 
 // ─── Cuadro de lista ──────────────────────────────────────────────────────────
-function CuadroCitas({ titulo, subtitulo, icono: Icono, tono, loading, citas, vacioMsg, renderAccion, toolbar }) {
+function CuadroCitas({ titulo, subtitulo, icono: Icono, tono, loading, citas, vacioMsg, renderAccion, toolbar, tele = {} }) {
   const TONES = {
     brand:   { tint: 'bg-brand-50',   border: 'border-brand-100',   icon: 'text-brand-700' },
     emerald: { tint: 'bg-emerald-50', border: 'border-emerald-100', icon: 'text-emerald-700' },
@@ -193,7 +210,10 @@ function CuadroCitas({ titulo, subtitulo, icono: Icono, tono, loading, citas, va
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <Avatar name={c.paciente_nombre} tone={tono} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13.5px] font-medium text-ink-900 truncate">{c.paciente_nombre ?? '—'}</p>
+                    <p className="text-[13.5px] font-medium text-ink-900 truncate flex items-center gap-2">
+                      <span className="truncate">{c.paciente_nombre ?? '—'}</span>
+                      {tele[c.id_cita]?.enlace_teleconsulta && <EtiquetaTeleconsulta />}
+                    </p>
                     <p className="text-[11.5px] text-ink-500 font-mono">{c.paciente_documento ?? ''}</p>
                     <div className="flex items-center gap-3 mt-1.5 text-[11.5px] text-ink-700">
                       <span className="inline-flex items-center gap-1">
@@ -236,5 +256,31 @@ function BotonNoAsistio({ onClick }) {
     >
       <UserX size={12} strokeWidth={1.75} /> No asistió
     </button>
+  );
+}
+
+// ─── Acciones de una teleconsulta ─────────────────────────────────────────────
+function AccionesTeleconsulta({ cita, datos, onIniciar }) {
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <button
+        onClick={onIniciar}
+        title="Abre la videollamada y la historia clínica"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-[12px] font-medium transition-colors"
+      >
+        <Video size={13} strokeWidth={1.75} />
+        {cita.estado === 'en_curso' ? 'Continuar' : 'Iniciar teleconsulta'}
+      </button>
+      <BotonEnviarWhatsapp
+        telefono={datos.whatsapp_telefono}
+        mensaje={mensajeTeleconsulta({
+          paciente: cita.paciente_nombre, fecha: cita.fecha, hora: cita.hora?.slice(0, 5),
+          enlace: datos.enlace_teleconsulta,
+        })}
+        className="!px-2.5 !py-1 !text-[11.5px]"
+      >
+        Reenviar enlace
+      </BotonEnviarWhatsapp>
+    </div>
   );
 }

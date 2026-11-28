@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, CalendarPlus, Stethoscope, MapPin, FileText, XCircle } from 'lucide-react';
-import { useCitas } from '../../../hooks';
+import { useCitas, useDatosTeleconsulta } from '../../../hooks';
+import { BotonTeleconsulta, EtiquetaTeleconsulta } from '../../../shared/components/Teleconsulta';
 import { citaService } from '../../../services';
 import {
   PageHeader, KPI, ErrorBanner, SuccessBanner, EmptyState, LoadingState,
@@ -21,6 +22,7 @@ export default function MisCitas() {
   const [filtro, setFiltro] = useState('todas');
   const [cancelando, setCancelando] = useState(null);
   const [aviso, setAviso]           = useState('');
+  const tele = useDatosTeleconsulta(citas);
 
   const hoy = hoyLocalISO();
   // Una cita es "próxima" solo si su estado sigue abierto (programada / confirmada / en_curso)
@@ -81,7 +83,9 @@ export default function MisCitas() {
         />
       ) : (
         <div className="space-y-3">
-          {filtered.map((c) => (
+          {filtered.map((c) => {
+            const enlace = tele[c.id_cita]?.enlace_teleconsulta;
+            return (
             <article
               key={c.id_cita}
               className="rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(11,18,32,0.04)] hover:border-ink-100 hover:shadow-[0_8px_28px_-14px_rgba(11,18,32,0.18)] transition-all duration-200 overflow-hidden"
@@ -116,13 +120,24 @@ export default function MisCitas() {
                         {c.tipo_consulta}
                       </div>
                     )}
-                    {c.medico_consultorio && (
+                    {enlace ? (
+                      <div><EtiquetaTeleconsulta /></div>
+                    ) : c.medico_consultorio && (
                       <div className="flex items-center gap-1.5 text-ink-700">
                         <MapPin size={12} className="text-sky-600 flex-shrink-0" strokeWidth={1.75} />
                         Consultorio {c.medico_consultorio}
                       </div>
                     )}
                   </div>
+
+                  {enlace && estaAbierta(c.estado) && (
+                    <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <p className="text-[12px] text-violet-900">
+                        Entra unos minutos antes y permite el uso de cámara y micrófono.
+                      </p>
+                      <BotonTeleconsulta enlace={enlace} />
+                    </div>
+                  )}
 
                   {c.motivo && (
                     <div className="mt-3 rounded-lg border border-line bg-surface/60 px-3 py-2">
@@ -151,7 +166,8 @@ export default function MisCitas() {
                 </div>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
 
